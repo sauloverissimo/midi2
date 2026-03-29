@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-gcc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test (gcc, C99 strict)
+        run: make CC=gcc test
+
+  test-clang:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test (clang, C99 strict)
+        run: make CC=clang test
+
+  test-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test (Apple clang)
+        run: make test
+
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test (MSVC)
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          cl /std:c11 /W4 /I src /Fe:test_msg.exe test\test_midi2_msg.c
+          test_msg.exe
+          cl /std:c11 /W4 /I src /Fe:test_proc.exe test\test_midi2_proc.c src\midi2_proc.c
+          test_proc.exe
+          cl /std:c11 /W4 /I src /Fe:test_ci.exe test\test_midi2_ci.c src\midi2_proc.c src\midi2_ci.c
+          test_ci.exe
+          cl /std:c11 /W4 /I src /Fe:test_conv.exe test\test_midi2_conv.c src\midi2_conv.c
+          test_conv.exe
+
+  build-arm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ARM toolchain
+        run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi
+      - name: Compile for ARM Cortex-M (syntax + type check, no link)
+        run: |
+          arm-none-eabi-gcc -std=c99 -Wall -Wextra -Wpedantic -I src -c src/midi2_proc.c -o /dev/null
+          arm-none-eabi-gcc -std=c99 -Wall -Wextra -Wpedantic -I src -c src/midi2_ci.c -o /dev/null
+          arm-none-eabi-gcc -std=c99 -Wall -Wextra -Wpedantic -I src -c src/midi2_conv.c -o /dev/null
+          echo "ARM Cortex-M compilation: OK"

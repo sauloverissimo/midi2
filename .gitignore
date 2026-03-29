@@ -1,0 +1,29 @@
+# Build artifacts
+*.o
+*.a
+*.so
+*.dylib
+
+# Test binaries
+test/test_midi2_msg
+test/test_midi2_proc
+test/test_midi2_ci
+test/test_midi2_conv
+
+# Editor
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Generated docs
+docs/api/
+
+# Environment
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db

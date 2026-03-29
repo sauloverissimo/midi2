@@ -1,0 +1,24 @@
+{
+  "name": "midi2",
+  "version": "0.1.0",
+  "description": "Portable MIDI 2.0 UMP library. C99, zero dependencies, zero allocation.",
+  "keywords": "midi, midi2, ump, music, embedded, protocol",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sauloverissimo/midi2.git"
+  },
+  "authors": [
+    {
+      "name": "Saulo Verissimo",
+      "email": "sauloverissimo@gmail.com",
+      "maintainer": true
+    }
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/sauloverissimo/midi2",
+  "frameworks": "*",
+  "platforms": "*",
+  "build": {
+    "srcDir": "src"
+  }
+}

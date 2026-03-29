@@ -1,0 +1,35 @@
+CC      ?= gcc
+CFLAGS  := -std=c99 -Wall -Wextra -Wpedantic -I src
+
+TESTS   := test/test_midi2_msg \
+           test/test_midi2_proc \
+           test/test_midi2_ci \
+           test/test_midi2_conv
+
+.PHONY: all test clean
+
+all: test
+
+test: $(TESTS)
+	@echo ""
+	@for t in $(TESTS); do \
+		echo "--- $$t ---"; \
+		./$$t || exit 1; \
+	done
+	@echo ""
+	@echo "All tests passed."
+
+test/test_midi2_msg: test/test_midi2_msg.c src/midi2_msg.h
+	$(CC) $(CFLAGS) -o $@ $<
+
+test/test_midi2_proc: test/test_midi2_proc.c src/midi2_proc.c src/midi2_proc.h src/midi2_msg.h
+	$(CC) $(CFLAGS) -o $@ test/test_midi2_proc.c src/midi2_proc.c
+
+test/test_midi2_ci: test/test_midi2_ci.c src/midi2_ci.c src/midi2_ci.h src/midi2_proc.c src/midi2_proc.h src/midi2_msg.h
+	$(CC) $(CFLAGS) -o $@ test/test_midi2_ci.c src/midi2_proc.c src/midi2_ci.c
+
+test/test_midi2_conv: test/test_midi2_conv.c src/midi2_conv.c src/midi2_conv.h src/midi2_msg.h
+	$(CC) $(CFLAGS) -o $@ test/test_midi2_conv.c src/midi2_conv.c
+
+clean:
+	rm -f $(TESTS)
