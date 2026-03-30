@@ -4,7 +4,8 @@ CFLAGS  := -std=c99 -Wall -Wextra -Wpedantic -I src
 TESTS   := test/test_midi2_msg \
            test/test_midi2_proc \
            test/test_midi2_ci \
-           test/test_midi2_conv
+           test/test_midi2_conv \
+           test/test_midi2_dispatch
 
 .PHONY: all test clean
 
@@ -30,6 +31,9 @@ test/test_midi2_ci: test/test_midi2_ci.c src/midi2_ci.c src/midi2_ci.h src/midi2
 
 test/test_midi2_conv: test/test_midi2_conv.c src/midi2_conv.c src/midi2_conv.h src/midi2_msg.h
 	$(CC) $(CFLAGS) -o $@ test/test_midi2_conv.c src/midi2_conv.c
+
+test/test_midi2_dispatch: test/test_midi2_dispatch.c src/midi2_dispatch.c src/midi2_dispatch.h src/midi2_msg.h
+	$(CC) $(CFLAGS) -o $@ test/test_midi2_dispatch.c src/midi2_dispatch.c
 
 clean:
 	rm -f $(TESTS)
