@@ -149,7 +149,7 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
     }
 
     case MIDI2_CI_NAK: {
-      if (!dp->on_nak) break;
+      if (!dp->on_nak || length < 13) break;
       uint8_t orig = 0, sc = 0, sd = 0;
       const uint8_t *det = NULL;
       uint16_t ml = 0;
@@ -175,8 +175,9 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
     case MIDI2_CI_PROFILE_INQUIRY_REPLY: {
       if (!dp->on_profile_inquiry_reply || length < 15) break;
       uint16_t en_count = midi2_ci_read_14(&data[13]);
-      const uint8_t *en_data = &data[15];
       uint16_t en_bytes = (uint16_t)(en_count * 5);
+      if (15 + en_bytes + 2 > length) break;  /* bounds check */
+      const uint8_t *en_data = &data[15];
       uint16_t dis_off = (uint16_t)(15 + en_bytes);
       uint16_t dis_count = 0;
       const uint8_t *dis_data = NULL;

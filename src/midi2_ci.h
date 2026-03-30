@@ -28,6 +28,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "midi2_proc.h"
+#include "midi2_ci_msg.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -43,19 +44,9 @@ enum {
   MIDI2_CI_ERR_NULL    = -3,   /**< NULL pointer argument */
 };
 
-/*--------------------------------------------------------------------+
- * MIDI-CI Sub-IDs (per MIDI-CI 1.2, M2-104-UM)
- *--------------------------------------------------------------------*/
-enum {
-  MIDI2_CI_DISCOVERY_REQUEST    = 0x70,
-  MIDI2_CI_DISCOVERY_REPLY      = 0x71,
-  MIDI2_CI_PROFILE_INQUIRY      = 0x24,
-  MIDI2_CI_PROFILE_INQUIRY_REPLY = 0x25,
-  MIDI2_CI_PE_GET               = 0x34,
-  MIDI2_CI_PE_GET_REPLY         = 0x35,
-  MIDI2_CI_PE_SET               = 0x36,
-  MIDI2_CI_PE_SET_REPLY         = 0x37,
-};
+/* Sub-IDs and constants are now in midi2_ci_msg.h.
+ * Legacy alias for backward compatibility: */
+#define MIDI2_CI_DISCOVERY_REQUEST  MIDI2_CI_DISCOVERY
 
 /*--------------------------------------------------------------------+
  * Callback types

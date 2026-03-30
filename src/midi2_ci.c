@@ -332,7 +332,7 @@ static void ci_handle_process_inquiry(midi2_ci_state *state, uint8_t group,
   reply[0] = 0x7E;
   reply[1] = 0x7F;
   reply[2] = 0x0D;
-  reply[3] = 0x21;  /* Process Inquiry Reply */
+  reply[3] = MIDI2_CI_PI_CAPABILITY_REPLY;  /* 0x41 */
   ci_write_muid(&reply[4], state->muid);
   ci_write_muid(&reply[8], src_muid);
   reply[12] = 0x01;  /* supported: MIDI 2.0 Channel Voice */
@@ -370,7 +370,7 @@ bool midi2_ci_process_sysex(midi2_ci_state *state,
       ci_handle_pe_set(state, group, data, length);
       return true;
 
-    case 0x20:  /* Process Inquiry */
+    case MIDI2_CI_PI_CAPABILITY:  /* Process Inquiry (0x40) */
       ci_handle_process_inquiry(state, group, data, length);
       return true;
 

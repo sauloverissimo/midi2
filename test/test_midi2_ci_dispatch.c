@@ -391,6 +391,124 @@ void test_ci_dp_pi_end(void) {
   PASS();
 }
 
+void test_ci_dp_set_profile_off(void) {
+  TEST("CI dispatch: Set Profile Off (nch always 0)");
+  midi2_ci_dispatch dp = make_dp();
+  reset();
+  uint8_t prof[5] = {0x7E, 2, 0, 0, 0};
+  uint8_t buf[32];
+  uint16_t len = midi2_ci_build_set_profile_off(buf, 0x02, 0x1234567, 0x7654321, 0x7F, prof);
+  midi2_ci_dispatch_feed(&dp, 0, buf, len);
+  CHECK(ctx.called, "dispatched");
+  CHECK(ctx.profile_id[1] == 2, "profile");
+  CHECK(ctx.num_channels == 0, "nch=0 for off");
+  PASS();
+}
+
+void test_ci_dp_profile_disabled(void) {
+  TEST("CI dispatch: Profile Disabled Report");
+  midi2_ci_dispatch dp = make_dp();
+  reset();
+  uint8_t prof[5] = {0x7E, 3, 0, 0, 0};
+  uint8_t buf[32];
+  uint16_t len = midi2_ci_build_profile_disabled(buf, 0x02, 0x1234567, 0x7F, prof, 0);
+  midi2_ci_dispatch_feed(&dp, 0, buf, len);
+  CHECK(ctx.called, "dispatched");
+  CHECK(ctx.profile_id[1] == 3, "profile");
+  PASS();
+}
+
+void test_ci_dp_profile_removed(void) {
+  TEST("CI dispatch: Profile Removed Report");
+  midi2_ci_dispatch dp = make_dp();
+  reset();
+  uint8_t prof[5] = {0x7E, 4, 0, 0, 0};
+  uint8_t buf[32];
+  uint16_t len = midi2_ci_build_profile_removed(buf, 0x02, 0x1234567, 0x7F, prof);
+  midi2_ci_dispatch_feed(&dp, 0, buf, len);
+  CHECK(ctx.called, "dispatched");
+  CHECK(ctx.profile_id[1] == 4, "profile");
+  PASS();
+}
+
+void test_ci_dp_profile_details(void) {
+  TEST("CI dispatch: Profile Details Inquiry + Reply");
+  midi2_ci_dispatch dp = make_dp();
+  dp.on_profile_details = (midi2_ci_dp_profile_details_cb)cb_profile_added; /* simplified */
+  reset();
+  uint8_t prof[5] = {0x7E, 1, 0, 0, 0};
+  uint8_t buf[64];
+  uint16_t len = midi2_ci_build_profile_details(buf, 0x02, 0x1234567, 0x7654321, 0x7F, prof, 0x01);
+  midi2_ci_dispatch_feed(&dp, 0, buf, len);
+  CHECK(ctx.called, "details dispatched");
+  PASS();
+}
+
+void test_ci_dp_profile_specific(void) {
+  TEST("CI dispatch: Profile Specific Data");
+  midi2_ci_dispatch dp = make_dp();
+  dp.on_profile_specific_data = (midi2_ci_dp_profile_specific_cb)cb_profile_added; /* simplified */
+  reset();
+  uint8_t prof[5] = {0x7E, 1, 0, 0, 0};
+  uint8_t buf[64];
+  uint8_t data[10]; memset(data, 0x42, 10);
+  uint16_t len = midi2_ci_build_profile_specific_data(buf, 0x02, 0x1234567, 0x7654321, 0x7F, prof, data, 10);
+  midi2_ci_dispatch_feed(&dp, 0, buf, len);
+  CHECK(ctx.called, "specific data dispatched");
+  PASS();
+}
+
+void test_ci_dp_pe_set(void) {
+  TEST("CI dispatch: PE Set with body");
+  midi2_ci_dispatch dp = make_dp();
+  reset();
+  uint8_t buf[64];
+  uint16_t len = midi2_ci_build_pe_set(buf, 0x02, 0x1234567, 0x7654321, 2, (const uint8_t*)"{}", 2, 1, 1, (const uint8_t*)"val", 3);
+  midi2_ci_dispatch_feed(&dp, 0, buf, len);
+  CHECK(ctx.called, "dispatched");
+  CHECK(ctx.request_id == 2, "req_id=2");
+  CHECK(ctx.body_len == 3, "body=3");
+  PASS();
+}
+
+void test_ci_dp_pe_notify(void) {
+  TEST("CI dispatch: PE Notify");
+  midi2_ci_dispatch dp = make_dp();
+  reset();
+  uint8_t buf[64];
+  uint16_t len = midi2_ci_build_pe_notify(buf, 0x02, 0x1234567, 0x7654321, 1, (const uint8_t*)"{}", 2, 1, 1, NULL, 0);
+  midi2_ci_dispatch_feed(&dp, 0, buf, len);
+  CHECK(ctx.called, "dispatched");
+  PASS();
+}
+
+void test_ci_dp_pi_report_reply(void) {
+  TEST("CI dispatch: PI MIDI Report Reply");
+  midi2_ci_dispatch dp = make_dp();
+  reset();
+  uint8_t buf[32];
+  uint16_t len = midi2_ci_build_pi_midi_report_reply(buf, 0x02, 0x7654321, 0x1234567, 0x7F, 0x03, 0x00, 0x1F, 0x07);
+  midi2_ci_dispatch_feed(&dp, 0, buf, len);
+  CHECK(ctx.called, "dispatched");
+  CHECK(ctx.system_bm == 0x03, "sys");
+  CHECK(ctx.chan_ctrl_bm == 0x1F, "chan");
+  CHECK(ctx.note_data_bm == 0x07, "note");
+  PASS();
+}
+
+void test_ci_dp_nak_v1(void) {
+  TEST("CI dispatch: NAK v1 header-only");
+  midi2_ci_dispatch dp = make_dp();
+  reset();
+  uint8_t buf[32];
+  uint16_t len = midi2_ci_build_nak(buf, 0x01, 0x1234567, 0x7654321, 0x7F, 0, 0, 0, NULL, 0, NULL);
+  midi2_ci_dispatch_feed(&dp, 0, buf, len);
+  CHECK(ctx.called, "dispatched");
+  CHECK(ctx.orig_sub_id == 0, "v1: orig=0");
+  CHECK(ctx.status_code == 0, "v1: status=0");
+  PASS();
+}
+
 void test_ci_dp_null_safe(void) {
   TEST("CI dispatch: NULL callbacks don't crash");
   midi2_ci_dispatch dp;
@@ -461,6 +579,23 @@ int main(void) {
   test_ci_dp_pi_capability();
   test_ci_dp_pi_report();
   test_ci_dp_pi_end();
+
+  printf("\n[Additional Profile]\n");
+  test_ci_dp_set_profile_off();
+  test_ci_dp_profile_disabled();
+  test_ci_dp_profile_removed();
+  test_ci_dp_profile_details();
+  test_ci_dp_profile_specific();
+
+  printf("\n[Additional PE]\n");
+  test_ci_dp_pe_set();
+  test_ci_dp_pe_notify();
+
+  printf("\n[Additional PI]\n");
+  test_ci_dp_pi_report_reply();
+
+  printf("\n[Version Handling]\n");
+  test_ci_dp_nak_v1();
 
   printf("\n[Edge Cases]\n");
   test_ci_dp_null_safe();

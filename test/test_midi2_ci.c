@@ -194,7 +194,7 @@ void test_profile_inquiry_reply(void) {
   request[0] = 0x7E;
   request[1] = 0x7F;
   request[2] = 0x0D;
-  request[3] = 0x24;         /* Profile Inquiry */
+  request[3] = 0x20;         /* Profile Inquiry (per M2-101-UM) */
   request[4] = 0x01;         /* source MUID */
   request[5] = 0x00;
   request[6] = 0x00;
@@ -212,7 +212,7 @@ void test_profile_inquiry_reply(void) {
   uint8_t resp[64];
   uint16_t resp_len = extract_sysex7_data(resp, 64);
   CHECK(resp_len >= 24, "response has profiles");
-  CHECK(resp[3] == 0x25, "Profile Inquiry Reply sub-ID");
+  CHECK(resp[3] == 0x21, "Profile Inquiry Reply sub-ID (per M2-101-UM)");
   CHECK(resp[12] == 2, "2 profiles enabled");
 
   /* Check first profile bytes */
