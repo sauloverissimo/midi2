@@ -66,7 +66,8 @@ enum {
   MIDI2_STATUS_REL_RPN       = 0x40,  /* Relative Registered Controller */
   MIDI2_STATUS_REL_NRPN      = 0x50,  /* Relative Assignable Controller */
   MIDI2_STATUS_PER_NOTE_PB   = 0x60,
-  MIDI2_STATUS_PER_NOTE_CC   = 0x10,  /* alias for ASN_PER_NOTE (same opcode) */
+  /* Note: Per-Note CC uses the same opcode as ASN_PER_NOTE (0x10).
+   * Use MIDI2_STATUS_ASN_PER_NOTE for new code. */
 };
 
 /*--------------------------------------------------------------------+
@@ -299,7 +300,7 @@ static inline void midi2_msg_per_note_pb(uint32_t *w, uint8_t group, uint8_t cha
 /** @brief Build a per-note CC (MT 0x4). Independent controller per note. */
 static inline void midi2_msg_per_note_cc(uint32_t *w, uint8_t group, uint8_t channel,
                                            uint8_t note, uint8_t index, uint32_t value) {
-  w[0] = midi2_msg_build_cv2_w0(group, MIDI2_STATUS_PER_NOTE_CC, channel, note & 0x7F, index);
+  w[0] = midi2_msg_build_cv2_w0(group, MIDI2_STATUS_ASN_PER_NOTE, channel, note & 0x7F, index);
   w[1] = value;
 }
 

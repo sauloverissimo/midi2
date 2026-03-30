@@ -18,7 +18,15 @@
   - Flex Data text builder for metadata (bank 0x01) and performance text (bank 0x02)
   - Endpoint Name, Product Instance ID, FB Name notifications (Stream)
   - All Flex Data status bank and text subtype enums
-- 74 new tests (total: 151 across 5 modules).
+- **midi2_ci_msg**: New header-only module for MIDI-CI message construction and parsing.
+  Covers all 31 MIDI-CI messages per M2-101-UM v1.2. MUID encoding, 14/28-bit field
+  helpers, parse helpers for common fields.
+- **midi2_ci_dispatch**: New module with 33 granular callbacks for typed MIDI-CI dispatch.
+  Covers Management, Profile Configuration, Property Exchange, Process Inquiry.
+- **midi2_ci** refactored: now uses midi2_ci_msg for message construction (eliminates
+  duplicate encoding logic). Fixed spec-incorrect Profile Inquiry sub-IDs (was 0x24/0x25,
+  corrected to 0x20/0x21). Replies now include version field per spec.
+- 136 new tests (total: 213 across 7 modules).
 
 ### Fixed
 - Utility message status nibble was at shift 16, corrected to shift 20 per

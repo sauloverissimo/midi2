@@ -255,7 +255,7 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
     case MIDI2_CI_PROFILE_SPECIFIC_DATA: {
       if (!dp->on_profile_specific_data || length < 22) break;
       uint32_t dl = midi2_ci_read_28(&data[18]);
-      const uint8_t *dd = (dl > 0 && length >= 22 + dl) ? &data[22] : NULL;
+      const uint8_t *dd = (dl > 0 && dl <= (uint32_t)(length - 22)) ? &data[22] : NULL;
       dp->on_profile_specific_data(hdr, &data[13], dd, dl, dp->context);
       return true;
     }

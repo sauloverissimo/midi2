@@ -46,6 +46,10 @@ jobs:
           test_conv.exe
           cl /std:c11 /W4 /I src /Fe:test_dispatch.exe test\test_midi2_dispatch.c src\midi2_dispatch.c
           test_dispatch.exe
+          cl /std:c11 /W4 /I src /Fe:test_ci_msg.exe test\test_midi2_ci_msg.c
+          test_ci_msg.exe
+          cl /std:c11 /W4 /I src /Fe:test_ci_dispatch.exe test\test_midi2_ci_dispatch.c src\midi2_ci_dispatch.c
+          test_ci_dispatch.exe
 
   build-arm:
     runs-on: ubuntu-latest
@@ -59,4 +63,5 @@ jobs:
           arm-none-eabi-gcc -std=c99 -Wall -Wextra -Wpedantic -I src -c src/midi2_ci.c -o /dev/null
           arm-none-eabi-gcc -std=c99 -Wall -Wextra -Wpedantic -I src -c src/midi2_conv.c -o /dev/null
           arm-none-eabi-gcc -std=c99 -Wall -Wextra -Wpedantic -I src -c src/midi2_dispatch.c -o /dev/null
+          arm-none-eabi-gcc -std=c99 -Wall -Wextra -Wpedantic -I src -c src/midi2_ci_dispatch.c -o /dev/null
           echo "ARM Cortex-M compilation: OK"

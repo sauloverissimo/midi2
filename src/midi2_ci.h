@@ -151,6 +151,14 @@ int midi2_ci_add_property_dynamic(midi2_ci_state *state,
 /** Process incoming SysEx that might be MIDI-CI.
  *  Returns true if the message was handled (CI), false if not.
  *  Automatically sends Discovery Reply, Profile Inquiry Reply, PE responses.
+ *
+ *  LIMITATIONS (simplified convenience responder):
+ *  - PE Get always returns the first property with a non-NULL value,
+ *    regardless of which property was requested (no JSON header parsing).
+ *  - PE Set calls the first setter with an empty value string.
+ *  - All replies use MIDI-CI Message Version 1 (no v2 extended fields).
+ *  - For full PE/Profile control, use midi2_ci_dispatch directly.
+ *
  *  @param group   UMP group the SysEx arrived on (responses go to same group)
  *  @param data    Reassembled SysEx content (no F0/F7)
  *  @param length  Length of data */

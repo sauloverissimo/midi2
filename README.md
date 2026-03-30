@@ -3,7 +3,7 @@
 [![CI](https://github.com/sauloverissimo/midi2/actions/workflows/ci.yml/badge.svg)](https://github.com/sauloverissimo/midi2/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![C99](https://img.shields.io/badge/C-C99-blue.svg)]()
-[![Tests](https://img.shields.io/badge/tests-151%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-213%20passing-brightgreen.svg)]()
 
 Portable MIDI 2.0 UMP library. C99, zero dependencies, zero allocation.
 
@@ -60,10 +60,12 @@ midi2_dispatch_feed(w, 2, &dp);
 | Module | Files | State | What it does |
 |--------|-------|-------|-------------|
 | **midi2_msg** | `.h` | Stateless | UMP construction, parsing, value scaling. All message types. |
-| **midi2_dispatch** | `.h` + `.c` | Caller-allocated | Typed message dispatch with 42 granular callbacks. |
+| **midi2_dispatch** | `.h` + `.c` | Caller-allocated | Typed UMP dispatch with 42 granular callbacks. |
 | **midi2_proc** | `.h` + `.c` | Caller-allocated | Group filtering, SysEx7/8 reassembly, group remap. |
-| **midi2_ci** | `.h` + `.c` | Caller-allocated | MIDI-CI responder: Discovery, Profiles, Property Exchange. |
 | **midi2_conv** | `.h` + `.c` | Caller-allocated | MIDI 1.0 byte stream to UMP (Running Status, SysEx). |
+| **midi2_ci_msg** | `.h` | Stateless | MIDI-CI message construction and parsing. All 31 messages. |
+| **midi2_ci_dispatch** | `.h` + `.c` | Caller-allocated | Typed CI dispatch with 33 granular callbacks. |
+| **midi2_ci** | `.h` + `.c` | Caller-allocated | Convenience CI responder (uses ci_msg + ci_dispatch). |
 
 Use only what you need. `midi2_msg` alone is a header include with zero overhead.
 
@@ -117,7 +119,7 @@ make test          # gcc by default
 make CC=clang test # or clang
 ```
 
-151 tests across 5 modules, zero warnings with `-Wall -Wextra -Wpedantic`.
+213 tests across 7 modules, zero warnings with `-Wall -Wextra -Wpedantic`.
 
 Tested on: gcc (Linux), clang (Linux/macOS), MSVC (Windows), ARM Cortex-M (cross-compile).
 

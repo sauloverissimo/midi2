@@ -82,8 +82,10 @@ void midi2_conv_init(midi2_conv_state *state, uint8_t group,
 
 /* Feed one MIDI 1.0 byte. Returns true when a complete UMP message is ready
  * in state->ump[]. Returns false if more bytes are needed.
- * May return true multiple times per byte (e.g., SysEx end generates
- * both the final SysEx packet and processes the status byte that follows). */
+ *
+ * LIMITATION: SysEx messages longer than 6 bytes produce only a START packet
+ * with the first 6 bytes. Full multi-packet SysEx should use midi2_proc_send_sysex7()
+ * after accumulation. */
 bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte);
 
 #ifdef __cplusplus

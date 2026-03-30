@@ -53,7 +53,7 @@ static void sysex7_process(midi2_proc_state *state, uint8_t group, const uint32_
     /* No buffer provided: deliver raw SysEx packets without reassembly */
     return;
   }
-  uint8_t status_nib = (words[0] >> 20) & 0x0F;
+  uint8_t status_nib = (words[0] >> 16) & 0xF0;  /* matches MIDI2_SYSEX7_* enums */
   uint8_t num_bytes  = (words[0] >> 16) & 0x0F;
 
   /* Extract data bytes from SysEx7 UMP packet */
@@ -66,7 +66,7 @@ static void sysex7_process(midi2_proc_state *state, uint8_t group, const uint32_
   if (num_bytes >= 5) data[n++] = (words[1] >> 8) & 0x7F;
   if (num_bytes >= 6) data[n++] = (words[1] >> 0) & 0x7F;
 
-  if (status_nib == 0x00) {
+  if (status_nib == MIDI2_SYSEX7_COMPLETE) {
     /* Complete: single-packet SysEx */
     if (state->on_sysex7) {
       state->on_sysex7(group, data, n, state->context);
@@ -74,7 +74,7 @@ static void sysex7_process(midi2_proc_state *state, uint8_t group, const uint32_
     return;
   }
 
-  if (status_nib == 0x01) {
+  if (status_nib == MIDI2_SYSEX7_START) {
     /* Start */
     state->sysex_group = group;
     state->sysex_len = 0;
@@ -82,7 +82,7 @@ static void sysex7_process(midi2_proc_state *state, uint8_t group, const uint32_
     /* Different group mid-stream: discard in-progress, restart */
     state->sysex_group = group;
     state->sysex_len = 0;
-    if (status_nib == 0x02) return;  /* Continue without start: drop */
+    if (status_nib == MIDI2_SYSEX7_CONTINUE) return;  /* Continue without start: drop */
   }
 
   /* Append data */
@@ -93,7 +93,7 @@ static void sysex7_process(midi2_proc_state *state, uint8_t group, const uint32_
     }
   }
 
-  if (status_nib == 0x03) {
+  if (status_nib == MIDI2_SYSEX7_END) {
     /* End: deliver complete message */
     if (state->on_sysex7) {
       state->on_sysex7(group, state->sysex_buf, state->sysex_len, state->context);
@@ -109,7 +109,7 @@ static void sysex7_process(midi2_proc_state *state, uint8_t group, const uint32_
 static void sysex8_process(midi2_proc_state *state, uint8_t group, const uint32_t *words) {
   if (state->sysex8_buf == NULL) return;
 
-  uint8_t status_nib = (words[0] >> 20) & 0x0F;
+  uint8_t status_nib = (words[0] >> 16) & 0xF0;  /* matches MIDI2_SYSEX8_* enums */
   uint8_t num_bytes  = (words[0] >> 16) & 0x0F;  /* includes stream_id */
   uint8_t stream_id  = (words[0] >> 8) & 0xFF;
 
@@ -132,7 +132,7 @@ static void sysex8_process(midi2_proc_state *state, uint8_t group, const uint32_
   if (total_data >= 12) data[n++] = (words[3] >> 8) & 0xFF;
   if (total_data >= 13) data[n++] = words[3] & 0xFF;
 
-  if (status_nib == 0x00) {
+  if (status_nib == MIDI2_SYSEX8_COMPLETE) {
     /* Complete single-packet SysEx8 */
     if (state->on_sysex8) {
       state->on_sysex8(group, stream_id, data, n, state->context);
@@ -140,7 +140,7 @@ static void sysex8_process(midi2_proc_state *state, uint8_t group, const uint32_
     return;
   }
 
-  if (status_nib == 0x01) {
+  if (status_nib == MIDI2_SYSEX8_START) {
     /* Start */
     state->sysex8_group = group;
     state->sysex8_stream_id = stream_id;
@@ -150,7 +150,7 @@ static void sysex8_process(midi2_proc_state *state, uint8_t group, const uint32_
     state->sysex8_group = group;
     state->sysex8_stream_id = stream_id;
     state->sysex8_len = 0;
-    if (status_nib == 0x02) return;
+    if (status_nib == MIDI2_SYSEX8_CONTINUE) return;
   }
 
   /* Append data */
@@ -161,7 +161,7 @@ static void sysex8_process(midi2_proc_state *state, uint8_t group, const uint32_
     }
   }
 
-  if (status_nib == 0x03) {
+  if (status_nib == MIDI2_SYSEX8_END) {
     /* End */
     if (state->on_sysex8) {
       state->on_sysex8(group, state->sysex8_stream_id,
