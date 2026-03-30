@@ -13,6 +13,9 @@ test/test_midi2_dispatch
 test/test_midi2_ci_msg
 test/test_midi2_ci_dispatch
 
+# docs
+case-study-midi1-to-ump.md
+
 # Editor
 *.swp
 *.swo
