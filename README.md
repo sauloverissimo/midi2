@@ -145,24 +145,36 @@ midi2 is designed to be vendored (copied into your project). Drop the `src/` fil
 
 ## Architecture
 
-midi2 is layer 2 in a 4-layer embedded MIDI 2.0 stack:
+midi2 is layer 2 in a 4-layer MIDI 2.0 stack:
 
 ```
-Layer 4: Sketch        Your application code
-Layer 3: Platform      ESP32MIDI / AdafruitMIDI2 / TeensyMIDI2 (C++ wrapper)
+Layer 1: Transport     TinyUSB / USB Host / BLE / Network / Serial / PIO-USB
 Layer 2: midi2         THIS LIBRARY -- portable C infrastructure
-Layer 1: Transport     TinyUSB / USB Host / BLE / Network / Serial
+Layer 3: Platform      ESP32MIDI / TeensyMIDI2 / DaisyMIDI2 / AdafruitMIDI2
+Layer 4: Application   Your synth, controller, DAW plugin, or embedded device
 ```
 
 ### How the layers work
 
-**Layer 1 (Transport)** delivers raw UMP words from hardware. It knows nothing about music -- just bytes in, bytes out. Examples: TinyUSB MIDI 2.0 class driver, ESP-IDF USB host, BLE MIDI service.
+**Layer 1 (Transport)** moves raw UMP words between hardware and software. It knows nothing about music -- just bytes in, bytes out. Examples: TinyUSB MIDI 2.0 class driver (ESP32-S3, RP2040, STM32), Teensy native USB, ESP-IDF USB Host, PIO-USB (RP2040/RP2350), BLE MIDI service, Network MIDI 2.0 UDP, classic Serial DIN-5/TRS.
 
 **Layer 2 (midi2)** turns raw words into structured music data. It constructs, parses, dispatches, and processes UMP and MIDI-CI messages. It is pure C, portable, and has zero opinion about hardware or application logic. This is where you are.
 
-**Layer 3 (Platform)** is a C++ wrapper that bridges midi2 to a specific ecosystem. It provides the Arduino-friendly API (`onNoteOn`, `onCC`, `setProfile`) and handles platform-specific concerns (FreeRTOS tasks, ESP-IDF events, Teensy USB interrupts). Each platform vendorizes midi2 as a dependency.
+**Layer 3 (Platform)** bridges midi2 to a specific hardware ecosystem. It provides the developer-friendly API (`onNoteOn`, `onCC`, `setProfile`) and handles platform-specific concerns. Each platform vendorizes midi2 as a dependency. Examples:
 
-**Layer 4 (Sketch)** is the user's application. It only sees the platform API -- never midi2 directly.
+| Platform | MCU / Environment | Transport | Notes |
+|----------|-------------------|-----------|-------|
+| ESP32MIDI | ESP32-S3, ESP32-P4 | TinyUSB, BLE | FreeRTOS tasks, ESP-IDF events |
+| TeensyMIDI2 | Teensy 4.x (NXP i.MX RT) | Native USB | USB dispatch built into core |
+| DaisyMIDI2 | Daisy Seed (STM32H7) | TinyUSB, SAI | libDaisy integration |
+| AdafruitMIDI2 | RP2040, nRF52, SAMD | TinyUSB, BLE | Arduino + Adafruit_TinyUSB |
+| RP2040MIDI2 | RP2040, RP2350 | TinyUSB, PIO-USB | Host + Device, dual port |
+| Desktop | Linux, macOS, Windows | ALSA, CoreMIDI, WinRT | Testing, DAW plugins, tools |
+| XMOS | xcore.ai | xCORE USB | Real-time multi-core |
+| Zephyr | Any Zephyr-supported MCU | USB, BLE | RTOS integration |
+| Bare-metal | Any C99 target | Any | No OS, no dependencies |
+
+**Layer 4 (Application)** is the user's code. It only sees the platform API -- never midi2 directly. A synth, a MIDI controller, a lighting bridge, a DAW plugin.
 
 ### What each layer owns
 
