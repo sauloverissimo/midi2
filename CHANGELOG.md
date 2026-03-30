@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.2.0] - 2026-03-30
+
+### Added
+- **midi2_dispatch**: New module with 42 granular callbacks for typed UMP message dispatch.
+  Covers 100% of M2-104-UM v1.1.2 message types. Semantically-named parameters per
+  message type. NULL callbacks silently skipped. Feed signature compatible with
+  midi2_proc on_ump callback.
+- **midi2_msg**: Complete UMP spec coverage. New construction functions:
+  - Delta Clockstamp TPQ and DC (MT 0x0, status 0x3/0x4)
+  - Registered/Assignable Per-Note Controllers (MT 0x4, status 0x0/0x1)
+  - Relative Registered/Assignable Controllers (MT 0x4, status 0x4/0x5)
+  - Mixed Data Set Header and Payload (MT 0x5, status 0x8/0x9)
+  - Set Metronome (Flex Data, bank 0x00, status 0x02)
+  - Set Chord Name (Flex Data, bank 0x00, status 0x06)
+  - Key Signature with tonic note and channel addressing
+  - Flex Data text builder for metadata (bank 0x01) and performance text (bank 0x02)
+  - Endpoint Name, Product Instance ID, FB Name notifications (Stream)
+  - All Flex Data status bank and text subtype enums
+- 74 new tests (total: 151 across 5 modules).
+
+### Fixed
+- Utility message status nibble was at shift 16, corrected to shift 20 per
+  M2-104-UM v1.1.2 Table 26. Affects JR Clock and JR Timestamp in v0.1.0.
+- SysEx7/SysEx8 dispatch delivers status values matching the MIDI2_SYSEX7_*/MIDI2_SYSEX8_*
+  enum values (0x00/0x10/0x20/0x30) instead of raw nibbles.
+
 ## [0.1.0] - 2026-03-28
 
 Initial release.
