@@ -154,6 +154,26 @@ Layer 4: Sketch            user application
 
 midi2 is layer 2: portable C infrastructure consumed by platform wrappers. The end user never includes `midi2.h` directly -- they include `ESP32MIDI.h` or similar.
 
+## Spec coverage
+
+midi2 covers the two core MIDI 2.0 specifications that define data formats and protocols:
+
+| Spec | Document | Coverage |
+|------|----------|----------|
+| **M2-104-UM v1.1.2** | UMP Format & MIDI 2.0 Protocol | 100% -- all message types (MT 0x0-0xF) |
+| **M2-101-UM v1.2** | MIDI-CI | 100% -- all 31 message types, 4 categories |
+| **M2-115-U v1.0.2** | Bit Scaling and Resolution | 100% -- round-trip safe value scaling |
+| **M2-116-U v1.0** | MIDI Clip File | Partial -- Delta Clockstamp, Start/End of Clip |
+
+### What midi2 deliberately does NOT cover
+
+These are responsibilities of other layers, not portable C infrastructure:
+
+- **Transports** (USB-MIDI 2.0, Network MIDI 2.0 UDP, BLE MIDI) -- handled by transport libraries like TinyUSB
+- **PE Resource schemas** (M2-105 through M2-112, M2-117) -- JSON content for Property Exchange. midi2 provides the PE message transport; the JSON schemas are application-level
+- **Profile behavior** (M2-113, M2-118 through M2-125) -- how a device behaves when a Profile is enabled. midi2 provides the Profile negotiation messages; the behavior is application-level
+- **JSON parsing** -- Property Exchange headers use JSON. Parsing JSON is out of scope for a zero-allocation embedded library. Use a JSON parser of your choice at the platform layer
+
 ## Design
 
 - **C99** -- any compiler, any platform
@@ -162,7 +182,7 @@ midi2 is layer 2: portable C infrastructure consumed by platform wrappers. The e
 - **Stateless where possible** -- midi2_msg is 100% stateless
 - **Error codes, not silent failures** -- functions report what happened
 - **Portable** -- only stdint.h, stdbool.h, string.h. Runs on AVR, ARM, x86, RISC-V
-- **Spec-complete** -- covers 100% of M2-104-UM v1.1.2 message types
+- **Spec-complete** -- covers 100% of core MIDI 2.0 data formats and protocols
 
 ## License
 
