@@ -282,7 +282,7 @@ void test_jr_clock(void) {
   uint32_t w = midi2_msg_jr_clock(0, 1000);
   CHECK(((w >> 28) & 0x0F) == 0x00, "MT=Utility");
   CHECK(((w >> 24) & 0x0F) == 0, "group=0");
-  CHECK(((w >> 16) & 0xFF) == 0x01, "status=JR Clock");
+  CHECK(((w >> 20) & 0x0F) == 0x01, "status=JR Clock");
   CHECK((w & 0xFFFF) == 1000, "timestamp=1000");
   PASS();
 }
@@ -291,7 +291,7 @@ void test_jr_timestamp(void) {
   TEST("JR Timestamp: group=2, timestamp=0xFFFF");
   uint32_t w = midi2_msg_jr_timestamp(2, 0xFFFF);
   CHECK(((w >> 24) & 0x0F) == 2, "group=2");
-  CHECK(((w >> 16) & 0xFF) == 0x02, "status=JR Timestamp");
+  CHECK(((w >> 20) & 0x0F) == 0x02, "status=JR Timestamp");
   CHECK((w & 0xFFFF) == 0xFFFF, "timestamp=max");
   PASS();
 }
@@ -426,6 +426,264 @@ void test_from_midi1(void) {
   PASS();
 }
 
+/* --- Delta Clockstamp (new) --- */
+
+void test_dctpq(void) {
+  TEST("DCTPQ: 480 ticks per quarter note");
+  uint32_t w = midi2_msg_dctpq(480);
+  CHECK(((w >> 28) & 0x0F) == 0x00, "MT=Utility");
+  CHECK(((w >> 20) & 0x0F) == 0x03, "status=DCTPQ");
+  CHECK((w & 0xFFFF) == 480, "tpq=480");
+  PASS();
+}
+
+void test_delta_clockstamp(void) {
+  TEST("Delta Clockstamp: 100000 ticks");
+  uint32_t w = midi2_msg_delta_clockstamp(100000);
+  CHECK(((w >> 28) & 0x0F) == 0x00, "MT=Utility");
+  CHECK(((w >> 20) & 0x0F) == 0x04, "status nibble=DC");
+  CHECK((w & 0x000FFFFF) == 100000, "ticks=100000");
+  PASS();
+}
+
+void test_delta_clockstamp_max(void) {
+  TEST("Delta Clockstamp: max 20-bit (1048575)");
+  uint32_t w = midi2_msg_delta_clockstamp(0xFFFFF);
+  CHECK((w & 0x000FFFFF) == 0xFFFFF, "ticks=max");
+  PASS();
+}
+
+void test_delta_clockstamp_overflow(void) {
+  TEST("Delta Clockstamp: overflow masked to 20 bits");
+  uint32_t w = midi2_msg_delta_clockstamp(0x1FFFFF);
+  CHECK((w & 0x000FFFFF) == 0xFFFFF, "masked to 20 bits");
+  PASS();
+}
+
+/* --- Registered/Assignable Per-Note Controllers (new) --- */
+
+void test_reg_per_note_ctrl(void) {
+  TEST("Reg Per-Note Ctrl: note=60, idx=3, val=0x80000000");
+  uint32_t w[2];
+  midi2_msg_reg_per_note_ctrl(w, 2, 5, 60, 3, 0x80000000);
+  CHECK(midi2_msg_get_mt(w) == 0x04, "MT=CV2");
+  CHECK(midi2_msg_get_group(w) == 2, "group=2");
+  CHECK((midi2_msg_get_status(w) & 0xF0) == 0x00, "status=0x00");
+  CHECK(midi2_msg_get_channel(w) == 5, "channel=5");
+  CHECK(midi2_msg_get_note(w) == 60, "note=60");
+  CHECK((w[0] & 0xFF) == 3, "index=3");
+  CHECK(w[1] == 0x80000000, "value");
+  PASS();
+}
+
+void test_asn_per_note_ctrl(void) {
+  TEST("Asn Per-Note Ctrl: note=48, idx=7, val=0x40000000");
+  uint32_t w[2];
+  midi2_msg_asn_per_note_ctrl(w, 0, 0, 48, 7, 0x40000000);
+  CHECK((midi2_msg_get_status(w) & 0xF0) == 0x10, "status=0x10");
+  CHECK(midi2_msg_get_note(w) == 48, "note=48");
+  CHECK((w[0] & 0xFF) == 7, "index=7");
+  CHECK(w[1] == 0x40000000, "value");
+  PASS();
+}
+
+/* --- Relative RPN/NRPN (new) --- */
+
+void test_rel_rpn(void) {
+  TEST("Relative RPN: bank=0, idx=7, val=0xFFFFFF00");
+  uint32_t w[2];
+  midi2_msg_rel_rpn(w, 0, 0, 0, 7, 0xFFFFFF00);
+  CHECK(midi2_msg_get_mt(w) == 0x04, "MT=CV2");
+  CHECK((midi2_msg_get_status(w) & 0xF0) == 0x40, "status=0x40");
+  CHECK(midi2_msg_get_note(w) == 0, "bank=0");
+  CHECK((w[0] & 0xFF) == 7, "index=7");
+  CHECK(w[1] == 0xFFFFFF00, "value (negative relative)");
+  PASS();
+}
+
+void test_rel_nrpn(void) {
+  TEST("Relative NRPN: bank=1, idx=2, val=0x00000100");
+  uint32_t w[2];
+  midi2_msg_rel_nrpn(w, 0, 0, 1, 2, 0x00000100);
+  CHECK((midi2_msg_get_status(w) & 0xF0) == 0x50, "status=0x50");
+  CHECK(w[1] == 0x00000100, "value (positive relative)");
+  PASS();
+}
+
+/* --- Mixed Data Set (new) --- */
+
+void test_mds_header(void) {
+  TEST("MDS Header: mds_id=1, 256 bytes, chunk 1/3");
+  uint32_t w[4];
+  midi2_msg_mds_header(w, 0, 1, 256, 3, 1, 0x007D, 0xFFFF, 0x0001, 0x0002);
+  CHECK(midi2_msg_get_mt(w) == 0x05, "MT=Data128");
+  CHECK(((w[0] >> 20) & 0x0F) == 0x08, "status nibble=8 (header)");
+  CHECK(((w[0] >> 16) & 0x0F) == 1, "mds_id=1");
+  CHECK((w[0] & 0xFFFF) == 256, "num_bytes=256");
+  CHECK(((w[1] >> 16) & 0xFFFF) == 3, "num_chunks=3");
+  CHECK((w[1] & 0xFFFF) == 1, "this_chunk=1");
+  CHECK(((w[2] >> 16) & 0xFFFF) == 0x007D, "mfr_id=0x007D");
+  CHECK((w[2] & 0xFFFF) == 0xFFFF, "device_id=all");
+  CHECK(((w[3] >> 16) & 0xFFFF) == 0x0001, "sub_id1");
+  CHECK((w[3] & 0xFFFF) == 0x0002, "sub_id2");
+  PASS();
+}
+
+void test_mds_payload(void) {
+  TEST("MDS Payload: 14 bytes sequential");
+  uint32_t w[4];
+  uint8_t data[14];
+  int i;
+  for (i = 0; i < 14; i++) data[i] = (uint8_t)(0xA0 + i);
+  midi2_msg_mds_payload(w, 0, 1, data, 14);
+  CHECK(midi2_msg_get_mt(w) == 0x05, "MT=Data128");
+  CHECK(((w[0] >> 20) & 0x0F) == 0x09, "status nibble=9 (payload)");
+  CHECK(((w[0] >> 16) & 0x0F) == 1, "mds_id=1");
+  /* data[0] at w[0][15:8], data[1] at w[0][7:0] */
+  CHECK(((w[0] >> 8) & 0xFF) == 0xA0, "data[0]");
+  CHECK((w[0] & 0xFF) == 0xA1, "data[1]");
+  /* data[2] at w[1][31:24] */
+  CHECK(((w[1] >> 24) & 0xFF) == 0xA2, "data[2]");
+  /* data[13] at w[3][7:0] */
+  CHECK((w[3] & 0xFF) == 0xAD, "data[13]");
+  PASS();
+}
+
+/* --- Metronome (new) --- */
+
+void test_metronome(void) {
+  TEST("Flex: Metronome 4/4, 24 clocks, accent every 4th");
+  uint32_t w[4];
+  midi2_msg_metronome(w, 0, 24, 4, 0, 0, 2, 0);
+  CHECK(midi2_msg_get_mt(w) == 0x0D, "MT=Flex");
+  CHECK((w[0] & 0xFF) == 0x02, "status=metronome");
+  CHECK(((w[1] >> 24) & 0xFF) == 24, "primary_clicks=24");
+  CHECK(((w[1] >> 16) & 0xFF) == 4, "accent_1=4");
+  CHECK(((w[1] >> 8) & 0xFF) == 0, "accent_2=0");
+  CHECK((w[1] & 0xFF) == 0, "accent_3=0");
+  CHECK(((w[2] >> 24) & 0xFF) == 2, "subdiv_1=2");
+  CHECK(((w[2] >> 16) & 0xFF) == 0, "subdiv_2=0");
+  PASS();
+}
+
+/* --- Chord Name (new) --- */
+
+void test_chord_name_bb_minor(void) {
+  TEST("Flex: Chord Bb minor (spec example)");
+  uint32_t w[4];
+  /* Bb minor: tonic_sf=-1(0xF), tonic=B(2), type=minor(0x07), no alts, bass=same */
+  midi2_msg_chord_name(w, 0, 1, 0,
+                          -1, 2, 0x07,
+                          0, 0, 0, 0, 0, 0, 0, 0,
+                          -8, 0, 0x00,
+                          0, 0, 0, 0);
+  CHECK(midi2_msg_get_mt(w) == 0x0D, "MT=Flex");
+  CHECK((w[0] & 0xFF) == 0x06, "status=chord");
+  CHECK(((w[1] >> 28) & 0x0F) == 0x0F, "tonic_sf=-1");
+  CHECK(((w[1] >> 24) & 0x0F) == 2, "tonic=B");
+  CHECK(((w[1] >> 16) & 0xFF) == 0x07, "type=minor");
+  PASS();
+}
+
+/* --- Key Signature Full (new) --- */
+
+void test_key_sig_full(void) {
+  TEST("Flex: Key Sig Full -- C major, tonic=C, group-level");
+  uint32_t w[4];
+  midi2_msg_key_sig_full(w, 0, 1, 0, 0, 3, 0);  /* C=3, major=0 */
+  CHECK(midi2_msg_get_mt(w) == 0x0D, "MT=Flex");
+  CHECK((w[0] & 0xFF) == 0x05, "status=key_sig");
+  CHECK(((w[0] >> 8) & 0xFF) == 0x00, "bank=setup");
+  CHECK(((w[1] >> 28) & 0x0F) == 0, "sharps_flats=0");
+  CHECK(((w[1] >> 24) & 0x0F) == 3, "tonic=C");
+  CHECK(((w[1] >> 22) & 0x03) == 0, "key_type=major");
+  PASS();
+}
+
+void test_key_sig_full_minor(void) {
+  TEST("Flex: Key Sig Full -- A minor, tonic=A, channel 5");
+  uint32_t w[4];
+  midi2_msg_key_sig_full(w, 0, 0, 5, 0, 1, 1);  /* A=1, minor=1 */
+  CHECK(((w[0] >> 20) & 0x03) == 0, "address=channel");
+  CHECK(((w[0] >> 16) & 0x0F) == 5, "channel=5");
+  CHECK(((w[1] >> 24) & 0x0F) == 1, "tonic=A");
+  CHECK(((w[1] >> 22) & 0x03) == 1, "key_type=minor");
+  PASS();
+}
+
+/* --- Flex Text (new) --- */
+
+void test_flex_text_copyright(void) {
+  TEST("Flex: Text copyright notice (complete)");
+  uint32_t w[4];
+  const uint8_t text[] = "2026 AMEI";
+  midi2_msg_flex_text(w, 0, 0, 1, 0, MIDI2_FLEX_BANK_METADATA,
+                         MIDI2_FLEX_TEXT_COPYRIGHT, text, 9);
+  CHECK(midi2_msg_get_mt(w) == 0x0D, "MT=Flex");
+  CHECK(((w[0] >> 22) & 0x03) == 0, "format=complete");
+  CHECK(((w[0] >> 8) & 0xFF) == 0x01, "bank=metadata");
+  CHECK((w[0] & 0xFF) == 0x04, "status=copyright");
+  CHECK(((w[1] >> 24) & 0xFF) == '2', "text[0]='2'");
+  CHECK(((w[1] >> 16) & 0xFF) == '0', "text[1]='0'");
+  CHECK(((w[1] >> 8) & 0xFF) == '2', "text[2]='2'");
+  CHECK((w[1] & 0xFF) == '6', "text[3]='6'");
+  CHECK(((w[2] >> 24) & 0xFF) == ' ', "text[4]=' '");
+  PASS();
+}
+
+void test_flex_text_lyrics(void) {
+  TEST("Flex: Lyrics (performance text, bank 0x02)");
+  uint32_t w[4];
+  const uint8_t text[] = "la";
+  midi2_msg_flex_text(w, 0, 0, 0, 0, MIDI2_FLEX_BANK_PERF_TEXT,
+                         MIDI2_FLEX_PERF_LYRICS, text, 2);
+  CHECK(((w[0] >> 8) & 0xFF) == 0x02, "bank=perf_text");
+  CHECK((w[0] & 0xFF) == 0x01, "status=lyrics");
+  CHECK(((w[1] >> 24) & 0xFF) == 'l', "text[0]='l'");
+  CHECK(((w[1] >> 16) & 0xFF) == 'a', "text[1]='a'");
+  PASS();
+}
+
+/* --- Stream Text Notifications (new) --- */
+
+void test_stream_endpoint_name(void) {
+  TEST("Stream: Endpoint Name 'Test'");
+  uint32_t w[4];
+  midi2_msg_stream_endpoint_name(w, 0, (const uint8_t *)"Test", 4);
+  CHECK(midi2_msg_get_mt(w) == 0x0F, "MT=Stream");
+  CHECK(((w[0] >> 16) & 0x3FF) == 0x003, "status=endpoint name");
+  CHECK(((w[0] >> 8) & 0xFF) == 'T', "name[0]='T'");
+  CHECK((w[0] & 0xFF) == 'e', "name[1]='e'");
+  CHECK(((w[1] >> 24) & 0xFF) == 's', "name[2]='s'");
+  CHECK(((w[1] >> 16) & 0xFF) == 't', "name[3]='t'");
+  PASS();
+}
+
+void test_stream_product_id(void) {
+  TEST("Stream: Product Instance ID 'ABC'");
+  uint32_t w[4];
+  midi2_msg_stream_product_id(w, 0, (const uint8_t *)"ABC", 3);
+  CHECK(((w[0] >> 16) & 0x3FF) == 0x004, "status=product id");
+  CHECK(((w[0] >> 8) & 0xFF) == 'A', "id[0]='A'");
+  CHECK((w[0] & 0xFF) == 'B', "id[1]='B'");
+  CHECK(((w[1] >> 24) & 0xFF) == 'C', "id[2]='C'");
+  PASS();
+}
+
+void test_stream_fb_name(void) {
+  TEST("Stream: FB Name 'Piano' fb=1");
+  uint32_t w[4];
+  midi2_msg_stream_fb_name(w, 0, 1, (const uint8_t *)"Piano", 5);
+  CHECK(((w[0] >> 16) & 0x3FF) == 0x012, "status=FB name");
+  CHECK(((w[0] >> 8) & 0xFF) == 1, "fb_num=1");
+  CHECK((w[0] & 0xFF) == 'P', "name[0]='P'");
+  CHECK(((w[1] >> 24) & 0xFF) == 'i', "name[1]='i'");
+  CHECK(((w[1] >> 16) & 0xFF) == 'a', "name[2]='a'");
+  CHECK(((w[1] >> 8) & 0xFF) == 'n', "name[3]='n'");
+  CHECK((w[1] & 0xFF) == 'o', "name[4]='o'");
+  PASS();
+}
+
 /* --- Main --- */
 
 int main(void) {
@@ -489,6 +747,43 @@ int main(void) {
 
   printf("\n[MIDI 1.0 Conversion]\n");
   test_from_midi1();
+
+  printf("\n[Delta Clockstamp]\n");
+  test_dctpq();
+  test_delta_clockstamp();
+  test_delta_clockstamp_max();
+  test_delta_clockstamp_overflow();
+
+  printf("\n[Per-Note Controllers]\n");
+  test_reg_per_note_ctrl();
+  test_asn_per_note_ctrl();
+
+  printf("\n[Relative RPN/NRPN]\n");
+  test_rel_rpn();
+  test_rel_nrpn();
+
+  printf("\n[Mixed Data Set]\n");
+  test_mds_header();
+  test_mds_payload();
+
+  printf("\n[Metronome]\n");
+  test_metronome();
+
+  printf("\n[Chord Name]\n");
+  test_chord_name_bb_minor();
+
+  printf("\n[Key Signature Full]\n");
+  test_key_sig_full();
+  test_key_sig_full_minor();
+
+  printf("\n[Flex Text]\n");
+  test_flex_text_copyright();
+  test_flex_text_lyrics();
+
+  printf("\n[Stream Text Notifications]\n");
+  test_stream_endpoint_name();
+  test_stream_product_id();
+  test_stream_fb_name();
 
   printf("\n=== Results: %d passed, %d failed ===\n\n", passed, failed);
   return failed > 0 ? 1 : 0;

@@ -562,32 +562,34 @@ enum {
 static inline uint32_t midi2_msg_jr_clock(uint8_t group, uint16_t timestamp) {
   return ((uint32_t)MIDI2_MT_UTILITY << 28)
        | ((uint32_t)(group & 0x0F) << 24)
-       | ((uint32_t)MIDI2_UTILITY_JR_CLOCK << 16)
+       | ((uint32_t)MIDI2_UTILITY_JR_CLOCK << 20)
        | (uint32_t)timestamp;
 }
 
 static inline uint32_t midi2_msg_jr_timestamp(uint8_t group, uint16_t timestamp) {
   return ((uint32_t)MIDI2_MT_UTILITY << 28)
        | ((uint32_t)(group & 0x0F) << 24)
-       | ((uint32_t)MIDI2_UTILITY_JR_TIMESTAMP << 16)
+       | ((uint32_t)MIDI2_UTILITY_JR_TIMESTAMP << 20)
        | (uint32_t)timestamp;
 }
 
 /** @brief Build a Delta Clockstamp Ticks Per Quarter Note (DCTPQ) message.
  *  Declares the tick resolution for Delta Clockstamp messages in a MIDI Clip File.
+ *  Word: [MT:4][reserved:4][0011:4][reserved:4][tpq:16]
  *  @param tpq Ticks per quarter note (1-65535, 0 = reserved). */
 static inline uint32_t midi2_msg_dctpq(uint16_t tpq) {
   return ((uint32_t)MIDI2_MT_UTILITY << 28)
-       | ((uint32_t)MIDI2_UTILITY_DCTPQ << 16)
+       | ((uint32_t)MIDI2_UTILITY_DCTPQ << 20)
        | (uint32_t)tpq;
 }
 
 /** @brief Build a Delta Clockstamp (DC) message.
  *  Declares ticks since last event in a MIDI Clip File.
+ *  Word: [MT:4][reserved:4][0100:4][20-bit ticks]
  *  @param ticks Ticks since last event (20-bit, 0-1048575). */
 static inline uint32_t midi2_msg_delta_clockstamp(uint32_t ticks) {
   return ((uint32_t)MIDI2_MT_UTILITY << 28)
-       | ((uint32_t)MIDI2_UTILITY_DC << 16)
+       | ((uint32_t)MIDI2_UTILITY_DC << 20)
        | (ticks & 0x000FFFFF);
 }
 
