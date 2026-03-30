@@ -121,7 +121,21 @@ make CC=clang test # or clang
 
 213 tests across 7 modules, zero warnings with `-Wall -Wextra -Wpedantic`.
 
-Tested on: gcc (Linux), clang (Linux/macOS), MSVC (Windows), ARM Cortex-M (cross-compile).
+CI runs 11 jobs on every push:
+
+| Target | Type | What it verifies |
+|--------|------|-----------------|
+| gcc (Linux x64) | Compile + run | Primary compiler, all 213 tests |
+| clang (Linux x64) | Compile + run | Catches different warnings |
+| Apple clang (macOS) | Compile + run | macOS / Darwin compatibility |
+| MSVC (Windows) | Compile + run | Microsoft compiler, C11 mode |
+| gcc 32-bit (Linux x86) | Compile + run | No 64-bit assumptions |
+| gcc + ASan + UBSan | Compile + run | Memory safety, undefined behavior |
+| ARM Cortex-M4 | Cross-compile | ESP32, STM32, nRF52, SAMD, Daisy |
+| AArch64 (Cortex-A) | Cross-compile | Raspberry Pi, 64-bit ARM |
+| RISC-V 64 | Cross-compile | ESP32-C3/C6, future platforms |
+| ESP32 (component) | Cross-compile | ESP-IDF component compatibility |
+| AVR ATmega328P | Cross-compile | Arduino Uno/Nano (header-only) |
 
 ## Integration
 

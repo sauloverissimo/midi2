@@ -122,3 +122,22 @@ midi2 never calls `malloc`. All state is in caller-provided structs:
 | midi2_ci | `midi2_ci_state` + profile/property arrays | ~60 bytes + arrays |
 
 Total overhead for a full stack (all modules): ~470 bytes + user-chosen buffers.
+
+## Continuous Integration
+
+Every push triggers 11 parallel CI jobs verifying portability and correctness:
+
+**Desktop (compile + run 213 tests):**
+- gcc (Linux x64) -- primary compiler
+- clang (Linux x64) -- catches different warning classes
+- Apple clang (macOS) -- Darwin compatibility
+- MSVC (Windows) -- Microsoft C11 mode
+- gcc 32-bit (Linux x86) -- verifies no 64-bit assumptions in pointer/integer math
+- gcc + AddressSanitizer + UndefinedBehaviorSanitizer -- catches buffer overflows, use-after-free, signed overflow, null dereference, and other memory/UB bugs at runtime
+
+**Embedded (cross-compile all modules):**
+- ARM Cortex-M4 (`arm-none-eabi-gcc -mcpu=cortex-m4 -mthumb`) -- covers ESP32-S3, STM32, nRF52, SAMD, Daisy
+- AArch64 (`aarch64-linux-gnu-gcc`) -- covers Raspberry Pi, 64-bit ARM SoCs
+- RISC-V 64 (`riscv64-linux-gnu-gcc`) -- covers ESP32-C3/C6, future RISC-V platforms
+- ESP32 component check (`gcc -DESP_PLATFORM`) -- verifies ESP-IDF component compatibility
+- AVR ATmega328P (`avr-gcc`) -- verifies header-only modules on 8-bit MCU (Arduino Uno/Nano)

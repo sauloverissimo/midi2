@@ -15,10 +15,12 @@ cd midi2
 make test
 ```
 
-This compiles and runs all 213 tests with `-Wall -Wextra -Wpedantic`. You can also specify a compiler:
+This compiles and runs all 213 tests with `-Wall -Wextra -Wpedantic`. You can also specify a compiler or enable sanitizers:
 
 ```bash
-make CC=clang test
+make CC=clang test                                              # clang
+make CC="gcc -fsanitize=address,undefined" test                 # memory + UB checks
+make CC="gcc -m32" test                                         # 32-bit verification
 ```
 
 ## First Example: Build and Parse a Note On
