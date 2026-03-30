@@ -375,12 +375,23 @@ static inline uint32_t midi2_msg_system_3byte(uint8_t group, uint8_t status,
  * Tempo, TimeSignature, KeySignature are group-level (address=0b01).
  *--------------------------------------------------------------------*/
 
-/* Internal: flex data word 0 builder */
-static inline uint32_t midi2_msg_build_flex_w0(uint8_t group, uint8_t status) {
+/* Internal: flex data word 0 builder with bank, address, channel, and format */
+static inline uint32_t midi2_msg_build_flex_w0_full(uint8_t group, uint8_t format,
+                                                       uint8_t address, uint8_t channel,
+                                                       uint8_t bank, uint8_t status) {
   return ((uint32_t)MIDI2_MT_FLEX_DATA << 28)
        | ((uint32_t)(group & 0x0F) << 24)
-       | ((uint32_t)0x01 << 20)   /* address = 0b01 (group-level) */
-       | (uint32_t)status;
+       | ((uint32_t)(format & 0x03) << 22)
+       | ((uint32_t)(address & 0x03) << 20)
+       | ((uint32_t)(channel & 0x0F) << 16)
+       | ((uint32_t)(bank & 0xFF) << 8)
+       | (uint32_t)(status & 0xFF);
+}
+
+/* Internal: flex data word 0 builder (group-level shorthand) */
+static inline uint32_t midi2_msg_build_flex_w0(uint8_t group, uint8_t status) {
+  return midi2_msg_build_flex_w0_full(group, 0, 0x01, 0,
+                                         MIDI2_FLEX_BANK_SETUP, status);
 }
 
 /* Tempo: word1 = 10ns per quarter note */
@@ -398,19 +409,6 @@ static inline void midi2_msg_time_sig(uint32_t *w, uint8_t group,
   w[1] = ((uint32_t)numerator << 24) | ((uint32_t)denominator << 16);
 }
 
-/* Internal: flex data word 0 builder with bank, address, channel, and format */
-static inline uint32_t midi2_msg_build_flex_w0_full(uint8_t group, uint8_t format,
-                                                       uint8_t address, uint8_t channel,
-                                                       uint8_t bank, uint8_t status) {
-  return ((uint32_t)MIDI2_MT_FLEX_DATA << 28)
-       | ((uint32_t)(group & 0x0F) << 24)
-       | ((uint32_t)(format & 0x03) << 22)
-       | ((uint32_t)(address & 0x03) << 20)
-       | ((uint32_t)(channel & 0x0F) << 16)
-       | ((uint32_t)bank << 8)
-       | (uint32_t)status;
-}
-
 /* Key Signature: word1 = [sharpsFlats:4][tonicNote:4][keyType:2][0:22]
  * sharpsFlats: -7 to +7 (4-bit signed). keyType: 0=major, 1=minor.
  * address: 0x0a = channel, 0x01 = group. tonic: 0=unknown, 1=A..7=G. */
@@ -425,15 +423,17 @@ static inline void midi2_msg_key_sig(uint32_t *w, uint8_t group,
 
 /** @brief Build a Key Signature with tonic note and channel addressing.
  *  @param address 0=channel, 1=group.
- *  @param tonic 0=unknown, 1=A, 2=B, 3=C, 4=D, 5=E, 6=F, 7=G. */
+ *  @param tonic 0=unknown, 1=A, 2=B, 3=C, 4=D, 5=E, 6=F, 7=G.
+ *  @param key_type 0=major, 1=minor, 2=none/atonal, 3=reserved. */
 static inline void midi2_msg_key_sig_full(uint32_t *w, uint8_t group, uint8_t address,
                                              uint8_t channel, int8_t sharps_flats,
-                                             uint8_t tonic) {
+                                             uint8_t tonic, uint8_t key_type) {
   memset(w, 0, 16);
   w[0] = midi2_msg_build_flex_w0_full(group, 0, address, channel,
                                          MIDI2_FLEX_BANK_SETUP, MIDI2_FLEX_KEY_SIG);
   w[1] = ((uint32_t)(sharps_flats & 0x0F) << 28)
-       | ((uint32_t)(tonic & 0x0F) << 24);
+       | ((uint32_t)(tonic & 0x0F) << 24)
+       | ((uint32_t)(key_type & 0x03) << 22);
 }
 
 /* Set Metronome: group-level (address=1), format=0 (complete).
@@ -474,7 +474,7 @@ static inline void midi2_msg_chord_name(uint32_t *w, uint8_t group, uint8_t addr
                                          MIDI2_FLEX_BANK_SETUP, MIDI2_FLEX_CHORD_NAME);
   w[1] = ((uint32_t)(tonic_sf & 0x0F) << 28)
        | ((uint32_t)(tonic_note & 0x0F) << 24)
-       | ((uint32_t)chord_type << 16)
+       | ((uint32_t)(chord_type & 0xFF) << 16)
        | ((uint32_t)(alt1_type & 0x0F) << 12)
        | ((uint32_t)(alt1_deg & 0x0F) << 8)
        | ((uint32_t)(alt2_type & 0x0F) << 4)
@@ -485,7 +485,7 @@ static inline void midi2_msg_chord_name(uint32_t *w, uint8_t group, uint8_t addr
        | ((uint32_t)(alt4_deg & 0x0F) << 16);
   w[3] = ((uint32_t)(bass_sf & 0x0F) << 28)
        | ((uint32_t)(bass_note & 0x0F) << 24)
-       | ((uint32_t)bass_type << 16)
+       | ((uint32_t)(bass_type & 0xFF) << 16)
        | ((uint32_t)(bass_alt1_type & 0x0F) << 12)
        | ((uint32_t)(bass_alt1_deg & 0x0F) << 8)
        | ((uint32_t)(bass_alt2_type & 0x0F) << 4)
