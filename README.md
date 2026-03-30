@@ -10,7 +10,7 @@
 [![Platforms](https://img.shields.io/badge/platforms-11_targets-informational.svg)]()
 [![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-pink.svg)](https://github.com/sponsors/sauloverissimo)
 
-Portable MIDI 2.0 UMP library for embedded and desktop. C99, zero dependencies, zero allocation.
+Portable MIDI 2.0 UMP library. C99, zero dependencies, zero allocation. Runs from AVR to desktop.
 
 ## What it does
 
