@@ -1,11 +1,16 @@
 # midi2
 
 [![CI](https://github.com/sauloverissimo/midi2/actions/workflows/ci.yml/badge.svg)](https://github.com/sauloverissimo/midi2/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![C99](https://img.shields.io/badge/C-C99-blue.svg)]()
 [![Tests](https://img.shields.io/badge/tests-213%20passing-brightgreen.svg)]()
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![C99](https://img.shields.io/badge/standard-C99-blue.svg)]()
+[![Zero Alloc](https://img.shields.io/badge/allocation-zero-orange.svg)]()
+[![UMP 100%](https://img.shields.io/badge/UMP_M2--104-100%25-blueviolet.svg)]()
+[![CI 100%](https://img.shields.io/badge/MIDI--CI_M2--101-100%25-blueviolet.svg)]()
+[![Platforms](https://img.shields.io/badge/platforms-11_targets-informational.svg)]()
+[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-pink.svg)](https://github.com/sponsors/sauloverissimo)
 
-Portable MIDI 2.0 UMP library. C99, zero dependencies, zero allocation.
+Portable MIDI 2.0 UMP library for embedded and desktop. C99, zero dependencies, zero allocation.
 
 ## What it does
 
@@ -268,6 +273,10 @@ These are responsibilities of other layers, not portable C infrastructure:
 - **Portable** -- only stdint.h, stdbool.h, string.h. Runs on AVR, ARM, x86, RISC-V
 - **Spec-complete** -- covers 100% of core MIDI 2.0 data formats and protocols
 
+## Sponsor
+
+If midi2 is useful to your project, consider [sponsoring](https://github.com/sponsors/sauloverissimo) the development. Sponsorship helps fund hardware for testing, spec access, and continued maintenance across platforms.
+
 ## License
 
-MIT
+MIT -- free for commercial and open-source use.
