@@ -59,10 +59,14 @@ enum {
   MIDI2_STATUS_CHAN_PRESSURE  = 0xD0,
   MIDI2_STATUS_PITCH_BEND    = 0xE0,
   MIDI2_STATUS_PER_NOTE_MGMT = 0xF0,
-  MIDI2_STATUS_RPN           = 0x20,
-  MIDI2_STATUS_NRPN          = 0x30,
+  MIDI2_STATUS_REG_PER_NOTE  = 0x00,  /* Registered Per-Note Controller */
+  MIDI2_STATUS_ASN_PER_NOTE  = 0x10,  /* Assignable Per-Note Controller */
+  MIDI2_STATUS_RPN           = 0x20,  /* Registered Controller (RPN) */
+  MIDI2_STATUS_NRPN          = 0x30,  /* Assignable Controller (NRPN) */
+  MIDI2_STATUS_REL_RPN       = 0x40,  /* Relative Registered Controller */
+  MIDI2_STATUS_REL_NRPN      = 0x50,  /* Relative Assignable Controller */
   MIDI2_STATUS_PER_NOTE_PB   = 0x60,
-  MIDI2_STATUS_PER_NOTE_CC   = 0x10,
+  MIDI2_STATUS_PER_NOTE_CC   = 0x10,  /* alias for ASN_PER_NOTE (same opcode) */
 };
 
 /*--------------------------------------------------------------------+
@@ -79,9 +83,44 @@ enum {
  * Flex Data Status
  *--------------------------------------------------------------------*/
 enum {
-  MIDI2_FLEX_TEMPO    = 0x00,
-  MIDI2_FLEX_TIME_SIG = 0x01,
-  MIDI2_FLEX_KEY_SIG  = 0x05,
+  MIDI2_FLEX_TEMPO      = 0x00,
+  MIDI2_FLEX_TIME_SIG   = 0x01,
+  MIDI2_FLEX_METRONOME  = 0x02,
+  MIDI2_FLEX_KEY_SIG    = 0x05,
+  MIDI2_FLEX_CHORD_NAME = 0x06,
+};
+
+/* Flex Data Status Banks */
+enum {
+  MIDI2_FLEX_BANK_SETUP    = 0x00,  /* Setup & Performance Events */
+  MIDI2_FLEX_BANK_METADATA = 0x01,  /* Metadata Text */
+  MIDI2_FLEX_BANK_PERF_TEXT = 0x02, /* Performance Text Events (lyrics) */
+};
+
+/* Flex Data Metadata Text status values (bank 0x01) */
+enum {
+  MIDI2_FLEX_TEXT_UNKNOWN          = 0x00,
+  MIDI2_FLEX_TEXT_PROJECT_NAME     = 0x01,
+  MIDI2_FLEX_TEXT_COMPOSITION_NAME = 0x02,
+  MIDI2_FLEX_TEXT_CLIP_NAME        = 0x03,
+  MIDI2_FLEX_TEXT_COPYRIGHT        = 0x04,
+  MIDI2_FLEX_TEXT_COMPOSER_NAME    = 0x05,
+  MIDI2_FLEX_TEXT_LYRICIST_NAME    = 0x06,
+  MIDI2_FLEX_TEXT_ARRANGER_NAME    = 0x07,
+  MIDI2_FLEX_TEXT_PUBLISHER_NAME   = 0x08,
+  MIDI2_FLEX_TEXT_PERFORMER_NAME   = 0x09,
+  MIDI2_FLEX_TEXT_ACCOMPANY_NAME   = 0x0A,
+  MIDI2_FLEX_TEXT_RECORDING_DATE   = 0x0B,
+  MIDI2_FLEX_TEXT_RECORDING_LOC    = 0x0C,
+};
+
+/* Flex Data Performance Text status values (bank 0x02) */
+enum {
+  MIDI2_FLEX_PERF_UNKNOWN        = 0x00,
+  MIDI2_FLEX_PERF_LYRICS         = 0x01,
+  MIDI2_FLEX_PERF_LYRICS_LANG    = 0x02,
+  MIDI2_FLEX_PERF_RUBY           = 0x03,
+  MIDI2_FLEX_PERF_RUBY_LANG      = 0x04,
 };
 
 /*--------------------------------------------------------------------+
@@ -273,6 +312,45 @@ static inline void midi2_msg_per_note_mgmt(uint32_t *w, uint8_t group, uint8_t c
 }
 
 /*--------------------------------------------------------------------+
+ * Registered Per-Note Controller (MT 0x4, status 0x0)
+ * 256 controllers per note, defined by MMA/AMEI.
+ *--------------------------------------------------------------------*/
+/** @brief Build a Registered Per-Note Controller message (MT 0x4).
+ *  @param index Controller index (0-255). */
+static inline void midi2_msg_reg_per_note_ctrl(uint32_t *w, uint8_t group, uint8_t channel,
+                                                  uint8_t note, uint8_t index, uint32_t value) {
+  w[0] = midi2_msg_build_cv2_w0(group, MIDI2_STATUS_REG_PER_NOTE, channel, note & 0x7F, index);
+  w[1] = value;
+}
+
+/** @brief Build an Assignable Per-Note Controller message (MT 0x4).
+ *  @param index Controller index (0-255). Application-specific. */
+static inline void midi2_msg_asn_per_note_ctrl(uint32_t *w, uint8_t group, uint8_t channel,
+                                                  uint8_t note, uint8_t index, uint32_t value) {
+  w[0] = midi2_msg_build_cv2_w0(group, MIDI2_STATUS_ASN_PER_NOTE, channel, note & 0x7F, index);
+  w[1] = value;
+}
+
+/*--------------------------------------------------------------------+
+ * Relative RPN/NRPN (MT 0x4, status 0x4/0x5)
+ * Two's complement relative value (positive = increase, negative = decrease).
+ * Cannot be translated to MIDI 1.0.
+ *--------------------------------------------------------------------*/
+/** @brief Build a Relative Registered Controller (RPN) message. */
+static inline void midi2_msg_rel_rpn(uint32_t *w, uint8_t group, uint8_t channel,
+                                       uint8_t msb, uint8_t lsb, uint32_t value) {
+  w[0] = midi2_msg_build_cv2_w0(group, MIDI2_STATUS_REL_RPN, channel, msb & 0x7F, lsb & 0x7F);
+  w[1] = value;
+}
+
+/** @brief Build a Relative Assignable Controller (NRPN) message. */
+static inline void midi2_msg_rel_nrpn(uint32_t *w, uint8_t group, uint8_t channel,
+                                        uint8_t msb, uint8_t lsb, uint32_t value) {
+  w[0] = midi2_msg_build_cv2_w0(group, MIDI2_STATUS_REL_NRPN, channel, msb & 0x7F, lsb & 0x7F);
+  w[1] = value;
+}
+
+/*--------------------------------------------------------------------+
  * System Messages (MT 0x1, 1 word)
  *--------------------------------------------------------------------*/
 static inline uint32_t midi2_msg_system(uint8_t group, uint8_t status) {
@@ -320,8 +398,22 @@ static inline void midi2_msg_time_sig(uint32_t *w, uint8_t group,
   w[1] = ((uint32_t)numerator << 24) | ((uint32_t)denominator << 16);
 }
 
+/* Internal: flex data word 0 builder with bank, address, channel, and format */
+static inline uint32_t midi2_msg_build_flex_w0_full(uint8_t group, uint8_t format,
+                                                       uint8_t address, uint8_t channel,
+                                                       uint8_t bank, uint8_t status) {
+  return ((uint32_t)MIDI2_MT_FLEX_DATA << 28)
+       | ((uint32_t)(group & 0x0F) << 24)
+       | ((uint32_t)(format & 0x03) << 22)
+       | ((uint32_t)(address & 0x03) << 20)
+       | ((uint32_t)(channel & 0x0F) << 16)
+       | ((uint32_t)bank << 8)
+       | (uint32_t)status;
+}
+
 /* Key Signature: word1 = [sharpsFlats:4][tonicNote:4][keyType:2][0:22]
- * sharpsFlats: -7 to +7 (4-bit signed). keyType: 0=major, 1=minor. */
+ * sharpsFlats: -7 to +7 (4-bit signed). keyType: 0=major, 1=minor.
+ * address: 0x0a = channel, 0x01 = group. tonic: 0=unknown, 1=A..7=G. */
 static inline void midi2_msg_key_sig(uint32_t *w, uint8_t group,
                                        int8_t sharps_flats, bool minor) {
   memset(w, 0, 16);
@@ -329,6 +421,106 @@ static inline void midi2_msg_key_sig(uint32_t *w, uint8_t group,
   uint8_t sf4 = (uint8_t)(sharps_flats & 0x0F);
   uint8_t key_type = minor ? 1 : 0;
   w[1] = ((uint32_t)sf4 << 28) | ((uint32_t)key_type << 22);
+}
+
+/** @brief Build a Key Signature with tonic note and channel addressing.
+ *  @param address 0=channel, 1=group.
+ *  @param tonic 0=unknown, 1=A, 2=B, 3=C, 4=D, 5=E, 6=F, 7=G. */
+static inline void midi2_msg_key_sig_full(uint32_t *w, uint8_t group, uint8_t address,
+                                             uint8_t channel, int8_t sharps_flats,
+                                             uint8_t tonic) {
+  memset(w, 0, 16);
+  w[0] = midi2_msg_build_flex_w0_full(group, 0, address, channel,
+                                         MIDI2_FLEX_BANK_SETUP, MIDI2_FLEX_KEY_SIG);
+  w[1] = ((uint32_t)(sharps_flats & 0x0F) << 28)
+       | ((uint32_t)(tonic & 0x0F) << 24);
+}
+
+/* Set Metronome: group-level (address=1), format=0 (complete).
+ * primary_clicks: MIDI clocks per primary click
+ * accent_1/2/3: bar accent parts (sum = beats in bar)
+ * subdiv_1/2: subdivision clicks per primary click period */
+static inline void midi2_msg_metronome(uint32_t *w, uint8_t group,
+                                          uint8_t primary_clicks,
+                                          uint8_t accent_1, uint8_t accent_2, uint8_t accent_3,
+                                          uint8_t subdiv_1, uint8_t subdiv_2) {
+  memset(w, 0, 16);
+  w[0] = midi2_msg_build_flex_w0_full(group, 0, 0x01, 0,
+                                         MIDI2_FLEX_BANK_SETUP, MIDI2_FLEX_METRONOME);
+  w[1] = ((uint32_t)primary_clicks << 24)
+       | ((uint32_t)accent_1 << 16)
+       | ((uint32_t)accent_2 << 8)
+       | (uint32_t)accent_3;
+  w[2] = ((uint32_t)subdiv_1 << 24)
+       | ((uint32_t)subdiv_2 << 16);
+}
+
+/* Set Chord Name: channel-addressable, format=0.
+ * Tonic: sharps_flats (4-bit signed), tonic_note (0=unknown..7=G).
+ * chord_type: 0x00=clear, 0x01=major, 0x07=minor, etc. (see spec Table 14)
+ * Alterations: up to 4 for chord, up to 2 for bass. type: 0=none, 1=add, 2=sub, 3=raise, 4=lower.
+ * Bass: bass_sharps_flats, bass_note, bass_chord_type. */
+static inline void midi2_msg_chord_name(uint32_t *w, uint8_t group, uint8_t address,
+                                           uint8_t channel,
+                                           int8_t tonic_sf, uint8_t tonic_note, uint8_t chord_type,
+                                           uint8_t alt1_type, uint8_t alt1_deg,
+                                           uint8_t alt2_type, uint8_t alt2_deg,
+                                           uint8_t alt3_type, uint8_t alt3_deg,
+                                           uint8_t alt4_type, uint8_t alt4_deg,
+                                           int8_t bass_sf, uint8_t bass_note, uint8_t bass_type,
+                                           uint8_t bass_alt1_type, uint8_t bass_alt1_deg,
+                                           uint8_t bass_alt2_type, uint8_t bass_alt2_deg) {
+  w[0] = midi2_msg_build_flex_w0_full(group, 0, address, channel,
+                                         MIDI2_FLEX_BANK_SETUP, MIDI2_FLEX_CHORD_NAME);
+  w[1] = ((uint32_t)(tonic_sf & 0x0F) << 28)
+       | ((uint32_t)(tonic_note & 0x0F) << 24)
+       | ((uint32_t)chord_type << 16)
+       | ((uint32_t)(alt1_type & 0x0F) << 12)
+       | ((uint32_t)(alt1_deg & 0x0F) << 8)
+       | ((uint32_t)(alt2_type & 0x0F) << 4)
+       | (uint32_t)(alt2_deg & 0x0F);
+  w[2] = ((uint32_t)(alt3_type & 0x0F) << 28)
+       | ((uint32_t)(alt3_deg & 0x0F) << 24)
+       | ((uint32_t)(alt4_type & 0x0F) << 20)
+       | ((uint32_t)(alt4_deg & 0x0F) << 16);
+  w[3] = ((uint32_t)(bass_sf & 0x0F) << 28)
+       | ((uint32_t)(bass_note & 0x0F) << 24)
+       | ((uint32_t)bass_type << 16)
+       | ((uint32_t)(bass_alt1_type & 0x0F) << 12)
+       | ((uint32_t)(bass_alt1_deg & 0x0F) << 8)
+       | ((uint32_t)(bass_alt2_type & 0x0F) << 4)
+       | (uint32_t)(bass_alt2_deg & 0x0F);
+}
+
+/*--------------------------------------------------------------------+
+ * Flex Data Text Messages (MT 0xD, 4 words)
+ *
+ * Bank 0x01: Metadata Text (project name, composer, copyright, etc.)
+ * Bank 0x02: Performance Text (lyrics, ruby, language)
+ * UTF-8 text, no BOM. Up to 12 bytes per UMP in words 1-3.
+ * Multi-UMP: format 0=complete, 1=start, 2=continue, 3=end.
+ *--------------------------------------------------------------------*/
+
+/** @brief Build a Flex Data text message (metadata or performance text).
+ *  @param format 0=complete, 1=start, 2=continue, 3=end.
+ *  @param address 0=channel, 1=group.
+ *  @param bank   0x01=metadata, 0x02=performance text.
+ *  @param status Text subtype (see MIDI2_FLEX_TEXT_* / MIDI2_FLEX_PERF_*).
+ *  @param text   UTF-8 text data (up to 12 bytes per UMP).
+ *  @param len    Bytes of text in this UMP (0-12). */
+static inline void midi2_msg_flex_text(uint32_t *w, uint8_t group, uint8_t format,
+                                          uint8_t address, uint8_t channel,
+                                          uint8_t bank, uint8_t status,
+                                          const uint8_t *text, uint8_t len) {
+  if (len > 12) len = 12;
+  w[0] = midi2_msg_build_flex_w0_full(group, format, address, channel, bank, status);
+  w[1] = 0; w[2] = 0; w[3] = 0;
+  uint8_t i;
+  for (i = 0; i < len; i++) {
+    uint8_t wi = (uint8_t)(1 + i / 4);
+    uint8_t sh = (uint8_t)(24 - (i % 4) * 8);
+    w[wi] |= ((uint32_t)text[i] << sh);
+  }
 }
 
 /*--------------------------------------------------------------------+
@@ -360,8 +552,11 @@ static inline void midi2_msg_sysex7_packet(uint32_t *w, uint8_t group,
  * Timestamp unit: 1/31250 of a second (~32us)
  *--------------------------------------------------------------------*/
 enum {
+  MIDI2_UTILITY_NOOP         = 0x00,
   MIDI2_UTILITY_JR_CLOCK     = 0x01,
   MIDI2_UTILITY_JR_TIMESTAMP = 0x02,
+  MIDI2_UTILITY_DCTPQ        = 0x03,  /* Delta Clockstamp Ticks Per Quarter Note */
+  MIDI2_UTILITY_DC           = 0x04,  /* Delta Clockstamp (ticks since last event) */
 };
 
 static inline uint32_t midi2_msg_jr_clock(uint8_t group, uint16_t timestamp) {
@@ -376,6 +571,24 @@ static inline uint32_t midi2_msg_jr_timestamp(uint8_t group, uint16_t timestamp)
        | ((uint32_t)(group & 0x0F) << 24)
        | ((uint32_t)MIDI2_UTILITY_JR_TIMESTAMP << 16)
        | (uint32_t)timestamp;
+}
+
+/** @brief Build a Delta Clockstamp Ticks Per Quarter Note (DCTPQ) message.
+ *  Declares the tick resolution for Delta Clockstamp messages in a MIDI Clip File.
+ *  @param tpq Ticks per quarter note (1-65535, 0 = reserved). */
+static inline uint32_t midi2_msg_dctpq(uint16_t tpq) {
+  return ((uint32_t)MIDI2_MT_UTILITY << 28)
+       | ((uint32_t)MIDI2_UTILITY_DCTPQ << 16)
+       | (uint32_t)tpq;
+}
+
+/** @brief Build a Delta Clockstamp (DC) message.
+ *  Declares ticks since last event in a MIDI Clip File.
+ *  @param ticks Ticks since last event (20-bit, 0-1048575). */
+static inline uint32_t midi2_msg_delta_clockstamp(uint32_t ticks) {
+  return ((uint32_t)MIDI2_MT_UTILITY << 28)
+       | ((uint32_t)MIDI2_UTILITY_DC << 16)
+       | (ticks & 0x000FFFFF);
 }
 
 /*--------------------------------------------------------------------+
@@ -511,6 +724,68 @@ static inline void midi2_msg_stream_fb_info(uint32_t *w,
        | (uint32_t)(protocol & 0x03);
 }
 
+/* Endpoint Name Notification (multi-packet text, up to 14 bytes per UMP).
+ * format: 0=complete, 1=start, 2=continue, 3=end.
+ * name: UTF-8 text, up to 14 bytes per UMP. */
+static inline void midi2_msg_stream_endpoint_name(uint32_t *w, uint8_t format,
+                                                     const uint8_t *name, uint8_t len) {
+  if (len > 14) len = 14;
+  memset(w, 0, 16);
+  w[0] = midi2_msg_build_stream_w0(format, MIDI2_STREAM_ENDPOINT_NAME);
+  uint8_t i;
+  for (i = 0; i < len; i++) {
+    if (i < 2) {
+      w[0] |= ((uint32_t)name[i] << (8 - i * 8));
+    } else {
+      uint8_t offset = (uint8_t)(i - 2);
+      uint8_t dwi = (uint8_t)(1 + offset / 4);
+      uint8_t dsh = (uint8_t)(24 - (offset % 4) * 8);
+      w[dwi] |= ((uint32_t)name[i] << dsh);
+    }
+  }
+}
+
+/* Product Instance Id Notification (multi-packet text, up to 14 bytes per UMP). */
+static inline void midi2_msg_stream_product_id(uint32_t *w, uint8_t format,
+                                                  const uint8_t *id, uint8_t len) {
+  if (len > 14) len = 14;
+  memset(w, 0, 16);
+  w[0] = midi2_msg_build_stream_w0(format, MIDI2_STREAM_PRODUCT_INSTANCE_ID);
+  uint8_t i;
+  for (i = 0; i < len; i++) {
+    if (i < 2) {
+      w[0] |= ((uint32_t)id[i] << (8 - i * 8));
+    } else {
+      uint8_t offset = (uint8_t)(i - 2);
+      uint8_t dwi = (uint8_t)(1 + offset / 4);
+      uint8_t dsh = (uint8_t)(24 - (offset % 4) * 8);
+      w[dwi] |= ((uint32_t)id[i] << dsh);
+    }
+  }
+}
+
+/* Function Block Name Notification (multi-packet text, up to 13 bytes per UMP).
+ * fb_num goes in w[0] bits [15:8], leaving 13 bytes for name. */
+static inline void midi2_msg_stream_fb_name(uint32_t *w, uint8_t format,
+                                               uint8_t fb_num,
+                                               const uint8_t *name, uint8_t len) {
+  if (len > 13) len = 13;
+  memset(w, 0, 16);
+  w[0] = midi2_msg_build_stream_w0(format, MIDI2_STREAM_FB_NAME)
+       | ((uint32_t)fb_num << 8);
+  uint8_t i;
+  for (i = 0; i < len; i++) {
+    if (i == 0) {
+      w[0] |= (uint32_t)name[0];
+    } else {
+      uint8_t offset = (uint8_t)(i - 1);
+      uint8_t dwi = (uint8_t)(1 + offset / 4);
+      uint8_t dsh = (uint8_t)(24 - (offset % 4) * 8);
+      w[dwi] |= ((uint32_t)name[i] << dsh);
+    }
+  }
+}
+
 /* Start/End of Clip */
 static inline void midi2_msg_stream_start_of_clip(uint32_t *w) {
   memset(w, 0, 16);
@@ -559,6 +834,61 @@ static inline void midi2_msg_sysex8_packet(uint32_t *w, uint8_t group,
   for (i = 1; i < len; i++) {
     uint8_t wi = (uint8_t)(1 + (i - 1) / 4);
     uint8_t sh = (uint8_t)(24 - ((i - 1) % 4) * 8);
+    w[wi] |= ((uint32_t)data[i] << sh);
+  }
+}
+
+/*--------------------------------------------------------------------+
+ * Mixed Data Set (MT 0x5, status 0x8/0x9, 4 words)
+ *
+ * MDS carries non-MIDI payloads (firmware, XML, etc.) in chunks.
+ * Each chunk: 1 Header UMP + N Payload UMPs, all sharing mds_id.
+ * Cannot be translated to MIDI 1.0.
+ *--------------------------------------------------------------------*/
+enum {
+  MIDI2_MDS_HEADER  = 0x80,
+  MIDI2_MDS_PAYLOAD = 0x90,
+};
+
+/** @brief Build a Mixed Data Set Header UMP.
+ *  @param mds_id    MDS ID (0-15), ties chunks together.
+ *  @param num_bytes Number of valid bytes in this chunk (including header).
+ *  @param num_chunks Total chunks in data set (0 = unknown).
+ *  @param this_chunk This chunk number (starting from 1).
+ *  @param mfr_id    16-bit Manufacturer ID (see spec 7.10).
+ *  @param device_id Device ID (0xFFFF = all call).
+ *  @param sub_id1   Sub ID #1.
+ *  @param sub_id2   Sub ID #2. */
+static inline void midi2_msg_mds_header(uint32_t *w, uint8_t group, uint8_t mds_id,
+                                          uint16_t num_bytes, uint16_t num_chunks,
+                                          uint16_t this_chunk, uint16_t mfr_id,
+                                          uint16_t device_id, uint16_t sub_id1,
+                                          uint16_t sub_id2) {
+  w[0] = ((uint32_t)MIDI2_MT_DATA128 << 28)
+       | ((uint32_t)(group & 0x0F) << 24)
+       | ((uint32_t)(MIDI2_MDS_HEADER | (mds_id & 0x0F)) << 16)
+       | (uint32_t)num_bytes;
+  w[1] = ((uint32_t)num_chunks << 16) | (uint32_t)this_chunk;
+  w[2] = ((uint32_t)mfr_id << 16) | (uint32_t)device_id;
+  w[3] = ((uint32_t)sub_id1 << 16) | (uint32_t)sub_id2;
+}
+
+/** @brief Build a Mixed Data Set Payload UMP.
+ *  @param mds_id MDS ID (0-15).
+ *  @param data   Payload bytes (up to 14).
+ *  @param len    Number of payload bytes (0-14). */
+static inline void midi2_msg_mds_payload(uint32_t *w, uint8_t group, uint8_t mds_id,
+                                            const uint8_t *data, uint8_t len) {
+  if (len > 14) len = 14;
+  memset(w, 0, 16);
+  w[0] = ((uint32_t)MIDI2_MT_DATA128 << 28)
+       | ((uint32_t)(group & 0x0F) << 24)
+       | ((uint32_t)(MIDI2_MDS_PAYLOAD | (mds_id & 0x0F)) << 16);
+  /* Pack 14 data bytes into w[0] bits [15:0] + w[1..3] */
+  uint8_t i;
+  for (i = 0; i < len; i++) {
+    uint8_t wi = (uint8_t)((i + 2) / 4);
+    uint8_t sh = (uint8_t)(24 - ((i + 2) % 4) * 8);
     w[wi] |= ((uint32_t)data[i] << sh);
   }
 }
