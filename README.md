@@ -1,4 +1,4 @@
-# midi2
+# 🎹 midi2
 
 [![CI](https://github.com/sauloverissimo/midi2/actions/workflows/ci.yml/badge.svg)](https://github.com/sauloverissimo/midi2/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-213%20passing-brightgreen.svg)]()
