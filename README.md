@@ -145,14 +145,72 @@ midi2 is designed to be vendored (copied into your project). Drop the `src/` fil
 
 ## Architecture
 
+midi2 is layer 2 in a 4-layer embedded MIDI 2.0 stack:
+
 ```
-Layer 1: TinyUSB          hardware -> raw UMP words
-Layer 2: midi2            words -> parsed music data (THIS library)
-Layer 3: Platform          ESP32MIDI / Adafruit / Teensy (C++ wrapper)
-Layer 4: Sketch            user application
+Layer 4: Sketch        Your application code
+Layer 3: Platform      ESP32MIDI / AdafruitMIDI2 / TeensyMIDI2 (C++ wrapper)
+Layer 2: midi2         THIS LIBRARY -- portable C infrastructure
+Layer 1: Transport     TinyUSB / USB Host / BLE / Network / Serial
 ```
 
-midi2 is layer 2: portable C infrastructure consumed by platform wrappers. The end user never includes `midi2.h` directly -- they include `ESP32MIDI.h` or similar.
+### How the layers work
+
+**Layer 1 (Transport)** delivers raw UMP words from hardware. It knows nothing about music -- just bytes in, bytes out. Examples: TinyUSB MIDI 2.0 class driver, ESP-IDF USB host, BLE MIDI service.
+
+**Layer 2 (midi2)** turns raw words into structured music data. It constructs, parses, dispatches, and processes UMP and MIDI-CI messages. It is pure C, portable, and has zero opinion about hardware or application logic. This is where you are.
+
+**Layer 3 (Platform)** is a C++ wrapper that bridges midi2 to a specific ecosystem. It provides the Arduino-friendly API (`onNoteOn`, `onCC`, `setProfile`) and handles platform-specific concerns (FreeRTOS tasks, ESP-IDF events, Teensy USB interrupts). Each platform vendorizes midi2 as a dependency.
+
+**Layer 4 (Sketch)** is the user's application. It only sees the platform API -- never midi2 directly.
+
+### What each layer owns
+
+| Responsibility | Layer |
+|---------------|-------|
+| USB descriptors, endpoints, DMA | Transport (1) |
+| UMP construction, parsing, scaling | **midi2 (2)** |
+| Typed dispatch (42 UMP + 33 CI callbacks) | **midi2 (2)** |
+| SysEx reassembly, group filtering | **midi2 (2)** |
+| CI message construction and parsing | **midi2 (2)** |
+| MIDI 1.0 byte stream to UMP conversion | **midi2 (2)** |
+| CI convenience responder (optional) | **midi2 (2)** |
+| Arduino-friendly callbacks (`onNoteOn`) | Platform (3) |
+| Profile behavior (GM2, MPE, etc.) | Platform (3) or Sketch (4) |
+| PE JSON schema interpretation | Platform (3) or Sketch (4) |
+| MUID peer management, CI session state | Platform (3) |
+| FreeRTOS tasks, event queues | Platform (3) |
+| Musical application logic | Sketch (4) |
+
+### Platform integration model
+
+midi2 is designed to be vendorized (copied) into platform wrappers. Each platform decides which midi2 modules to include:
+
+| Platform | Typical midi2 modules used |
+|----------|---------------------------|
+| **ESP32MIDI** (TinyUSB) | All -- transport delivers raw words, midi2 does everything |
+| **TeensyMIDI2** (native USB) | msg + ci_msg + ci_dispatch -- Teensy USB already has typed dispatch |
+| **AdafruitMIDI2** (TinyUSB Arduino) | All -- similar to ESP32MIDI |
+| **DaisyMIDI2** (STM32/TinyUSB) | All -- similar to ESP32MIDI |
+| **RP2040MIDI2** (TinyUSB/PIO-USB) | All -- similar to ESP32MIDI |
+
+Platforms that already have typed dispatch at the transport level (Teensy) use fewer midi2 modules. Platforms that receive raw UMP words (TinyUSB-based) use the full stack.
+
+### Optional modules
+
+Not every project needs every module. midi2 is designed for incremental adoption:
+
+```
+midi2_msg.h          Always needed. Header-only, zero cost.
+  |
+  +-- midi2_dispatch   Add if you want typed UMP callbacks.
+  +-- midi2_proc       Add if you need SysEx reassembly or group filtering.
+  +-- midi2_conv       Add if you receive MIDI 1.0 byte streams (Serial/DIN).
+  +-- midi2_ci_msg     Add if you handle MIDI-CI messages.
+       |
+       +-- midi2_ci_dispatch  Add if you want typed CI callbacks.
+       +-- midi2_ci           Add if you want a convenience CI responder.
+```
 
 ## Spec coverage
 
