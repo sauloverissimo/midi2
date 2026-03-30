@@ -129,6 +129,9 @@ typedef void (*midi2_dp_mds_header_cb)(uint8_t group, uint8_t mds_id,
                                          uint16_t this_chunk, uint16_t mfr_id,
                                          uint16_t device_id, uint16_t sub_id1,
                                          uint16_t sub_id2, void *context);
+/** MDS Payload callback. Always delivers 14 bytes per UMP packet.
+ *  The actual valid byte count for the chunk is in the MDS Header's num_bytes field;
+ *  the caller must track header state to know when payload ends. */
 typedef void (*midi2_dp_mds_payload_cb)(uint8_t group, uint8_t mds_id,
                                           const uint8_t *data, uint8_t len, void *context);
 
@@ -174,6 +177,8 @@ typedef void (*midi2_dp_device_identity_cb)(uint32_t manufacturer_id,
                                               uint32_t version_id, void *context);
 typedef void (*midi2_dp_stream_text_cb)(uint16_t status, uint8_t format,
                                           const uint8_t *data, uint8_t len, void *context);
+typedef void (*midi2_dp_fb_name_cb)(uint8_t format, uint8_t fb_num,
+                                      const uint8_t *name, uint8_t len, void *context);
 typedef void (*midi2_dp_config_cb)(uint8_t protocol, bool rx_jr, bool tx_jr, void *context);
 typedef void (*midi2_dp_fb_discovery_cb)(uint8_t fb_num, uint8_t filter, void *context);
 typedef void (*midi2_dp_fb_info_cb)(bool active, uint8_t fb_num, uint8_t direction,
@@ -249,7 +254,8 @@ typedef struct {
   midi2_dp_endpoint_discovery_cb on_endpoint_discovery;
   midi2_dp_endpoint_info_cb      on_endpoint_info;
   midi2_dp_device_identity_cb    on_device_identity;
-  midi2_dp_stream_text_cb        on_stream_text;  /* endpoint name, product id, fb name */
+  midi2_dp_stream_text_cb        on_stream_text;  /* endpoint name, product instance id */
+  midi2_dp_fb_name_cb            on_fb_name;      /* function block name (separate: has fb_num) */
   midi2_dp_config_cb             on_config_request;
   midi2_dp_config_cb             on_config_notify;
   midi2_dp_fb_discovery_cb       on_fb_discovery;

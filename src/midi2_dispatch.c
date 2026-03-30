@@ -120,7 +120,7 @@ static void dispatch_cv1(midi2_dispatch *dp, uint32_t w) {
 static void dispatch_sysex7(midi2_dispatch *dp, const uint32_t *w) {
   if (!dp->on_sysex7) return;
   uint8_t group   = (uint8_t)((w[0] >> 24) & 0x0F);
-  uint8_t status  = (uint8_t)((w[0] >> 20) & 0x0F);
+  uint8_t status  = (uint8_t)((w[0] >> 16) & 0xF0); /* matches MIDI2_SYSEX7_* enums */
   uint8_t num     = (uint8_t)((w[0] >> 16) & 0x0F);
   if (num > 6) num = 6;
 
@@ -268,7 +268,7 @@ static void dispatch_data128(midi2_dispatch *dp, const uint32_t *w) {
     }
   } else {
     /* SysEx8 (status 0x00..0x30) */
-    uint8_t sysex_status = (uint8_t)((status_byte >> 4) & 0x0F);
+    uint8_t sysex_status = status_byte & 0xF0; /* matches MIDI2_SYSEX8_* enums */
     uint8_t num_bytes    = status_byte & 0x0F;
 
     if (dp->on_sysex8) {
@@ -459,22 +459,22 @@ static void dispatch_stream(midi2_dispatch *dp, const uint32_t *w) {
     }
 
     case MIDI2_STREAM_FB_NAME: {
-      if (dp->on_stream_text) {
-        /* fb_num in w[0][15:8], then 1 byte in w[0][7:0] + 12 in w[1..3] = 13 max */
-        uint8_t data[14]; /* reuse: [0] = fb_num, [1..13] = name */
-        data[0] = (uint8_t)((w[0] >> 8) & 0xFF); /* fb_num */
-        data[1] = (uint8_t)(w[0] & 0xFF);
+      if (dp->on_fb_name) {
+        uint8_t fb_num = (uint8_t)((w[0] >> 8) & 0xFF);
+        /* 1 byte in w[0][7:0] + 12 in w[1..3] = 13 name bytes max */
+        uint8_t name[13];
+        name[0] = (uint8_t)(w[0] & 0xFF);
         uint8_t i;
         for (i = 0; i < 12; i++) {
           uint8_t wi = (uint8_t)(1 + i / 4);
           uint8_t sh = (uint8_t)(24 - (i % 4) * 8);
-          data[2 + i] = (uint8_t)((w[wi] >> sh) & 0xFF);
+          name[1 + i] = (uint8_t)((w[wi] >> sh) & 0xFF);
         }
-        uint8_t len = 14;
+        uint8_t len = 13;
         if (format == 0 || format == 3) {
-          while (len > 0 && data[len - 1] == 0) len--;
+          while (len > 0 && name[len - 1] == 0) len--;
         }
-        dp->on_stream_text(status, format, data, len, dp->context);
+        dp->on_fb_name(format, fb_num, name, len, dp->context);
       }
       break;
     }

@@ -95,6 +95,15 @@ static void cb_cv1_note_on(uint8_t g, uint8_t ch, uint8_t n, uint8_t v, void *c)
 static void cb_cv1_cc(uint8_t g, uint8_t ch, uint8_t idx, uint8_t v, void *c) {
   (void)c; ctx.called = 1; ctx.group = g; ctx.channel = ch; ctx.index = idx; ctx.value = v;
 }
+static void cb_cv1_program(uint8_t g, uint8_t ch, uint8_t prog, void *c) {
+  (void)c; ctx.called = 1; ctx.group = g; ctx.channel = ch; ctx.note = prog;
+}
+static void cb_cv1_pressure(uint8_t g, uint8_t ch, uint8_t v, void *c) {
+  (void)c; ctx.called = 1; ctx.group = g; ctx.channel = ch; ctx.value = v;
+}
+static void cb_cv1_poly_pressure(uint8_t g, uint8_t ch, uint8_t n, uint8_t v, void *c) {
+  (void)c; ctx.called = 1; ctx.group = g; ctx.channel = ch; ctx.note = n; ctx.value = v;
+}
 static void cb_cv1_pitch_bend(uint8_t g, uint8_t ch, uint16_t v, void *c) {
   (void)c; ctx.called = 1; ctx.group = g; ctx.channel = ch; ctx.velocity = v;
 }
@@ -215,6 +224,10 @@ static void cb_stream_text(uint16_t st, uint8_t fmt, const uint8_t *d, uint8_t l
   (void)c; ctx.called = 1; ctx.stream_status = st; ctx.text_format = fmt;
   ctx.text_len = len; if (len > 14) len = 14; memcpy(ctx.text_data, d, len);
 }
+static void cb_fb_name(uint8_t fmt, uint8_t fb, const uint8_t *name, uint8_t len, void *c) {
+  (void)c; ctx.called = 1; ctx.text_format = fmt; ctx.fb_num = fb;
+  ctx.text_len = len; if (len > 13) len = 13; memcpy(ctx.text_data, name, len);
+}
 static void cb_config(uint8_t proto, bool rxjr, bool txjr, void *c) {
   (void)c; ctx.called = 1; ctx.proto = proto; ctx.rx_jr = rxjr; ctx.tx_jr = txjr;
 }
@@ -249,7 +262,11 @@ static midi2_dispatch make_dp(void) {
   dp.on_system = cb_system;
   /* CV1 */
   dp.on_cv1_note_on = cb_cv1_note_on;
+  dp.on_cv1_note_off = cb_cv1_note_on; /* same signature */
   dp.on_cv1_cc = cb_cv1_cc;
+  dp.on_cv1_program = cb_cv1_program;
+  dp.on_cv1_chan_pressure = cb_cv1_pressure;
+  dp.on_cv1_poly_pressure = cb_cv1_poly_pressure;
   dp.on_cv1_pitch_bend = cb_cv1_pitch_bend;
   /* CV2 */
   dp.on_note_on = cb_note_on;
@@ -284,6 +301,7 @@ static midi2_dispatch make_dp(void) {
   dp.on_endpoint_info = cb_endpoint_info;
   dp.on_device_identity = cb_device_identity;
   dp.on_stream_text = cb_stream_text;
+  dp.on_fb_name = cb_fb_name;
   dp.on_config_request = cb_config;
   dp.on_config_notify = cb_config;
   dp.on_fb_discovery = cb_fb_discovery;
@@ -738,6 +756,315 @@ void test_dp_clip(void) {
 }
 
 /*--------------------------------------------------------------------+
+ * Tests: additional Utility (MT 0x0)
+ *--------------------------------------------------------------------*/
+void test_dp_noop(void) {
+  TEST("dispatch: NOOP");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w = 0x00000000; /* MT=0, status=0 */
+  midi2_dispatch_feed(&w, 1, &dp);
+  CHECK(ctx.called, "callback fired");
+  PASS();
+}
+
+void test_dp_jr_timestamp(void) {
+  TEST("dispatch: JR Timestamp group=3 ts=0xFFFF");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w = midi2_msg_jr_timestamp(3, 0xFFFF);
+  midi2_dispatch_feed(&w, 1, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.group == 3, "group");
+  CHECK(ctx.timestamp == 0xFFFF, "timestamp");
+  PASS();
+}
+
+/*--------------------------------------------------------------------+
+ * Tests: additional CV1 (MT 0x2)
+ *--------------------------------------------------------------------*/
+void test_dp_cv1_note_off(void) {
+  TEST("dispatch: CV1 Note Off ch=0 note=64 vel=80");
+  midi2_dispatch dp = make_dp();
+  dp.on_cv1_note_off = cb_cv1_note_on; /* same sig */
+  reset_ctx();
+  uint32_t w = midi2_msg_from_midi1(0, 0x80, 64, 80);
+  midi2_dispatch_feed(&w, 1, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.note == 64, "note");
+  CHECK(ctx.velocity == 80, "velocity");
+  PASS();
+}
+
+void test_dp_cv1_cc(void) {
+  TEST("dispatch: CV1 CC idx=7 val=100");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w = midi2_msg_from_midi1(0, 0xB0, 7, 100);
+  midi2_dispatch_feed(&w, 1, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.index == 7, "index");
+  CHECK(ctx.value == 100, "value");
+  PASS();
+}
+
+void test_dp_cv1_program(void) {
+  TEST("dispatch: CV1 Program Change prog=5");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w = midi2_msg_from_midi1(0, 0xC0, 5, 0);
+  midi2_dispatch_feed(&w, 1, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.note == 5, "program");
+  PASS();
+}
+
+void test_dp_cv1_chan_pressure(void) {
+  TEST("dispatch: CV1 Channel Pressure val=100");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w = midi2_msg_from_midi1(0, 0xD0, 100, 0);
+  midi2_dispatch_feed(&w, 1, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.value == 100, "value");
+  PASS();
+}
+
+void test_dp_cv1_poly_pressure(void) {
+  TEST("dispatch: CV1 Poly Pressure note=60 val=80");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w = midi2_msg_from_midi1(0, 0xA0, 60, 80);
+  midi2_dispatch_feed(&w, 1, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.note == 60, "note");
+  CHECK(ctx.value == 80, "value");
+  PASS();
+}
+
+/*--------------------------------------------------------------------+
+ * Tests: additional CV2 (MT 0x4)
+ *--------------------------------------------------------------------*/
+void test_dp_note_off(void) {
+  TEST("dispatch: Note Off group=0 ch=0 note=60 vel=0x8000");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w[2];
+  midi2_msg_note_off(w, 0, 0, 60, 0x8000, 0);
+  midi2_dispatch_feed(w, 2, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.note == 60, "note");
+  CHECK(ctx.velocity == 0x8000, "velocity");
+  PASS();
+}
+
+void test_dp_pitch_bend(void) {
+  TEST("dispatch: Pitch Bend center=0x80000000");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w[2];
+  midi2_msg_pitch_bend(w, 0, 0, 0x80000000);
+  midi2_dispatch_feed(w, 2, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.value == 0x80000000, "value=center");
+  PASS();
+}
+
+void test_dp_per_note_pb(void) {
+  TEST("dispatch: Per-Note Pitch Bend note=60 val=0x80000000");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w[2];
+  midi2_msg_per_note_pb(w, 0, 0, 60, 0x80000000);
+  midi2_dispatch_feed(w, 2, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.note == 60, "note");
+  CHECK(ctx.value == 0x80000000, "value");
+  PASS();
+}
+
+void test_dp_asn_per_note(void) {
+  TEST("dispatch: Asn Per-Note Ctrl note=48 idx=7 val=0x40000000");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w[2];
+  midi2_msg_asn_per_note_ctrl(w, 0, 0, 48, 7, 0x40000000);
+  midi2_dispatch_feed(w, 2, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.note == 48, "note");
+  CHECK(ctx.index == 7, "index");
+  CHECK(ctx.value == 0x40000000, "value");
+  PASS();
+}
+
+void test_dp_nrpn(void) {
+  TEST("dispatch: NRPN bank=1 idx=2 val=0x12345678");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w[2];
+  midi2_msg_nrpn(w, 0, 0, 1, 2, 0x12345678);
+  midi2_dispatch_feed(w, 2, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.bank_msb == 1, "bank");
+  CHECK(ctx.index == 2, "index");
+  CHECK(ctx.value == 0x12345678, "value");
+  PASS();
+}
+
+void test_dp_rel_rpn(void) {
+  TEST("dispatch: Relative RPN bank=0 idx=7 val=0xFFFFFF00");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w[2];
+  midi2_msg_rel_rpn(w, 0, 0, 0, 7, 0xFFFFFF00);
+  midi2_dispatch_feed(w, 2, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.value == 0xFFFFFF00, "value (negative)");
+  PASS();
+}
+
+void test_dp_rel_nrpn(void) {
+  TEST("dispatch: Relative NRPN bank=1 idx=3 val=0x00000100");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w[2];
+  midi2_msg_rel_nrpn(w, 0, 0, 1, 3, 0x00000100);
+  midi2_dispatch_feed(w, 2, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.value == 0x00000100, "value (positive)");
+  PASS();
+}
+
+/*--------------------------------------------------------------------+
+ * Tests: SysEx7 status enum alignment
+ *--------------------------------------------------------------------*/
+void test_dp_sysex7_status_start(void) {
+  TEST("dispatch: SysEx7 Start status matches enum");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w[2];
+  uint8_t data[] = {0x01, 0x02, 0x03};
+  midi2_msg_sysex7_packet(w, 0, MIDI2_SYSEX7_START, data, 3);
+  midi2_dispatch_feed(w, 2, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.sysex_status == MIDI2_SYSEX7_START, "status matches MIDI2_SYSEX7_START");
+  PASS();
+}
+
+/*--------------------------------------------------------------------+
+ * Tests: SysEx8 status enum alignment
+ *--------------------------------------------------------------------*/
+void test_dp_sysex8_status(void) {
+  TEST("dispatch: SysEx8 Complete status matches enum");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w[4];
+  uint8_t data[] = {0xAA};
+  midi2_msg_sysex8_packet(w, 0, MIDI2_SYSEX8_COMPLETE, 0, data, 1);
+  midi2_dispatch_feed(w, 4, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.sysex_status == MIDI2_SYSEX8_COMPLETE, "status matches MIDI2_SYSEX8_COMPLETE");
+  PASS();
+}
+
+/*--------------------------------------------------------------------+
+ * Tests: MDS Payload
+ *--------------------------------------------------------------------*/
+void test_dp_mds_payload(void) {
+  TEST("dispatch: MDS Payload 14 bytes");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w[4];
+  uint8_t data[14];
+  int i;
+  for (i = 0; i < 14; i++) data[i] = (uint8_t)(0xA0 + i);
+  midi2_msg_mds_payload(w, 0, 1, data, 14);
+  midi2_dispatch_feed(w, 4, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.mds_id == 1, "mds_id");
+  CHECK(ctx.mds_data_len == 14, "len=14");
+  CHECK(ctx.mds_data[0] == 0xA0, "data[0]");
+  CHECK(ctx.mds_data[13] == 0xAD, "data[13]");
+  PASS();
+}
+
+/*--------------------------------------------------------------------+
+ * Tests: Config with JR bits
+ *--------------------------------------------------------------------*/
+void test_dp_config_with_jr(void) {
+  TEST("dispatch: Config Request MIDI2 with rx_jr=true");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w[4];
+  memset(w, 0, 16);
+  /* Build manually: MT=0xF, format=0, status=0x005, protocol=0x02, rxjr=1, txjr=0 */
+  w[0] = ((uint32_t)0x0F << 28) | ((uint32_t)0x005 << 16) | ((uint32_t)0x02 << 8) | 0x02;
+  midi2_dispatch_feed(w, 4, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.proto == 0x02, "protocol=MIDI2");
+  CHECK(ctx.rx_jr == true, "rx_jr=true");
+  CHECK(ctx.tx_jr == false, "tx_jr=false");
+  PASS();
+}
+
+/*--------------------------------------------------------------------+
+ * Tests: FB Name separate callback
+ *--------------------------------------------------------------------*/
+void test_dp_fb_name(void) {
+  TEST("dispatch: FB Name 'Piano' fb=1 (separate callback)");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w[4];
+  midi2_msg_stream_fb_name(w, 0, 1, (const uint8_t *)"Piano", 5);
+  midi2_dispatch_feed(w, 4, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.fb_num == 1, "fb_num=1");
+  CHECK(ctx.text_len == 5, "len=5");
+  CHECK(ctx.text_data[0] == 'P', "P");
+  CHECK(ctx.text_data[4] == 'o', "o");
+  PASS();
+}
+
+void test_dp_fb_discovery(void) {
+  TEST("dispatch: FB Discovery all");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w[4];
+  midi2_msg_stream_fb_discovery(w, 0xFF, 0x03);
+  midi2_dispatch_feed(w, 4, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.fb_num == 0xFF, "fb=all");
+  CHECK(ctx.filter == 0x03, "filter=info+name");
+  PASS();
+}
+
+void test_dp_product_id(void) {
+  TEST("dispatch: Product Instance ID 'XYZ123'");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w[4];
+  midi2_msg_stream_product_id(w, 0, (const uint8_t *)"XYZ123", 6);
+  midi2_dispatch_feed(w, 4, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.stream_status == MIDI2_STREAM_PRODUCT_INSTANCE_ID, "status");
+  CHECK(ctx.text_data[0] == 'X', "X");
+  CHECK(ctx.text_data[5] == '3', "3");
+  PASS();
+}
+
+void test_dp_config_notify(void) {
+  TEST("dispatch: Config Notify MIDI 1.0");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w[4];
+  midi2_msg_stream_config_notify(w, 0x01);
+  midi2_dispatch_feed(w, 4, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.proto == 0x01, "protocol=MIDI1");
+  PASS();
+}
+
+/*--------------------------------------------------------------------+
  * Tests: NULL callbacks are skipped
  *--------------------------------------------------------------------*/
 void test_dp_null_callback(void) {
@@ -793,7 +1120,9 @@ int main(void) {
   printf("\n=== midi2_dispatch Unit Tests ===\n\n");
 
   printf("[Utility MT 0x0]\n");
+  test_dp_noop();
   test_dp_jr_clock();
+  test_dp_jr_timestamp();
   test_dp_dctpq();
   test_dp_dc();
 
@@ -802,24 +1131,39 @@ int main(void) {
 
   printf("\n[MIDI 1.0 CV MT 0x2]\n");
   test_dp_cv1_note_on();
+  test_dp_cv1_note_off();
+  test_dp_cv1_cc();
+  test_dp_cv1_program();
+  test_dp_cv1_chan_pressure();
+  test_dp_cv1_poly_pressure();
   test_dp_cv1_pitch_bend();
 
   printf("\n[MIDI 2.0 CV MT 0x4]\n");
   test_dp_note_on();
+  test_dp_note_off();
   test_dp_cc();
   test_dp_program();
+  test_dp_pitch_bend();
   test_dp_rpn();
+  test_dp_nrpn();
+  test_dp_rel_rpn();
+  test_dp_rel_nrpn();
+  test_dp_per_note_pb();
   test_dp_per_note_mgmt();
   test_dp_reg_per_note();
+  test_dp_asn_per_note();
   test_dp_poly_pressure();
   test_dp_chan_pressure();
 
   printf("\n[SysEx7 MT 0x3]\n");
   test_dp_sysex7();
+  test_dp_sysex7_status_start();
 
   printf("\n[SysEx8 / MDS MT 0x5]\n");
   test_dp_sysex8();
+  test_dp_sysex8_status();
   test_dp_mds_header();
+  test_dp_mds_payload();
 
   printf("\n[Flex Data MT 0xD]\n");
   test_dp_tempo();
@@ -834,8 +1178,13 @@ int main(void) {
   test_dp_endpoint_info();
   test_dp_device_identity();
   test_dp_endpoint_name();
+  test_dp_product_id();
   test_dp_config_request();
+  test_dp_config_with_jr();
+  test_dp_config_notify();
+  test_dp_fb_discovery();
   test_dp_fb_info();
+  test_dp_fb_name();
   test_dp_clip();
 
   printf("\n[Edge Cases]\n");
