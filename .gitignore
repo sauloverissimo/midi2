@@ -10,6 +10,7 @@ test/test_midi2_proc
 test/test_midi2_ci
 test/test_midi2_conv
 test/test_midi2_dispatch
+test/test_midi2_ci_msg
 
 # Editor
 *.swp
