@@ -11,7 +11,7 @@ Portable MIDI 2.0 UMP library. C99, zero dependencies, zero allocation.
 
 midi2 builds, parses, dispatches, and processes [UMP](https://www.midi.org/specifications/midi-2-0-specifications) (Universal MIDI Packet) messages per the M2-104-UM v1.1.2 specification. It handles value scaling, typed message dispatch, SysEx reassembly, group filtering, MIDI-CI responses, and MIDI 1.0 byte stream conversion.
 
-It sits between the USB stack and your platform wrapper. The layers below (TinyUSB, hardware) and above (ESP32, Arduino, your application) are not its concern.
+It sits between the transport layer and your platform wrapper. The layers below (TinyUSB, Teensy USB, PIO-USB, BLE MIDI, Network MIDI, Serial DIN) and above (ESP32, Teensy, Daisy, RP2040, Arduino, Zephyr, bare-metal) are not its concern.
 
 ## Quick start
 
