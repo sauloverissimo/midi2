@@ -130,27 +130,12 @@ void test_discovery_reply(void) {
   midi2_ci_set_write_fn(&s, capture_write, NULL);
   reset();
 
-  /* Build a Discovery Request */
-  uint8_t request[14];
-  request[0] = 0x7E;         /* Universal SysEx */
-  request[1] = 0x7F;         /* device ID */
-  request[2] = 0x0D;         /* MIDI-CI */
-  request[3] = 0x70;         /* Discovery Request */
-  /* Source MUID = 0x0ABCDEF */
-  request[4] = 0x6F;         /* bits 0-6 */
-  request[5] = 0x37;         /* bits 7-13 */
-  request[6] = 0x2F;         /* bits 14-20 */
-  request[7] = 0x05;         /* bits 21-27 */
-  /* Destination MUID = broadcast */
-  request[8] = 0x7F;
-  request[9] = 0x7F;
-  request[10] = 0x7F;
-  request[11] = 0x7F;
-  /* Manufacturer + rest */
-  request[12] = 0x00;
-  request[13] = 0x00;
+  /* Build a Discovery Request using midi2_ci_build */
+  uint8_t request[32];
+  uint16_t req_len = midi2_ci_build_discovery(request, MIDI2_CI_VERSION_1,
+                                                   0x0ABCDEF, 0x002109, 1, 1, 0, 0x0C, 128, 0);
 
-  bool handled = midi2_ci_process_sysex(&s, 0, request, 14);
+  bool handled = midi2_ci_process_sysex(&s, 0, request, req_len);
   CHECK(handled, "message was handled");
   CHECK(write_pos > 0, "response was written");
 
@@ -162,13 +147,12 @@ void test_discovery_reply(void) {
   CHECK(resp[2] == 0x0D, "MIDI-CI");
   CHECK(resp[3] == 0x71, "Discovery Reply sub-ID");
 
-  /* Check our MUID in response (bytes 4-7) */
-  uint32_t our_muid = (uint32_t)resp[4] | ((uint32_t)resp[5] << 7)
-                     | ((uint32_t)resp[6] << 14) | ((uint32_t)resp[7] << 21);
+  /* Check our MUID in response (bytes 5-8, after version at byte 4) */
+  uint32_t our_muid = midi2_ci_get_src_muid(resp);
   CHECK(our_muid == (0x12345678 & 0x0FFFFFFF), "our MUID in reply");
 
-  /* Check manufacturer ID */
-  uint32_t mfr = (uint32_t)resp[12] | ((uint32_t)resp[13] << 8) | ((uint32_t)resp[14] << 16);
+  /* Check manufacturer ID (at offset 13) */
+  uint32_t mfr = midi2_ci_get_mfr_id(resp);
   CHECK((mfr & 0x7F7F7F) == (0x00AABB & 0x7F7F7F), "manufacturer ID");
 
   PASS();
@@ -189,35 +173,24 @@ void test_profile_inquiry_reply(void) {
   midi2_ci_add_profile(&s, p2);
   reset();
 
-  /* Build Profile Inquiry */
-  uint8_t request[13];
-  request[0] = 0x7E;
-  request[1] = 0x7F;
-  request[2] = 0x0D;
-  request[3] = 0x20;         /* Profile Inquiry (per M2-101-UM) */
-  request[4] = 0x01;         /* source MUID */
-  request[5] = 0x00;
-  request[6] = 0x00;
-  request[7] = 0x00;
-  request[8] = 0x7F;         /* dest MUID (broadcast) */
-  request[9] = 0x7F;
-  request[10] = 0x7F;
-  request[11] = 0x7F;
-  request[12] = 0x00;
+  /* Build Profile Inquiry using midi2_ci_build */
+  uint8_t request[16];
+  uint16_t req_len = midi2_ci_build_profile_inquiry(request, MIDI2_CI_VERSION_1,
+                                                         0x0000001, s.muid, 0x7F);
 
-  bool handled = midi2_ci_process_sysex(&s, 0, request, 13);
+  bool handled = midi2_ci_process_sysex(&s, 0, request, req_len);
   CHECK(handled, "message was handled");
   CHECK(write_pos > 0, "response was written");
 
   uint8_t resp[64];
   uint16_t resp_len = extract_sysex7_data(resp, 64);
   CHECK(resp_len >= 24, "response has profiles");
-  CHECK(resp[3] == 0x21, "Profile Inquiry Reply sub-ID (per M2-101-UM)");
-  CHECK(resp[12] == 2, "2 profiles enabled");
+  CHECK(midi2_ci_get_sub_id(resp) == MIDI2_CI_PROFILE_INQUIRY_REPLY, "Profile Inquiry Reply");
+  CHECK(midi2_ci_get_enabled_count(resp) == 2, "2 profiles enabled");
 
-  /* Check first profile bytes */
-  CHECK(resp[14] == 0x00, "profile 1 byte 0");
-  CHECK(resp[15] == 0x21, "profile 1 byte 1");
+  /* Check first profile bytes (at offset 15 = 13 header + 2 count) */
+  CHECK(resp[15] == 0x00, "profile 1 byte 0");
+  CHECK(resp[16] == 0x21, "profile 1 byte 1");
 
   PASS();
 }

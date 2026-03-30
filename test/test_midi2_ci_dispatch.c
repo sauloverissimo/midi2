@@ -431,10 +431,14 @@ void test_ci_dp_profile_removed(void) {
   PASS();
 }
 
+static void cb_profile_details_simple(midi2_ci_header h, const uint8_t *pid, uint8_t target, void *c) {
+  (void)c; (void)target; ctx.called = 1; ctx.hdr = h; memcpy(ctx.profile_id, pid, 5);
+}
+
 void test_ci_dp_profile_details(void) {
   TEST("CI dispatch: Profile Details Inquiry + Reply");
   midi2_ci_dispatch dp = make_dp();
-  dp.on_profile_details = (midi2_ci_dp_profile_details_cb)cb_profile_added; /* simplified */
+  dp.on_profile_details = cb_profile_details_simple;
   reset();
   uint8_t prof[5] = {0x7E, 1, 0, 0, 0};
   uint8_t buf[64];
@@ -444,10 +448,14 @@ void test_ci_dp_profile_details(void) {
   PASS();
 }
 
+static void cb_profile_specific_simple(midi2_ci_header h, const uint8_t *pid, const uint8_t *d, uint32_t dl, void *c) {
+  (void)c; (void)d; (void)dl; ctx.called = 1; ctx.hdr = h; memcpy(ctx.profile_id, pid, 5);
+}
+
 void test_ci_dp_profile_specific(void) {
   TEST("CI dispatch: Profile Specific Data");
   midi2_ci_dispatch dp = make_dp();
-  dp.on_profile_specific_data = (midi2_ci_dp_profile_specific_cb)cb_profile_added; /* simplified */
+  dp.on_profile_specific_data = cb_profile_specific_simple;
   reset();
   uint8_t prof[5] = {0x7E, 1, 0, 0, 0};
   uint8_t buf[64];
