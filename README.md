@@ -142,6 +142,15 @@ CI runs 11 jobs on every push:
 | ESP32 (component) | Cross-compile | ESP-IDF component compatibility |
 | AVR ATmega328P | Cross-compile | Arduino Uno/Nano (header-only) |
 
+### Hardware validation
+
+| Platform | MCU | Device | Host |
+|----------|-----|--------|------|
+| ESP32-S3 (ESP-IDF) | ESP32-S3 | Pass | Pass |
+| ESP32-P4 (ESP-IDF) | ESP32-P4 | Pass | Pass |
+| ESP32-S3 (Arduino) | ESP32-S3 | Pass | Pass |
+| Teensy 4.1 | i.MX RT1062 | Pass | Pass |
+
 ## Integration
 
 midi2 is designed to be vendored (copied into your project). Drop the `src/` files into your build:

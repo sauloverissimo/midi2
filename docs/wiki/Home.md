@@ -20,6 +20,9 @@ Welcome to the midi2 wiki -- the complete guide for developers using or contribu
 ### Platform Integration
 - [Platform Guide](Platform-Guide.md) -- How each platform consumes midi2
 
+### Validation
+- [Hardware Validation](Hardware-Validation.md) -- Test results on real hardware
+
 ### Contributing
 - [Design Decisions](Design-Decisions.md) -- Key architectural choices and their rationale
 
