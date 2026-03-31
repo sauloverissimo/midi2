@@ -144,12 +144,20 @@ CI runs 11 jobs on every push:
 
 ### Hardware validation
 
-| Platform | MCU | Device | Host |
-|----------|-----|--------|------|
-| ESP32-S3 (ESP-IDF) | ESP32-S3 | Pass | Pass |
-| ESP32-P4 (ESP-IDF) | ESP32-P4 | Pass | Pass |
-| ESP32-S3 (Arduino) | ESP32-S3 | Pass | Pass |
-| Teensy 4.1 | i.MX RT1062 | Pass | Pass |
+| Platform | MCU | Device | Host | TinyUSB |
+|----------|-----|--------|------|---------|
+| ESP32-S3 (ESP-IDF) | ESP32-S3 | ✅ | ✅ | ✅ |
+| ESP32-P4 (ESP-IDF) | ESP32-P4 | ✅ | ✅ | ✅ |
+| ESP32-S3 (Arduino) | ESP32-S3 | ✅ | ✅ | ✅ |
+| Teensy 4.1 | i.MX RT1062 | ✅ | ✅ | -- |
+| RP2040 | RP2040 | ✅ | -- | ✅ |
+| RP2350 | RP2350 | ✅ | ✅ | ✅ |
+| Daisy Seed | STM32H750 | 🔜 | 🔜 | 🔜 |
+| Arduino Pro Micro | ATmega32U4 | 🔜 | -- | -- |
+| Arduino Leonardo | ATmega32U4 | 🔜 | -- | -- |
+| Arduino Uno | ATmega328P | 🔜 | -- | -- |
+| Windows | x86_64 | ✅ MSVC | -- | -- |
+| Linux | x86_64 | ✅ gcc/clang | -- | -- |
 
 ## Integration
 
