@@ -14,28 +14,28 @@ jobs:
   test-gcc:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build and test (gcc, C99 strict)
         run: make CC=gcc test
 
   test-clang:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build and test (clang, C99 strict)
         run: make CC=clang test
 
   test-macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build and test (Apple clang)
         run: make test
 
   test-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build and test (MSVC)
         shell: cmd
         run: |
@@ -63,7 +63,7 @@ jobs:
     name: ARM Cortex-M (arm-none-eabi-gcc)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install ARM toolchain
         run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi
       - name: Compile all modules for Cortex-M
@@ -79,7 +79,7 @@ jobs:
     name: ARM Cortex-A (aarch64-linux-gnu-gcc)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install AArch64 toolchain
         run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
       - name: Compile all modules for AArch64
@@ -95,7 +95,7 @@ jobs:
     name: RISC-V (riscv64-linux-gnu-gcc)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install RISC-V toolchain
         run: sudo apt-get update && sudo apt-get install -y gcc-riscv64-linux-gnu
       - name: Compile all modules for RISC-V
@@ -111,7 +111,7 @@ jobs:
     name: ESP32 (ESP-IDF component check)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Compile with Xtensa GCC (via xtensa-esp-elf docker)
         run: |
           # Verify C99 strict compilation with a cross-compiler proxy
@@ -128,7 +128,7 @@ jobs:
     name: AVR (avr-gcc)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install AVR toolchain
         run: sudo apt-get update && sudo apt-get install -y gcc-avr avr-libc
       - name: Compile header-only modules for AVR
@@ -154,7 +154,7 @@ jobs:
     name: Linux x86 32-bit (gcc -m32)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install 32-bit libraries
         run: sudo apt-get update && sudo apt-get install -y gcc-multilib
       - name: Build and test (gcc 32-bit)
@@ -164,6 +164,6 @@ jobs:
     name: Linux (gcc + ASan + UBSan)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Build and test with sanitizers
         run: make CC="gcc -fsanitize=address,undefined -fno-omit-frame-pointer" test

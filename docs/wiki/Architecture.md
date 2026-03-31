@@ -7,7 +7,7 @@ midi2 is layer 2 in a 4-layer MIDI 2.0 stack:
 ```
 Layer 1: Transport     Hardware drivers (TinyUSB, BLE, Serial, Network)
 Layer 2: midi2         Portable C infrastructure (THIS LIBRARY)
-Layer 3: Platform      Ecosystem wrapper (ESP32MIDI, TeensyMIDI2, etc.)
+Layer 3: Platform      Ecosystem wrapper (ESP32, Teensy, etc.)
 Layer 4: Application   Your synth, controller, or tool
 ```
 

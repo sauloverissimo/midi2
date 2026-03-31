@@ -10,7 +10,7 @@
 [![Platforms](https://img.shields.io/badge/platforms-11_targets-informational.svg)]()
 [![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-pink.svg)](https://github.com/sponsors/sauloverissimo)
 
-Portable MIDI 2.0 UMP library. C99, zero dependencies, zero allocation. Runs from AVR to desktop.
+🎹 Portable MIDI 2.0 UMP library. C99, zero dependencies, zero allocation. Runs from AVR to desktop.
 
 ## What it does
 
@@ -169,7 +169,7 @@ midi2 is layer 2 in a 4-layer MIDI 2.0 stack:
 ```
 Layer 1: Transport     TinyUSB / USB Host / BLE / Network / Serial / PIO-USB
 Layer 2: midi2         THIS LIBRARY -- portable C infrastructure
-Layer 3: Platform      ESP32MIDI / TeensyMIDI2 / DaisyMIDI2 / AdafruitMIDI2
+Layer 3: Platform      ESP32 / Teensy / Daisy / Adafruit / RP2040 wrapper
 Layer 4: Application   Your synth, controller, DAW plugin, or embedded device
 ```
 
@@ -183,11 +183,11 @@ Layer 4: Application   Your synth, controller, DAW plugin, or embedded device
 
 | Platform | MCU / Environment | Transport | Notes |
 |----------|-------------------|-----------|-------|
-| ESP32MIDI | ESP32-S3, ESP32-P4 | TinyUSB, BLE | FreeRTOS tasks, ESP-IDF events |
-| TeensyMIDI2 | Teensy 4.x (NXP i.MX RT) | Native USB | USB dispatch built into core |
-| DaisyMIDI2 | Daisy Seed (STM32H7) | TinyUSB, SAI | libDaisy integration |
-| AdafruitMIDI2 | RP2040, nRF52, SAMD | TinyUSB, BLE | Arduino + Adafruit_TinyUSB |
-| RP2040MIDI2 | RP2040, RP2350 | TinyUSB, PIO-USB | Host + Device, dual port |
+| ESP32 | ESP32-S3, ESP32-P4 | TinyUSB, BLE | FreeRTOS tasks, ESP-IDF events |
+| Teensy | Teensy 4.x (NXP i.MX RT) | Native USB | USB dispatch built into core |
+| Daisy | Daisy Seed (STM32H7) | TinyUSB, SAI | libDaisy integration |
+| Adafruit | RP2040, nRF52, SAMD | TinyUSB, BLE | Arduino + Adafruit_TinyUSB |
+| RP2040/RP2350 | RP2040, RP2350 | TinyUSB, PIO-USB | Host + Device, dual port |
 | Desktop | Linux, macOS, Windows | ALSA, CoreMIDI, WinRT | Testing, DAW plugins, tools |
 | XMOS | xcore.ai | xCORE USB | Real-time multi-core |
 | Zephyr | Any Zephyr-supported MCU | USB, BLE | RTOS integration |
@@ -219,11 +219,11 @@ midi2 is designed to be vendorized (copied) into platform wrappers. Each platfor
 
 | Platform | Typical midi2 modules used |
 |----------|---------------------------|
-| **ESP32MIDI** (TinyUSB) | All -- transport delivers raw words, midi2 does everything |
-| **TeensyMIDI2** (native USB) | msg + ci_msg + ci_dispatch -- Teensy USB already has typed dispatch |
-| **AdafruitMIDI2** (TinyUSB Arduino) | All -- similar to ESP32MIDI |
-| **DaisyMIDI2** (STM32/TinyUSB) | All -- similar to ESP32MIDI |
-| **RP2040MIDI2** (TinyUSB/PIO-USB) | All -- similar to ESP32MIDI |
+| **ESP32** (TinyUSB) | All -- transport delivers raw words, midi2 does everything |
+| **Teensy** (native USB) | msg + ci_msg + ci_dispatch -- Teensy USB already has typed dispatch |
+| **Adafruit** (TinyUSB Arduino) | All -- similar to ESP32 |
+| **Daisy** (STM32/TinyUSB) | All -- similar to ESP32 |
+| **RP2040/RP2350** (TinyUSB/PIO-USB) | All -- similar to ESP32 |
 
 Platforms that already have typed dispatch at the transport level (Teensy) use fewer midi2 modules. Platforms that receive raw UMP words (TinyUSB-based) use the full stack.
 

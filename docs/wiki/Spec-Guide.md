@@ -1,6 +1,10 @@
 # MIDI 2.0 Specification Guide
 
-Complete reference of all MIDI 2.0 specifications published by the MIDI Association (MA) and AMEI, organized by role in the ecosystem.
+Complete reference of all MIDI 2.0 specifications, organized by role in the ecosystem.
+
+All specifications referenced here are developed and published by **The MIDI Association (MA)** and the **Association of Musical Electronics Industry (AMEI)**. The official specifications are available at [midi.org](https://www.midi.org) and [amei.or.jp](http://www.amei.or.jp).
+
+midi2 implements these specifications. It is not affiliated with or endorsed by the MIDI Association or AMEI.
 
 ## Core Specifications
 

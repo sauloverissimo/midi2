@@ -1,6 +1,6 @@
 # UMP Message Reference
 
-Complete reference of all Universal MIDI Packet message types per M2-104-UM v1.1.2.
+Developer reference for Universal MIDI Packet message types as implemented by midi2, based on M2-104-UM v1.1.2 published by [The MIDI Association](https://www.midi.org) and [AMEI](http://www.amei.or.jp).
 
 ## Message Types Overview
 
