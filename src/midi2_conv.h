@@ -39,6 +39,11 @@ extern "C" {
  * Converts serial MIDI 1.0 bytes (DIN-5, TRS, UART) into UMP words.
  * Handles Running Status, multi-byte messages, and SysEx (F0..F7).
  *
+ * SysEx is emitted as streaming UMP SysEx7 packets:
+ *   - Every 6 bytes: emits START or CONTINUE (2 UMP words)
+ *   - On F7: emits END or COMPLETE with remaining bytes
+ *   - No caller-provided buffer needed (6-byte internal buffer)
+ *
  * Usage:
  *   midi2_conv_state conv;
  *   midi2_conv_init(&conv, 0);  // group 0
@@ -61,11 +66,11 @@ typedef struct {
   uint8_t data_pos;
   uint8_t data[2];
 
-  /** SysEx state: caller-provided buffer */
-  uint8_t  *sysex_buf;         /**< pointer to caller's buffer, or NULL to skip SysEx */
-  uint16_t  sysex_buf_size;
-  uint16_t  sysex_len;
-  bool      in_sysex;
+  /** SysEx state: 6-byte internal buffer for streaming */
+  uint8_t  sysex_buf[6];       /**< internal buffer (one UMP packet worth) */
+  uint8_t  sysex_len;          /**< bytes accumulated in sysex_buf (0-6) */
+  bool     in_sysex;           /**< currently inside F0..F7 */
+  bool     sysex_started;      /**< true after START emitted */
 
   /** Output: completed UMP message */
   uint32_t ump[4];
@@ -74,18 +79,14 @@ typedef struct {
 
 /** Initialize converter state.
  *  @param state         State struct (caller-allocated)
- *  @param group         UMP group to assign to converted messages
- *  @param sysex_buf     Buffer for SysEx accumulation, or NULL to ignore SysEx
- *  @param sysex_buf_size Size of sysex_buf in bytes */
-void midi2_conv_init(midi2_conv_state *state, uint8_t group,
-                       uint8_t *sysex_buf, uint16_t sysex_buf_size);
+ *  @param group         UMP group to assign to converted messages */
+void midi2_conv_init(midi2_conv_state *state, uint8_t group);
 
 /* Feed one MIDI 1.0 byte. Returns true when a complete UMP message is ready
  * in state->ump[]. Returns false if more bytes are needed.
  *
- * LIMITATION: SysEx messages longer than 6 bytes produce only a START packet
- * with the first 6 bytes. Full multi-packet SysEx should use midi2_proc_send_sysex7()
- * after accumulation. */
+ * SysEx of any length is fully supported via streaming UMP SysEx7 packets.
+ * Each call produces at most one UMP message (1 or 2 words). */
 bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte);
 
 #ifdef __cplusplus

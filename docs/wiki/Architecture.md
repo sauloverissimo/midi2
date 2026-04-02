@@ -116,7 +116,7 @@ midi2 never calls `malloc`. All state is in caller-provided structs:
 | midi2_msg | None (stateless) | 0 bytes |
 | midi2_dispatch | `midi2_dispatch` (function pointers) | ~180 bytes |
 | midi2_proc | `midi2_proc_state` + SysEx buffers | ~60 bytes + buffers |
-| midi2_conv | `midi2_conv_state` + SysEx buffer | ~30 bytes + buffer |
+| midi2_conv | `midi2_conv_state` (6-byte internal SysEx) | ~30 bytes |
 | midi2_ci_msg | None (stateless) | 0 bytes |
 | midi2_ci_dispatch | `midi2_ci_dispatch` (function pointers) | ~140 bytes |
 | midi2_ci | `midi2_ci_state` + profile/property arrays | ~60 bytes + arrays |

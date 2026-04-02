@@ -10,8 +10,6 @@
 static int passed = 0;
 static int failed = 0;
 
-static uint8_t conv_sysex_buf[128];
-
 #define TEST(name) printf("  %-55s ", name)
 #define PASS() do { printf("PASS\n"); passed++; } while(0)
 #define FAIL(msg) do { printf("FAIL: %s\n", msg); failed++; } while(0)
@@ -22,7 +20,7 @@ static uint8_t conv_sysex_buf[128];
 void test_note_on_3bytes(void) {
   TEST("Note On: 0x90 0x3C 0x7F -> MT 0x2");
   midi2_conv_state s;
-  midi2_conv_init(&s, 0, conv_sysex_buf, sizeof(conv_sysex_buf));
+  midi2_conv_init(&s, 0);
 
   CHECK(!midi2_conv_feed(&s, 0x90), "status: not ready");
   CHECK(!midi2_conv_feed(&s, 0x3C), "data1: not ready");
@@ -40,7 +38,7 @@ void test_note_on_3bytes(void) {
 void test_running_status(void) {
   TEST("Running Status: 2nd note without status byte");
   midi2_conv_state s;
-  midi2_conv_init(&s, 0, conv_sysex_buf, sizeof(conv_sysex_buf));
+  midi2_conv_init(&s, 0);
 
   /* First note: full message */
   midi2_conv_feed(&s, 0x90);
@@ -60,7 +58,7 @@ void test_running_status(void) {
 void test_program_change(void) {
   TEST("Program Change: 0xC0 0x05 -> 1 data byte");
   midi2_conv_state s;
-  midi2_conv_init(&s, 0, conv_sysex_buf, sizeof(conv_sysex_buf));
+  midi2_conv_init(&s, 0);
 
   CHECK(!midi2_conv_feed(&s, 0xC0), "status: not ready");
   CHECK(midi2_conv_feed(&s, 0x05), "data: ready");
@@ -74,7 +72,7 @@ void test_program_change(void) {
 void test_realtime_mid_message(void) {
   TEST("Real-Time F8 mid-message: does not break parsing");
   midi2_conv_state s;
-  midi2_conv_init(&s, 0, conv_sysex_buf, sizeof(conv_sysex_buf));
+  midi2_conv_init(&s, 0);
 
   midi2_conv_feed(&s, 0x90);
   midi2_conv_feed(&s, 0x3C);
@@ -97,7 +95,7 @@ void test_realtime_mid_message(void) {
 void test_system_common_cancels_running(void) {
   TEST("Tune Request (F6): cancels Running Status");
   midi2_conv_state s;
-  midi2_conv_init(&s, 0, conv_sysex_buf, sizeof(conv_sysex_buf));
+  midi2_conv_init(&s, 0);
 
   /* Set Running Status */
   midi2_conv_feed(&s, 0x90);
@@ -118,7 +116,7 @@ void test_system_common_cancels_running(void) {
 void test_song_position_pointer(void) {
   TEST("Song Position Pointer: F2 + 2 data bytes");
   midi2_conv_state s;
-  midi2_conv_init(&s, 0, conv_sysex_buf, sizeof(conv_sysex_buf));
+  midi2_conv_init(&s, 0);
 
   CHECK(!midi2_conv_feed(&s, 0xF2), "status");
   CHECK(!midi2_conv_feed(&s, 0x40), "data1");
@@ -135,7 +133,7 @@ void test_song_position_pointer(void) {
 void test_sysex_short(void) {
   TEST("SysEx: F0 01 02 03 F7 -> complete packet");
   midi2_conv_state s;
-  midi2_conv_init(&s, 0, conv_sysex_buf, sizeof(conv_sysex_buf));
+  midi2_conv_init(&s, 0);
 
   CHECK(!midi2_conv_feed(&s, 0xF0), "F0: start");
   CHECK(!midi2_conv_feed(&s, 0x01), "data");
@@ -150,7 +148,7 @@ void test_sysex_short(void) {
 void test_sysex_cancels_running_status(void) {
   TEST("SysEx: cancels Running Status");
   midi2_conv_state s;
-  midi2_conv_init(&s, 0, conv_sysex_buf, sizeof(conv_sysex_buf));
+  midi2_conv_init(&s, 0);
 
   /* Set Running Status */
   midi2_conv_feed(&s, 0x90);
@@ -170,7 +168,7 @@ void test_sysex_cancels_running_status(void) {
 void test_sysex_empty(void) {
   TEST("SysEx: F0 F7 -> empty complete packet");
   midi2_conv_state s;
-  midi2_conv_init(&s, 0, conv_sysex_buf, sizeof(conv_sysex_buf));
+  midi2_conv_init(&s, 0);
 
   CHECK(!midi2_conv_feed(&s, 0xF0), "F0: start");
   CHECK(midi2_conv_feed(&s, 0xF7), "F7: end");
@@ -179,12 +177,133 @@ void test_sysex_empty(void) {
   PASS();
 }
 
+/* --- SysEx long (streaming) --- */
+
+void test_sysex_exactly_6(void) {
+  TEST("SysEx 6 bytes: F0 + 6 data + F7 -> COMPLETE");
+  midi2_conv_state s;
+  midi2_conv_init(&s, 0);
+
+  CHECK(!midi2_conv_feed(&s, 0xF0), "F0");
+  uint8_t i;
+  for (i = 0; i < 5; i++)
+    CHECK(!midi2_conv_feed(&s, 0x10 + i), "data");
+  CHECK(midi2_conv_feed(&s, 0xF7), "F7 -> packet");
+  CHECK(s.ump_words == 2, "2 words");
+  /* status nibble should be COMPLETE (0x00) since no START was emitted */
+  uint8_t status = (s.ump[0] >> 16) & 0xF0;
+  CHECK(status == MIDI2_SYSEX7_COMPLETE, "COMPLETE");
+  PASS();
+}
+
+void test_sysex_7_bytes(void) {
+  TEST("SysEx 7 bytes: START(6) + END(1)");
+  midi2_conv_state s;
+  midi2_conv_init(&s, 0);
+
+  midi2_conv_feed(&s, 0xF0);
+  uint8_t i;
+  int got_start = 0;
+  for (i = 0; i < 6; i++) {
+    if (midi2_conv_feed(&s, 0x20 + i)) {
+      /* 6th byte triggers START */
+      got_start = 1;
+      CHECK(s.ump_words == 2, "2 words");
+      uint8_t st = (s.ump[0] >> 16) & 0xF0;
+      CHECK(st == MIDI2_SYSEX7_START, "START");
+    }
+  }
+  CHECK(got_start, "got START at byte 6");
+
+  /* 7th data byte + F7 */
+  CHECK(!midi2_conv_feed(&s, 0x26), "7th byte: accumulating");
+  CHECK(midi2_conv_feed(&s, 0xF7), "F7 -> END");
+  uint8_t st = (s.ump[0] >> 16) & 0xF0;
+  CHECK(st == MIDI2_SYSEX7_END, "END");
+  uint8_t nb = (s.ump[0] >> 16) & 0x0F;
+  CHECK(nb == 1, "1 byte in END packet");
+  PASS();
+}
+
+void test_sysex_12_bytes(void) {
+  TEST("SysEx 12 bytes: START(6) + CONTINUE(6) + END(0)");
+  midi2_conv_state s;
+  midi2_conv_init(&s, 0);
+
+  midi2_conv_feed(&s, 0xF0);
+  uint8_t i;
+  int packets = 0;
+  for (i = 0; i < 12; i++) {
+    if (midi2_conv_feed(&s, 0x30 + (i % 16))) {
+      packets++;
+    }
+  }
+  CHECK(packets == 2, "START + CONTINUE during data");
+
+  CHECK(midi2_conv_feed(&s, 0xF7), "F7 -> END");
+  uint8_t st = (s.ump[0] >> 16) & 0xF0;
+  CHECK(st == MIDI2_SYSEX7_END, "END");
+  uint8_t nb = (s.ump[0] >> 16) & 0x0F;
+  CHECK(nb == 0, "0 bytes in END packet");
+  PASS();
+}
+
+void test_sysex_30_bytes_ci(void) {
+  TEST("SysEx 30 bytes (CI-sized): START + 3*CONTINUE + END");
+  midi2_conv_state s;
+  midi2_conv_init(&s, 0);
+
+  midi2_conv_feed(&s, 0xF0);
+  uint8_t i;
+  int packets = 0;
+  for (i = 0; i < 30; i++) {
+    if (midi2_conv_feed(&s, i & 0x7F)) {
+      uint8_t st = (s.ump[0] >> 16) & 0xF0;
+      if (packets == 0)
+        CHECK(st == MIDI2_SYSEX7_START, "first=START");
+      else
+        CHECK(st == MIDI2_SYSEX7_CONTINUE, "mid=CONTINUE");
+      packets++;
+    }
+  }
+  CHECK(packets == 5, "5 packets during 30 data bytes"); /* 30/6 = 5 */
+
+  CHECK(midi2_conv_feed(&s, 0xF7), "F7 -> END");
+  uint8_t st = (s.ump[0] >> 16) & 0xF0;
+  CHECK(st == MIDI2_SYSEX7_END, "final=END");
+  uint8_t nb = (s.ump[0] >> 16) & 0x0F;
+  CHECK(nb == 0, "0 remaining bytes in END");
+  PASS();
+}
+
+void test_sysex_13_bytes(void) {
+  TEST("SysEx 13 bytes: START(6) + CONTINUE(6) + END(1)");
+  midi2_conv_state s;
+  midi2_conv_init(&s, 0);
+
+  midi2_conv_feed(&s, 0xF0);
+  uint8_t i;
+  int packets = 0;
+  for (i = 0; i < 13; i++) {
+    if (midi2_conv_feed(&s, 0x40 + (i % 16)))
+      packets++;
+  }
+  CHECK(packets == 2, "START + CONTINUE during data");
+
+  CHECK(midi2_conv_feed(&s, 0xF7), "F7 -> END");
+  uint8_t st = (s.ump[0] >> 16) & 0xF0;
+  CHECK(st == MIDI2_SYSEX7_END, "END");
+  uint8_t nb = (s.ump[0] >> 16) & 0x0F;
+  CHECK(nb == 1, "1 byte in END");
+  PASS();
+}
+
 /* --- Group --- */
 
 void test_group_assignment(void) {
   TEST("Group: assigned group appears in UMP");
   midi2_conv_state s;
-  midi2_conv_init(&s, 5, conv_sysex_buf, sizeof(conv_sysex_buf));
+  midi2_conv_init(&s, 5);
 
   midi2_conv_feed(&s, 0x90);
   midi2_conv_feed(&s, 0x3C);
@@ -199,7 +318,7 @@ void test_group_assignment(void) {
 void test_orphan_data_byte(void) {
   TEST("Orphan data byte: ignored when no status");
   midi2_conv_state s;
-  midi2_conv_init(&s, 0, conv_sysex_buf, sizeof(conv_sysex_buf));
+  midi2_conv_init(&s, 0);
 
   CHECK(!midi2_conv_feed(&s, 0x3C), "data without status: ignored");
   CHECK(s.ump_words == 0, "no output");
@@ -211,7 +330,7 @@ void test_orphan_data_byte(void) {
 void test_new_status_cancels_previous(void) {
   TEST("New status byte cancels previous incomplete");
   midi2_conv_state s;
-  midi2_conv_init(&s, 0, conv_sysex_buf, sizeof(conv_sysex_buf));
+  midi2_conv_init(&s, 0);
 
   midi2_conv_feed(&s, 0x90);  /* Note On */
   midi2_conv_feed(&s, 0x3C);  /* data1 */
@@ -246,6 +365,13 @@ int main(void) {
   test_sysex_short();
   test_sysex_cancels_running_status();
   test_sysex_empty();
+
+  printf("\n[SysEx Streaming]\n");
+  test_sysex_exactly_6();
+  test_sysex_7_bytes();
+  test_sysex_12_bytes();
+  test_sysex_30_bytes_ci();
+  test_sysex_13_bytes();
 
   printf("\n[Group]\n");
   test_group_assignment();

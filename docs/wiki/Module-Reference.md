@@ -178,12 +178,11 @@ midi2_proc_feed(&proc, words, word_count);
 
 **Type**: Compiled. Links with: `midi2_msg.h`.
 
-Converts MIDI 1.0 byte stream (Serial DIN, UART) to UMP (MT 0x2). Handles Running Status, System Common, Real-Time interleaving, and SysEx accumulation.
+Converts MIDI 1.0 byte stream (Serial DIN, UART) to UMP. Handles Running Status, System Common, Real-Time interleaving, and streaming SysEx (any length, emitted as UMP SysEx7 packets: START/CONTINUE/END).
 
 ```c
-uint8_t sysex_buf[128];
 midi2_conv_state conv;
-midi2_conv_init(&conv, 0, sysex_buf, sizeof(sysex_buf));
+midi2_conv_init(&conv, 0);  /* group 0, no external buffer needed */
 
 while (serial_available()) {
     uint8_t byte = serial_read();

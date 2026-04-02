@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- **midi2_conv**: Streaming SysEx support for any message length. The converter
+  now emits UMP SysEx7 packets incrementally (START/CONTINUE/END) as bytes arrive,
+  instead of buffering the entire message. This removes the previous 6-byte
+  truncation limitation for SysEx.
+- **midi2_conv**: `midi2_conv_init()` simplified to 2 parameters (state, group).
+  The caller-provided SysEx buffer is no longer needed -- the converter uses a
+  6-byte internal buffer. **Breaking change** from v0.2.0 API.
+- 5 new streaming SysEx tests (total: 218 across 7 modules).
+
 ## [0.2.0] - 2026-03-30
 
 ### Added

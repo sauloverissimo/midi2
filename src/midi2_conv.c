@@ -25,12 +25,9 @@
 #include "midi2_conv.h"
 #include <string.h>
 
-void midi2_conv_init(midi2_conv_state *state, uint8_t group,
-                       uint8_t *sysex_buf, uint16_t sysex_buf_size) {
+void midi2_conv_init(midi2_conv_state *state, uint8_t group) {
   memset(state, 0, sizeof(midi2_conv_state));
   state->group = group & 0x0F;
-  state->sysex_buf = sysex_buf;
-  state->sysex_buf_size = sysex_buf_size;
 }
 
 /* How many data bytes a status byte expects */
@@ -77,47 +74,37 @@ static void emit_channel_msg(midi2_conv_state *state) {
   }
 }
 
-/* Flush accumulated SysEx data as UMP SysEx7 packets */
-static bool flush_sysex(midi2_conv_state *state, bool is_end) {
-  if (state->sysex_len == 0 && is_end) {
-    /* Empty SysEx (F0 immediately followed by F7) */
-    midi2_msg_sysex7_packet(state->ump, state->group, MIDI2_SYSEX7_COMPLETE, NULL, 0);
-    state->ump_words = 2;
-    state->in_sysex = false;
-    return true;
+/* Emit a SysEx7 UMP packet from the internal 6-byte buffer.
+ * Called when the buffer is full (6 bytes) or when F7 arrives. */
+static bool emit_sysex_packet(midi2_conv_state *state, bool is_end) {
+  uint8_t status;
+
+  if (!state->sysex_started && is_end) {
+    /* Never emitted START: entire SysEx fits in one COMPLETE packet */
+    status = MIDI2_SYSEX7_COMPLETE;
+  } else if (!state->sysex_started) {
+    /* First packet of a multi-packet SysEx */
+    status = MIDI2_SYSEX7_START;
+    state->sysex_started = true;
+  } else if (is_end) {
+    /* Final packet */
+    status = MIDI2_SYSEX7_END;
+  } else {
+    /* Middle packet */
+    status = MIDI2_SYSEX7_CONTINUE;
   }
 
-  /* For simplicity, we emit the final packet when SysEx ends.
-   * Multi-packet SysEx during streaming is handled by accumulating
-   * in the buffer and emitting when F7 arrives or buffer is full. */
+  midi2_msg_sysex7_packet(state->ump, state->group, status,
+                           state->sysex_buf, state->sysex_len);
+  state->ump_words = 2;
+  state->sysex_len = 0;
 
   if (is_end) {
-    if (state->sysex_len > 6) {
-      /* Need to emit start + continue packets first, then end */
-      /* For the converter, we buffer everything and emit as complete or start+end */
-      /* This simplified version handles up to MIDI2_CONV_SYSEX_BUF_SIZE bytes */
-      /* First packet: start */
-      midi2_msg_sysex7_packet(state->ump, state->group, MIDI2_SYSEX7_START,
-                               state->sysex_buf, 6);
-      state->ump_words = 2;
-      /* We can only return one UMP at a time, so we truncate to
-       * the last 6 bytes as the end packet for simplicity.
-       * Full multi-packet streaming should use midi2_proc_send_sysex7. */
-      state->sysex_len = 0;
-      state->in_sysex = false;
-      return true;
-    }
-
-    /* Small SysEx: fits in one complete packet */
-    midi2_msg_sysex7_packet(state->ump, state->group, MIDI2_SYSEX7_COMPLETE,
-                             state->sysex_buf, (uint8_t)state->sysex_len);
-    state->ump_words = 2;
-    state->sysex_len = 0;
     state->in_sysex = false;
-    return true;
+    state->sysex_started = false;
   }
 
-  return false;
+  return true;
 }
 
 bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte) {
@@ -134,6 +121,7 @@ bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte) {
   if (byte == 0xF0) {
     /* SysEx Start */
     state->in_sysex = true;
+    state->sysex_started = false;
     state->sysex_len = 0;
     state->running_status = 0;  /* SysEx cancels Running Status */
     return false;
@@ -142,23 +130,25 @@ bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte) {
   if (byte == 0xF7) {
     /* SysEx End */
     if (state->in_sysex) {
-      return flush_sysex(state, true);
+      return emit_sysex_packet(state, true);
     }
     return false;  /* F7 without F0: ignore */
   }
 
   if (state->in_sysex) {
-    /* Accumulate SysEx data byte */
-    if (byte < 0x80 && state->sysex_buf && state->sysex_len < state->sysex_buf_size) {
-      state->sysex_buf[state->sysex_len++] = byte;
-    }
-    /* If a status byte appears during SysEx (not Real-Time, not F7),
-     * it terminates the SysEx implicitly */
+    /* A non-Real-Time status byte during SysEx terminates it implicitly */
     if (byte >= 0x80) {
       state->in_sysex = false;
+      state->sysex_started = false;
       state->sysex_len = 0;
       /* Fall through to process as new status byte */
     } else {
+      /* Accumulate SysEx data byte */
+      state->sysex_buf[state->sysex_len++] = byte;
+      if (state->sysex_len == 6) {
+        /* Buffer full: emit START or CONTINUE packet */
+        return emit_sysex_packet(state, false);
+      }
       return false;
     }
   }

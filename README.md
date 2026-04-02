@@ -1,7 +1,7 @@
 # 🎹 midi2
 
 [![CI](https://github.com/sauloverissimo/midi2/actions/workflows/ci.yml/badge.svg)](https://github.com/sauloverissimo/midi2/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-213%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-218%20passing-brightgreen.svg)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![C99](https://img.shields.io/badge/standard-C99-blue.svg)]()
 [![Zero Alloc](https://img.shields.io/badge/allocation-zero-orange.svg)]()
@@ -67,7 +67,7 @@ midi2_dispatch_feed(w, 2, &dp);
 | **midi2_msg** | `.h` | Stateless | UMP construction, parsing, value scaling. All message types. |
 | **midi2_dispatch** | `.h` + `.c` | Caller-allocated | Typed UMP dispatch with 42 granular callbacks. |
 | **midi2_proc** | `.h` + `.c` | Caller-allocated | Group filtering, SysEx7/8 reassembly, group remap. |
-| **midi2_conv** | `.h` + `.c` | Caller-allocated | MIDI 1.0 byte stream to UMP (Running Status, SysEx). |
+| **midi2_conv** | `.h` + `.c` | Caller-allocated | MIDI 1.0 byte stream to UMP (Running Status, streaming SysEx). |
 | **midi2_ci_msg** | `.h` | Stateless | MIDI-CI message construction and parsing. All 31 messages. |
 | **midi2_ci_dispatch** | `.h` + `.c` | Caller-allocated | Typed CI dispatch with 33 granular callbacks. |
 | **midi2_ci** | `.h` + `.c` | Caller-allocated | Convenience CI responder (uses ci_msg + ci_dispatch). |
@@ -124,13 +124,13 @@ make test          # gcc by default
 make CC=clang test # or clang
 ```
 
-213 tests across 7 modules, zero warnings with `-Wall -Wextra -Wpedantic`.
+218 tests across 7 modules, zero warnings with `-Wall -Wextra -Wpedantic`.
 
 CI runs 11 jobs on every push:
 
 | Target | Type | What it verifies |
 |--------|------|-----------------|
-| gcc (Linux x64) | Compile + run | Primary compiler, all 213 tests |
+| gcc (Linux x64) | Compile + run | Primary compiler, all 218 tests |
 | clang (Linux x64) | Compile + run | Catches different warnings |
 | Apple clang (macOS) | Compile + run | macOS / Darwin compatibility |
 | MSVC (Windows) | Compile + run | Microsoft compiler, C11 mode |
