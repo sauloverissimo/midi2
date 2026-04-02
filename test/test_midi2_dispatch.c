@@ -1114,6 +1114,101 @@ void test_dp_proc_compat(void) {
 }
 
 /*--------------------------------------------------------------------+
+ * Upscale MT 0x2 -> MT 0x4
+ *--------------------------------------------------------------------*/
+
+void test_dp_upscale_note_on(void) {
+  TEST("upscale: MT 0x2 Note On -> MT 0x4 on_note_on callback");
+  reset_ctx();
+  midi2_dispatch dp;
+  midi2_dispatch_init(&dp);
+  dp.context = NULL;
+  dp.upscale_mt2 = true;
+  dp.on_note_on = cb_note_on;
+
+  /* Feed a MT 0x2 Note On: ch=0, note=60, vel=100 */
+  uint32_t mt2 = midi2_msg_from_midi1(0, 0x90, 60, 100);
+  midi2_dispatch_feed(&mt2, 1, &dp);
+
+  CHECK(ctx.called, "on_note_on called");
+  CHECK(ctx.note == 60, "note=60");
+  CHECK(ctx.velocity == midi2_msg_scale_up_7to16(100), "velocity scaled");
+  PASS();
+}
+
+void test_dp_upscale_note_on_vel0(void) {
+  TEST("upscale: MT 0x2 Note On vel=0 -> on_note_off");
+  reset_ctx();
+  midi2_dispatch dp;
+  midi2_dispatch_init(&dp);
+  dp.context = NULL;
+  dp.upscale_mt2 = true;
+  dp.on_note_off = cb_note_on; /* reuse: same signature captures note */
+
+  uint32_t mt2 = midi2_msg_from_midi1(0, 0x90, 60, 0);
+  midi2_dispatch_feed(&mt2, 1, &dp);
+
+  CHECK(ctx.called, "on_note_off called");
+  CHECK(ctx.note == 60, "note=60");
+  PASS();
+}
+
+void test_dp_upscale_cc(void) {
+  TEST("upscale: MT 0x2 CC#7 val=100 -> on_cc 32-bit");
+  reset_ctx();
+  midi2_dispatch dp;
+  midi2_dispatch_init(&dp);
+  dp.context = NULL;
+  dp.upscale_mt2 = true;
+  dp.on_cc = cb_cc;
+
+  uint32_t mt2 = midi2_msg_from_midi1(0, 0xB0, 7, 100);
+  midi2_dispatch_feed(&mt2, 1, &dp);
+
+  CHECK(ctx.called, "on_cc called");
+  CHECK(ctx.index == 7, "index=7");
+  CHECK(ctx.value == midi2_msg_scale_up_7to32(100), "value scaled");
+  PASS();
+}
+
+void test_dp_upscale_pitch_bend(void) {
+  TEST("upscale: MT 0x2 Pitch Bend center -> on_pitch_bend 32-bit");
+  reset_ctx();
+  midi2_dispatch dp;
+  midi2_dispatch_init(&dp);
+  dp.context = NULL;
+  dp.upscale_mt2 = true;
+  dp.on_pitch_bend = cb_pitch_bend;
+
+  /* Center: LSB=0x00, MSB=0x40 -> 14-bit 0x2000 */
+  uint32_t mt2 = midi2_msg_from_midi1(0, 0xE0, 0x00, 0x40);
+  midi2_dispatch_feed(&mt2, 1, &dp);
+
+  CHECK(ctx.called, "on_pitch_bend called");
+  CHECK(ctx.value == midi2_msg_scale_up_14to32(0x2000), "center scaled");
+  PASS();
+}
+
+void test_dp_upscale_off_by_default(void) {
+  TEST("upscale: off by default, MT 0x2 -> on_cv1_note_on");
+  reset_ctx();
+  midi2_dispatch dp;
+  midi2_dispatch_init(&dp);
+  dp.context = NULL;
+  /* upscale_mt2 is false (default from init) */
+  dp.on_cv1_note_on = cb_cv1_note_on;
+  dp.on_note_on = cb_note_on;
+
+  uint32_t mt2 = midi2_msg_from_midi1(0, 0x90, 60, 100);
+  midi2_dispatch_feed(&mt2, 1, &dp);
+
+  CHECK(ctx.called, "cv1 callback called");
+  CHECK(ctx.note == 60, "note=60");
+  CHECK(ctx.velocity == 100, "velocity=100 (7-bit, not scaled)");
+  PASS();
+}
+
+/*--------------------------------------------------------------------+
  * Main
  *--------------------------------------------------------------------*/
 int main(void) {
@@ -1191,6 +1286,13 @@ int main(void) {
   test_dp_null_callback();
   test_dp_unknown();
   test_dp_proc_compat();
+
+  printf("\n[Upscale MT 0x2 -> MT 0x4]\n");
+  test_dp_upscale_note_on();
+  test_dp_upscale_note_on_vel0();
+  test_dp_upscale_cc();
+  test_dp_upscale_pitch_bend();
+  test_dp_upscale_off_by_default();
 
   printf("\n=== Results: %d passed, %d failed ===\n\n", passed, failed);
   return failed > 0 ? 1 : 0;

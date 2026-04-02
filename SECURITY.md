@@ -27,7 +27,7 @@ midi2 is a data processing library with no network, file, or OS access. Security
 
 ## Mitigations
 
-- All 213 tests run under AddressSanitizer and UndefinedBehaviorSanitizer in CI
+- All 232 tests run under AddressSanitizer and UndefinedBehaviorSanitizer in CI
 - Input length is validated before accessing message fields
 - All multi-byte field access uses explicit bounds checks
 - No dynamic memory allocation eliminates use-after-free and double-free classes

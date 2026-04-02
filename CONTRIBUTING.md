@@ -52,7 +52,7 @@ If adding a new module, follow the established pattern:
 ## Testing
 
 ```bash
-make test                                               # gcc, all 213 tests
+make test                                               # gcc, all 232 tests
 make CC=clang test                                      # clang
 make CC="gcc -fsanitize=address,undefined" test          # sanitizers
 make CC="gcc -m32" test                                  # 32-bit verification

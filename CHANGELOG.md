@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+- **midi2_msg**: `midi2_msg_mt2_to_mt4()` -- stateless protocol translation from
+  MT 0x2 (MIDI 1.0 Channel Voice) to MT 0x4 (MIDI 2.0 Channel Voice) with proper
+  value scaling per M2-104-UM v1.1.2 Section 7. Handles Note On velocity 0 ->
+  Note Off, Pitch Bend LSB/MSB combine, Program Change without bank.
+- **midi2_dispatch**: `upscale_mt2` flag. When true, incoming MT 0x2 messages are
+  automatically translated to MT 0x4 and dispatched through on_note_on/on_cc/etc.
+  Default false (backward compatible).
+- 14 new tests: 9 for mt2_to_mt4 translation, 5 for upscale dispatch.
+
 ### Changed
 - **midi2_conv**: Streaming SysEx support for any message length. The converter
   now emits UMP SysEx7 packets incrementally (START/CONTINUE/END) as bytes arrive,
@@ -10,7 +20,7 @@
 - **midi2_conv**: `midi2_conv_init()` simplified to 2 parameters (state, group).
   The caller-provided SysEx buffer is no longer needed -- the converter uses a
   6-byte internal buffer. **Breaking change** from v0.2.0 API.
-- 5 new streaming SysEx tests (total: 218 across 7 modules).
+- Total: 232 tests across 7 modules.
 
 ## [0.2.0] - 2026-03-30
 

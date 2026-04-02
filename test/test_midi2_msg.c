@@ -686,6 +686,114 @@ void test_stream_fb_name(void) {
 
 /* --- Main --- */
 
+/* --- MT 0x2 -> MT 0x4 Translation --- */
+
+void test_mt2_to_mt4_note_on(void) {
+  TEST("mt2->mt4: Note On ch=0 note=60 vel=100");
+  uint32_t mt2 = midi2_msg_from_midi1(0, 0x90, 60, 100);
+  uint32_t mt4[2];
+  CHECK(midi2_msg_mt2_to_mt4(mt2, mt4), "translated");
+  CHECK(midi2_msg_get_mt(mt4) == MIDI2_MT_MIDI2_CV, "MT=0x4");
+  CHECK(midi2_msg_get_note(mt4) == 60, "note=60");
+  uint16_t vel = midi2_msg_get_velocity(mt4);
+  CHECK(vel == midi2_msg_scale_up_7to16(100), "velocity scaled");
+  PASS();
+}
+
+void test_mt2_to_mt4_note_on_vel0(void) {
+  TEST("mt2->mt4: Note On vel=0 -> Note Off");
+  uint32_t mt2 = midi2_msg_from_midi1(0, 0x90, 60, 0);
+  uint32_t mt4[2];
+  CHECK(midi2_msg_mt2_to_mt4(mt2, mt4), "translated");
+  uint8_t status = (mt4[0] >> 16) & 0xF0;
+  CHECK(status == 0x80, "status=Note Off");
+  CHECK(midi2_msg_get_note(mt4) == 60, "note=60");
+  PASS();
+}
+
+void test_mt2_to_mt4_cc(void) {
+  TEST("mt2->mt4: CC#7 val=100 -> 32-bit scaled");
+  uint32_t mt2 = midi2_msg_from_midi1(0, 0xB0, 7, 100);
+  uint32_t mt4[2];
+  CHECK(midi2_msg_mt2_to_mt4(mt2, mt4), "translated");
+  CHECK(midi2_msg_get_mt(mt4) == MIDI2_MT_MIDI2_CV, "MT=0x4");
+  uint32_t val = mt4[1];
+  CHECK(val == midi2_msg_scale_up_7to32(100), "value scaled");
+  PASS();
+}
+
+void test_mt2_to_mt4_program(void) {
+  TEST("mt2->mt4: Program Change prog=5, no bank");
+  uint32_t mt2 = midi2_msg_from_midi1(0, 0xC0, 5, 0);
+  uint32_t mt4[2];
+  CHECK(midi2_msg_mt2_to_mt4(mt2, mt4), "translated");
+  /* bank_valid bit should be 0 */
+  CHECK((mt4[0] & 0x01) == 0, "bank_valid=false");
+  uint8_t prog = (mt4[1] >> 24) & 0x7F;
+  CHECK(prog == 5, "program=5");
+  PASS();
+}
+
+void test_mt2_to_mt4_chan_pressure(void) {
+  TEST("mt2->mt4: Channel Pressure val=80 -> 32-bit");
+  uint32_t mt2 = midi2_msg_from_midi1(0, 0xD0, 80, 0);
+  uint32_t mt4[2];
+  CHECK(midi2_msg_mt2_to_mt4(mt2, mt4), "translated");
+  CHECK(mt4[1] == midi2_msg_scale_up_7to32(80), "value scaled");
+  PASS();
+}
+
+void test_mt2_to_mt4_pitch_bend(void) {
+  TEST("mt2->mt4: Pitch Bend center (0x00,0x40) -> 32-bit");
+  /* MIDI 1.0 pitch bend: data1=LSB, data2=MSB. Center = 0x2000 = (0x40 << 7) | 0x00 */
+  uint32_t mt2 = midi2_msg_from_midi1(0, 0xE0, 0x00, 0x40);
+  uint32_t mt4[2];
+  CHECK(midi2_msg_mt2_to_mt4(mt2, mt4), "translated");
+  uint32_t val = mt4[1];
+  uint32_t expected = midi2_msg_scale_up_14to32(0x2000);
+  CHECK(val == expected, "center scaled correctly");
+  PASS();
+}
+
+void test_mt2_to_mt4_poly_pressure(void) {
+  TEST("mt2->mt4: Poly Pressure note=48 val=100");
+  uint32_t mt2 = midi2_msg_from_midi1(0, 0xA0, 48, 100);
+  uint32_t mt4[2];
+  CHECK(midi2_msg_mt2_to_mt4(mt2, mt4), "translated");
+  CHECK(midi2_msg_get_note(mt4) == 48, "note=48");
+  CHECK(mt4[1] == midi2_msg_scale_up_7to32(100), "value scaled");
+  PASS();
+}
+
+void test_mt2_to_mt4_roundtrip(void) {
+  TEST("mt2->mt4: roundtrip velocity 7->16->7");
+  uint8_t v;
+  for (v = 1; v <= 127; v++) {
+    uint32_t mt2 = midi2_msg_from_midi1(0, 0x90, 60, v);
+    uint32_t mt4[2];
+    midi2_msg_mt2_to_mt4(mt2, mt4);
+    uint16_t vel16 = midi2_msg_get_velocity(mt4);
+    uint8_t back = midi2_msg_scale_down_16to7(vel16);
+    if (back != v) {
+      char msg[64];
+      sprintf(msg, "roundtrip failed: %d -> %u -> %d", v, vel16, back);
+      FAIL(msg);
+      return;
+    }
+  }
+  PASS();
+}
+
+void test_mt2_to_mt4_wrong_mt(void) {
+  TEST("mt2->mt4: wrong MT returns false");
+  uint32_t w[2];
+  midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0); /* MT 0x4 */
+  uint32_t out[2];
+  CHECK(!midi2_msg_mt2_to_mt4(w[0], out), "MT 0x4 rejected");
+  CHECK(!midi2_msg_mt2_to_mt4(0, out), "zero rejected");
+  PASS();
+}
+
 int main(void) {
   printf("\n=== midi2_msg.h Unit Tests ===\n\n");
 
@@ -784,6 +892,17 @@ int main(void) {
   test_stream_endpoint_name();
   test_stream_product_id();
   test_stream_fb_name();
+
+  printf("\n[MT 0x2 -> MT 0x4 Translation]\n");
+  test_mt2_to_mt4_note_on();
+  test_mt2_to_mt4_note_on_vel0();
+  test_mt2_to_mt4_cc();
+  test_mt2_to_mt4_program();
+  test_mt2_to_mt4_chan_pressure();
+  test_mt2_to_mt4_pitch_bend();
+  test_mt2_to_mt4_poly_pressure();
+  test_mt2_to_mt4_roundtrip();
+  test_mt2_to_mt4_wrong_mt();
 
   printf("\n=== Results: %d passed, %d failed ===\n\n", passed, failed);
   return failed > 0 ? 1 : 0;

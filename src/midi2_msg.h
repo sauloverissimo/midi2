@@ -912,6 +912,78 @@ static inline uint32_t midi2_msg_from_midi1(uint8_t group,
        | (uint32_t)(data2 & 0x7F);
 }
 
+/*--------------------------------------------------------------------+
+ * Protocol Translation: MT 0x2 (MIDI 1.0 CV) -> MT 0x4 (MIDI 2.0 CV)
+ *
+ * Translates a 1-word MT 0x2 message to a 2-word MT 0x4 message with
+ * proper value scaling per M2-104-UM v1.1.2, Section 7.
+ *
+ * Special cases:
+ *   - Note On with velocity 0 becomes Note Off (velocity 0x8000)
+ *   - Program Change: bank_valid = false (no bank info in MT 0x2)
+ *   - Pitch Bend: combines data1 (LSB) + data2 (MSB) before scaling
+ *
+ * Returns true if the message was translated, false if mt2_word is not
+ * a Channel Voice message (wrong MT or unrecognized status).
+ *--------------------------------------------------------------------*/
+static inline bool midi2_msg_mt2_to_mt4(uint32_t mt2_word, uint32_t out[2]) {
+  if (midi2_msg_get_mt(&mt2_word) != MIDI2_MT_MIDI1_CV) return false;
+
+  uint8_t group   = (mt2_word >> 24) & 0x0F;
+  uint8_t status  = (mt2_word >> 16) & 0xF0;
+  uint8_t channel = (mt2_word >> 16) & 0x0F;
+  uint8_t data1   = (mt2_word >>  8) & 0x7F;
+  uint8_t data2   = (mt2_word      ) & 0x7F;
+
+  switch (status) {
+    case 0x90: /* Note On */
+      if (data2 == 0) {
+        /* velocity 0 means Note Off per MIDI 1.0 convention */
+        midi2_msg_note_off(out, group, channel, data1,
+                           midi2_msg_scale_up_7to16(64), 0);
+      } else {
+        midi2_msg_note_on(out, group, channel, data1,
+                          midi2_msg_scale_up_7to16(data2), 0);
+      }
+      return true;
+
+    case 0x80: /* Note Off */
+      midi2_msg_note_off(out, group, channel, data1,
+                         midi2_msg_scale_up_7to16(data2), 0);
+      return true;
+
+    case 0xB0: /* Control Change */
+      midi2_msg_cc(out, group, channel, data1,
+                   midi2_msg_scale_up_7to32(data2));
+      return true;
+
+    case 0xC0: /* Program Change */
+      midi2_msg_program(out, group, channel, data1, false, 0, 0);
+      return true;
+
+    case 0xD0: /* Channel Pressure */
+      midi2_msg_chan_pressure(out, group, channel,
+                              midi2_msg_scale_up_7to32(data1));
+      return true;
+
+    case 0xE0: /* Pitch Bend */
+      {
+        uint16_t bend14 = ((uint16_t)data2 << 7) | data1;
+        midi2_msg_pitch_bend(out, group, channel,
+                             midi2_msg_scale_up_14to32(bend14));
+      }
+      return true;
+
+    case 0xA0: /* Poly Pressure */
+      midi2_msg_poly_pressure(out, group, channel, data1,
+                               midi2_msg_scale_up_7to32(data2));
+      return true;
+
+    default:
+      return false;
+  }
+}
+
 #ifdef __cplusplus
 }
 #endif

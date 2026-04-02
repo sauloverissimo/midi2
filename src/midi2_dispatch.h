@@ -198,6 +198,13 @@ typedef void (*midi2_dp_unknown_cb)(const uint32_t *words, uint8_t word_count, v
 typedef struct {
   void *context;   /**< User pointer passed to all callbacks */
 
+  /** When true, incoming MT 0x2 (MIDI 1.0 CV) messages are translated
+   *  to MT 0x4 (MIDI 2.0 CV) with proper value scaling and dispatched
+   *  through the on_note_on/on_cc/etc. callbacks. The on_cv1_* callbacks
+   *  are NOT called when upscale is active.
+   *  When false (default), MT 0x2 goes to on_cv1_* as before. */
+  bool upscale_mt2;
+
   /* MT 0x0: Utility */
   midi2_dp_noop_cb            on_noop;
   midi2_dp_jr_clock_cb        on_jr_clock;

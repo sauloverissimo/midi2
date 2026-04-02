@@ -192,6 +192,25 @@ while (serial_available()) {
 }
 ```
 
+### Protocol translation (MT 0x2 -> MT 0x4)
+
+`midi2_msg_mt2_to_mt4()` translates a 1-word MT 0x2 message to a 2-word MT 0x4 message with proper value scaling per M2-104-UM v1.1.2 Section 7. Stateless, defined in `midi2_msg.h`.
+
+```c
+uint32_t mt2 = midi2_msg_from_midi1(0, 0x90, 60, 100);  /* MT 0x2 Note On */
+uint32_t mt4[2];
+midi2_msg_mt2_to_mt4(mt2, mt4);  /* MT 0x4 with 16-bit velocity */
+```
+
+The `midi2_dispatch` supports automatic upscaling via the `upscale_mt2` flag:
+
+```c
+midi2_dispatch dp;
+midi2_dispatch_init(&dp);
+dp.upscale_mt2 = true;   /* MT 0x2 translated to MT 0x4 before dispatch */
+dp.on_note_on = my_handler;  /* receives both MT 0x2 and MT 0x4 messages */
+```
+
 ---
 
 ## midi2_ci_msg.h

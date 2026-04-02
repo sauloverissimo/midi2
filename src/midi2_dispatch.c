@@ -554,7 +554,14 @@ void midi2_dispatch_feed(const uint32_t *words, uint8_t word_count, void *contex
       dispatch_system(dp, words[0]);
       break;
     case MIDI2_MT_MIDI1_CV:
-      dispatch_cv1(dp, words[0]);
+      if (dp->upscale_mt2) {
+        uint32_t mt4[2];
+        if (midi2_msg_mt2_to_mt4(words[0], mt4)) {
+          dispatch_cv2(dp, mt4);
+        }
+      } else {
+        dispatch_cv1(dp, words[0]);
+      }
       break;
     case MIDI2_MT_SYSEX7:
       dispatch_sysex7(dp, words);

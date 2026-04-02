@@ -31,5 +31,5 @@ Welcome to the midi2 wiki -- the complete guide for developers using or contribu
 - **Repository**: [github.com/sauloverissimo/midi2](https://github.com/sauloverissimo/midi2)
 - **License**: MIT
 - **Language**: C99, zero dependencies, zero allocation
-- **Tests**: 213 passing across 7 modules
+- **Tests**: 232 passing across 7 modules
 - **Specs covered**: M2-104-UM v1.1.2 (UMP) 100%, M2-101-UM v1.2 (CI) 100%

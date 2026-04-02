@@ -54,7 +54,7 @@ Key architectural choices made during midi2 development and their rationale.
 
 **Decision**: Cover 100% of UMP and CI message types first, then validate progressively on real hardware.
 
-**Why**: A partial API that gets published and later extended causes breaking changes for early adopters. By stabilizing the full API surface first, hardware validation focuses on integration quality rather than API design. The library has 213 host-side tests covering all message types; hardware validation confirms real-world interoperability.
+**Why**: A partial API that gets published and later extended causes breaking changes for early adopters. By stabilizing the full API surface first, hardware validation focuses on integration quality rather than API design. The library has 232 host-side tests covering all message types; hardware validation confirms real-world interoperability.
 
 ## 10. Progressive hardware validation
 
