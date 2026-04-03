@@ -2,7 +2,14 @@
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-04-03
+
 ### Added
+- **midi2.h**: Single-header amalgamation of all 7 modules (stb-style). One file,
+  drop into any project, `#define MIDI2_IMPLEMENTATION` in one `.c`. Auto-generated
+  via `tools/amalgamate.sh`.
+- **test_midi2_amalgam**: 20 new tests validating the amalgamated header across
+  all modules. Total: 252 tests across 8 test suites.
 - **midi2_msg**: `midi2_msg_mt2_to_mt4()` -- stateless protocol translation from
   MT 0x2 (MIDI 1.0 Channel Voice) to MT 0x4 (MIDI 2.0 Channel Voice) with proper
   value scaling per M2-104-UM v1.1.2 Section 7. Handles Note On velocity 0 ->
@@ -10,7 +17,10 @@
 - **midi2_dispatch**: `upscale_mt2` flag. When true, incoming MT 0x2 messages are
   automatically translated to MT 0x4 and dispatched through on_note_on/on_cc/etc.
   Default false (backward compatible).
-- 14 new tests: 9 for mt2_to_mt4 translation, 5 for upscale dispatch.
+- Hardware validation: Daisy Seed (STM32H750) confirmed Device mode via STM32 HAL USB.
+- Hardware validation table expanded with real board names (T-Display S3, Waveshare
+  ESP32-P4, T-PicoC3, Raspberry Pi Pico/Pico 2, etc.) and Transport column replacing
+  the previous TinyUSB column.
 
 ### Changed
 - **midi2_conv**: Streaming SysEx support for any message length. The converter
@@ -20,7 +30,8 @@
 - **midi2_conv**: `midi2_conv_init()` simplified to 2 parameters (state, group).
   The caller-provided SysEx buffer is no longer needed -- the converter uses a
   6-byte internal buffer. **Breaking change** from v0.2.0 API.
-- Total: 232 tests across 7 modules.
+- Documentation updated: single-header integration as recommended path, examples
+  use `#include "midi2.h"`, hardware validation with real board names and transports.
 
 ## [0.2.0] - 2026-03-30
 

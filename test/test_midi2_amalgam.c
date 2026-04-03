@@ -3,7 +3,7 @@
  * Validates that the single-header build produces identical behavior
  * to the multi-module build across all 7 modules.
  *
- * Compile: gcc -std=c99 -I.. test_midi2_amalgam.c -o test_midi2_amalgam
+ * Compile: gcc -std=c99 -I../src test_midi2_amalgam.c -o test_midi2_amalgam
  */
 
 #define MIDI2_IMPLEMENTATION

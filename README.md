@@ -1,7 +1,7 @@
 # 🎹 midi2
 
 [![CI](https://github.com/sauloverissimo/midi2/actions/workflows/ci.yml/badge.svg)](https://github.com/sauloverissimo/midi2/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-232%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-252%20passing-brightgreen.svg)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![C99](https://img.shields.io/badge/standard-C99-blue.svg)]()
 [![Zero Alloc](https://img.shields.io/badge/allocation-zero-orange.svg)]()
@@ -21,7 +21,7 @@ It sits between the transport layer and your platform wrapper. The layers below 
 ## Quick start
 
 ```c
-#include "midi2_msg.h"
+#include "midi2.h"
 
 /* Build a Note On: group 0, channel 0, note 60, velocity 75% */
 uint32_t w[2];
@@ -38,7 +38,7 @@ uint16_t vel16 = midi2_msg_scale_up_7to16(127);  /* 65535 */
 ### With dispatch (typed callbacks)
 
 ```c
-#include "midi2_dispatch.h"
+#include "midi2.h"
 
 void my_note_on(uint8_t group, uint8_t channel, uint8_t note,
                 uint16_t velocity, uint8_t attr_type,
@@ -60,7 +60,15 @@ dp.on_cc = my_cc;
 midi2_dispatch_feed(w, 2, &dp);
 ```
 
+## Single file
+
+| File | What you get |
+|------|-------------|
+| **`midi2.h`** | Everything. All 7 modules in one header. Drop into your project, `#define MIDI2_IMPLEMENTATION` in one `.c`, done. |
+
 ## Modules
+
+When you need finer control, include individual modules instead:
 
 | Module | Files | State | What it does |
 |--------|-------|-------|-------------|
@@ -72,7 +80,7 @@ midi2_dispatch_feed(w, 2, &dp);
 | **midi2_ci_dispatch** | `.h` + `.c` | Caller-allocated | Typed CI dispatch with 33 granular callbacks. |
 | **midi2_ci** | `.h` + `.c` | Caller-allocated | Convenience CI responder (uses ci_msg + ci_dispatch). |
 
-Use only what you need. `midi2_msg` alone is a header include with zero overhead.
+Use only what you need. `midi2_msg` alone is a header include with zero overhead. See [Integration](#integration) for setup details.
 
 ## Message types supported
 
@@ -81,9 +89,9 @@ All message types defined in the UMP specification (M2-104-UM v1.1.2):
 - **Utility (MT 0x0):** NOOP, JR Clock, JR Timestamp, Delta Clockstamp TPQ/DC
 - **System (MT 0x1):** Timing Clock, Start, Stop, Continue, Song Position, Song Select, Tune Request, Active Sensing, Reset
 - **MIDI 1.0 Channel Voice (MT 0x2):** Note On/Off, CC, Program Change, Pressure, Pitch Bend
-- **SysEx7 (MT 0x3):** Construction, fragmentation, and reassembly
+- **SysEx7 (MT 0x3):** Construction, fragmentation, reassembly, and streaming send
 - **MIDI 2.0 Channel Voice (MT 0x4):** Note On/Off, CC, Program Change, Pitch Bend, Channel/Poly Pressure, RPN, NRPN, Relative RPN/NRPN, Registered/Assignable Per-Note Controllers, Per-Note Pitch Bend, Per-Note Management
-- **Data 128-bit (MT 0x5):** SysEx8, Mixed Data Set (Header + Payload)
+- **SysEx8 Data 128-bit (MT 0x5):** SysEx8 construction, fragmentation, and reassembly. Mixed Data Set (Header + Payload)
 - **Flex Data (MT 0xD):** Tempo, Time Signature, Metronome, Key Signature, Chord Name, Metadata Text (13 subtypes), Performance Text (lyrics, ruby, language)
 - **UMP Stream (MT 0xF):** Endpoint Discovery/Info, Device Identity, Endpoint Name, Product Instance ID, Stream Config, Function Block Discovery/Info/Name, Start/End of Clip
 
@@ -124,13 +132,13 @@ make test          # gcc by default
 make CC=clang test # or clang
 ```
 
-232 tests across 7 modules, zero warnings with `-Wall -Wextra -Wpedantic`.
+252 tests across 7 modules, zero warnings with `-Wall -Wextra -Wpedantic`.
 
 CI runs 11 jobs on every push:
 
 | Target | Type | What it verifies |
 |--------|------|-----------------|
-| gcc (Linux x64) | Compile + run | Primary compiler, all 232 tests |
+| gcc (Linux x64) | Compile + run | Primary compiler, all 252 tests |
 | clang (Linux x64) | Compile + run | Catches different warnings |
 | Apple clang (macOS) | Compile + run | macOS / Darwin compatibility |
 | MSVC (Windows) | Compile + run | Microsoft compiler, C11 mode |
@@ -144,24 +152,49 @@ CI runs 11 jobs on every push:
 
 ### Hardware validation
 
-| Platform | MCU | Device | Host | TinyUSB |
-|----------|-----|--------|------|---------|
-| ESP32-S3 (ESP-IDF) | ESP32-S3 | ✅ | ✅ | ✅ |
-| ESP32-P4 (ESP-IDF) | ESP32-P4 | ✅ | ✅ | ✅ |
-| ESP32-S3 (Arduino) | ESP32-S3 | ✅ | ✅ | ✅ |
-| Teensy 4.1 | i.MX RT1062 | ✅ | ✅ | -- |
-| RP2040 | RP2040 | ✅ | -- | ✅ |
-| RP2350 | RP2350 | ✅ | ✅ | ✅ |
-| Daisy Seed | STM32H750 | 🔜 | 🔜 | 🔜 |
-| Arduino Pro Micro | ATmega32U4 | 🔜 | -- | -- |
-| Arduino Leonardo | ATmega32U4 | 🔜 | -- | -- |
-| Arduino Uno | ATmega328P | 🔜 | -- | -- |
+| Platform | MCU | Device | Host | Transport |
+|----------|-----|--------|------|-----------|
+| 🌟 T-Display S3 (ESP-IDF) | ESP32-S3 | ✅ | ✅ | TinyUSB, ESP-NOW, BLE, UART, USB-OTG |
+| T-Display S3 Amoled (ESP-IDF) | ESP32-S3 | ✅ | ✅ | TinyUSB, ESP-NOW, BLE, UART, USB-OTG |
+| 🌟 Waveshare ESP32-P4 (ESP-IDF) | ESP32-P4 | ✅ | ✅ | TinyUSB, BLE |
+| T-PicoC3 (SDK-Pico) | RP2040 | ✅ | -- | TinyUSB |
+| T-PicoC3 (ESP-IDF) | ESP32-C3 | ✅ | -- | TinyUSB |
+| ESP32-S3 (Arduino) | ESP32-S3 | ✅ | ✅ | TinyUSB, BLE |
+| 🌟 Teensy 4.1 | i.MX RT1062 | ✅ | ✅ | Native USB |
+| Raspberry Pi Pico | RP2040 | ✅ | -- | TinyUSB |
+| Waveshare RP2040-Zero | RP2040 | ✅ | -- | TinyUSB |
+| Raspberry Pi Pico 2 | RP2350 | ✅ | ✅ | TinyUSB, PIO-USB |
+| 🌟 Daisy Seed | STM32H750 | ✅ | -- | STM32 HAL USB |
+| ESP32-C6 | ESP32-C6 | 🔜 | -- | TinyUSB, BLE |
+| Nordic nRF52840 | nRF52840 | 🔜 | -- | TinyUSB, BLE |
+| 🌟 Adafruit Feather RP2040 Host | RP2040 | 🔜 | -- | TinyUSB, BLE |
+| Xiao SAMD21 | SAMD21 | 🔜 | -- | TinyUSB |
+| Xiao Renesas RA4M1 | RA4M1 | 🔜 | -- | TinyUSB |
 | Windows | x86_64 | ✅ MSVC | -- | -- |
 | Linux | x86_64 | ✅ gcc/clang | -- | -- |
 
 ## Integration
 
-midi2 is designed to be vendored (copied into your project). Drop the `src/` files into your build:
+midi2 is designed to be vendored (copied into your project). There are two ways to integrate:
+
+### Single-header (recommended for vendoring)
+
+Copy `src/midi2.h` into your project. That's it -- one file, all 7 modules.
+
+```c
+// In any file -- declarations + inline functions
+#include "midi2.h"
+
+// In exactly ONE .c file -- generates the implementation
+#define MIDI2_IMPLEMENTATION
+#include "midi2.h"
+```
+
+This follows the same single-header pattern used by SQLite, stb, cJSON, and cmidi2. The file is auto-generated from the multi-module sources via `tools/amalgamate.sh`.
+
+### Multi-module (for development or selective inclusion)
+
+Drop individual `src/` files into your build for finer control:
 
 **Minimal (just message construction):**
 - Add `midi2_msg.h` to your include path. Done. Header-only.
@@ -176,8 +209,9 @@ midi2 is designed to be vendored (copied into your project). Drop the `src/` fil
 **With byte stream conversion:**
 - Also add `midi2_conv.h/.c`
 
-**PlatformIO:**
-- `library.json` is included for direct use with PlatformIO.
+### PlatformIO
+
+`library.json` is included for direct use with PlatformIO.
 
 ## Architecture
 
@@ -200,11 +234,12 @@ Layer 4: Application   Your synth, controller, DAW plugin, or embedded device
 
 | Platform | MCU / Environment | Transport | Notes |
 |----------|-------------------|-----------|-------|
-| ESP32 | ESP32-S3, ESP32-P4 | TinyUSB, BLE | FreeRTOS tasks, ESP-IDF events |
+| ESP32 | ESP32-S3, ESP32-P4 | TinyUSB, ESP-NOW, BLE, UART, USB-OTG | FreeRTOS tasks, ESP-IDF events |
 | Teensy | Teensy 4.x (NXP i.MX RT) | Native USB | USB dispatch built into core |
-| Daisy | Daisy Seed (STM32H7) | TinyUSB, SAI | libDaisy integration |
+| Daisy | Daisy Seed (STM32H7) | STM32 HAL USB, SAI | libDaisy integration |
 | Adafruit | RP2040, nRF52, SAMD | TinyUSB, BLE | Arduino + Adafruit_TinyUSB |
 | RP2040/RP2350 | RP2040, RP2350 | TinyUSB, PIO-USB | Host + Device, dual port |
+| Nordic | nRF52840 | TinyUSB, BLE | Zephyr or bare-metal |
 | Desktop | Linux, macOS, Windows | ALSA, CoreMIDI, WinRT | Testing, DAW plugins, tools |
 | XMOS | xcore.ai | xCORE USB | Real-time multi-core |
 | Zephyr | Any Zephyr-supported MCU | USB, BLE | RTOS integration |

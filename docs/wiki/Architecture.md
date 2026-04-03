@@ -127,7 +127,7 @@ Total overhead for a full stack (all modules): ~470 bytes + user-chosen buffers.
 
 Every push triggers 11 parallel CI jobs verifying portability and correctness:
 
-**Desktop (compile + run 232 tests):**
+**Desktop (compile + run 252 tests):**
 - gcc (Linux x64) -- primary compiler
 - clang (Linux x64) -- catches different warning classes
 - Apple clang (macOS) -- Darwin compatibility

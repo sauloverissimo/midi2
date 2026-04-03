@@ -15,7 +15,7 @@ cd midi2
 make test
 ```
 
-This compiles and runs all 232 tests with `-Wall -Wextra -Wpedantic`. You can also specify a compiler or enable sanitizers:
+This compiles and runs all 252 tests with `-Wall -Wextra -Wpedantic`. You can also specify a compiler or enable sanitizers:
 
 ```bash
 make CC=clang test                                              # clang
@@ -26,7 +26,7 @@ make CC="gcc -m32" test                                         # 32-bit verific
 ## First Example: Build and Parse a Note On
 
 ```c
-#include "midi2_msg.h"
+#include "midi2.h"
 
 int main(void) {
     /* Build a MIDI 2.0 Note On: group 0, channel 0, note 60 (C4), velocity 75% */
@@ -48,12 +48,13 @@ int main(void) {
 }
 ```
 
-Compile with: `gcc -std=c99 -I src example.c -o example`
+Compile with: `gcc -std=c99 -I src example.c -o example` (midi2_msg is header-only, no `.c` needed)
 
 ## Second Example: Typed Dispatch
 
 ```c
-#include "midi2_dispatch.h"
+#define MIDI2_IMPLEMENTATION
+#include "midi2.h"
 
 void on_note_on(uint8_t group, uint8_t channel, uint8_t note,
                 uint16_t velocity, uint8_t attr_type,
@@ -81,13 +82,12 @@ int main(void) {
 }
 ```
 
-Compile with: `gcc -std=c99 -I src example.c src/midi2_dispatch.c -o example`
+Compile with: `gcc -std=c99 -I src example.c -o example` (MIDI2_IMPLEMENTATION includes all `.c` code)
 
 ## Third Example: Process + Dispatch Chain
 
 ```c
-#include "midi2_proc.h"
-#include "midi2_dispatch.h"
+#include "midi2.h"
 
 /* Chain: proc (SysEx reassembly, group filter) -> dispatch (typed callbacks) */
 
