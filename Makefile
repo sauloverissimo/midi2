@@ -7,7 +7,8 @@ TESTS   := test/test_midi2_msg \
            test/test_midi2_conv \
            test/test_midi2_dispatch \
            test/test_midi2_ci_msg \
-           test/test_midi2_ci_dispatch
+           test/test_midi2_ci_dispatch \
+           test/test_midi2_amalgam
 
 .PHONY: all test clean
 
@@ -42,6 +43,9 @@ test/test_midi2_ci_msg: test/test_midi2_ci_msg.c src/midi2_ci_msg.h
 
 test/test_midi2_ci_dispatch: test/test_midi2_ci_dispatch.c src/midi2_ci_dispatch.c src/midi2_ci_dispatch.h src/midi2_ci_msg.h
 	$(CC) $(CFLAGS) -o $@ test/test_midi2_ci_dispatch.c src/midi2_ci_dispatch.c
+
+test/test_midi2_amalgam: test/test_midi2_amalgam.c midi2.h
+	$(CC) $(CFLAGS) -I. -o $@ $<
 
 clean:
 	rm -f $(TESTS)
