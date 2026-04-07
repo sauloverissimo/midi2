@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-/* Auto-generated from midi2 v0.2.2 -- 2026-04-03
+/* Auto-generated from midi2 v0.2.2 -- 2026-04-07
  * https://github.com/sauloverissimo/midi2
  *
  * Usage:

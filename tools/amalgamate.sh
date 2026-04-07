@@ -89,3 +89,25 @@ EOF
 } > "$OUT"
 
 echo "Generated $OUT ($(wc -l < "$OUT") lines, v${VER})"
+
+# Generate midi2.c companion file
+OUT_C="${OUT%.h}.c"
+{
+  # Extract license from first source file
+  awk '/^\/\*/{p=1} p{print} /^ \*\//{exit}' "$SRC/midi2_msg.h"
+
+  cat <<EOF
+
+/* Auto-generated from midi2 v${VER} -- $(date -u +%Y-%m-%d)
+ * https://github.com/sauloverissimo/midi2
+ *
+ * Compile this file to get all midi2 symbols.
+ * Include midi2.h in your headers for declarations.
+ */
+
+#define MIDI2_IMPLEMENTATION
+#include "midi2.h"
+EOF
+} > "$OUT_C"
+
+echo "Generated $OUT_C ($(wc -l < "$OUT_C") lines, v${VER})"
