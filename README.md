@@ -60,11 +60,11 @@ dp.on_cc = my_cc;
 midi2_dispatch_feed(w, 2, &dp);
 ```
 
-## Single file
+## Amalgamated
 
 | File | What you get |
 |------|-------------|
-| **`midi2.h`** | Everything. All 7 modules in one header. Drop into your project, `#define MIDI2_IMPLEMENTATION` in one `.c`, done. |
+| **`midi2.h`** + **`midi2.c`** | Everything. All 7 modules. Drop both files into your project, done. |
 
 ## Modules
 
@@ -177,9 +177,20 @@ CI runs 11 jobs on every push:
 
 midi2 is designed to be vendored (copied into your project). There are two ways to integrate:
 
-### Single-header (recommended for vendoring)
+### Pair (recommended for vendoring)
 
-Copy `src/midi2.h` into your project. That's it -- one file, all 7 modules.
+Copy `src/midi2.h` + `src/midi2.c` into your project. Your build system compiles `midi2.c` alongside your code. No special defines needed.
+
+```c
+// In your code -- just include the header
+#include "midi2.h"
+```
+
+This is the simplest integration path and works naturally with platforms that auto-compile `.c` files (Arduino, Teensy, PlatformIO, ESP-IDF components).
+
+### Single-header (alternative)
+
+If you prefer a single file, use only `src/midi2.h` with the stb-style pattern:
 
 ```c
 // In any file -- declarations + inline functions
@@ -190,7 +201,7 @@ Copy `src/midi2.h` into your project. That's it -- one file, all 7 modules.
 #include "midi2.h"
 ```
 
-This follows the same single-header pattern used by SQLite, stb, cJSON, and cmidi2. The file is auto-generated from the multi-module sources via `tools/amalgamate.sh`.
+Both files are auto-generated from the multi-module sources via `tools/amalgamate.sh`.
 
 ### Multi-module (for development or selective inclusion)
 
