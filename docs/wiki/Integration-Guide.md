@@ -4,9 +4,20 @@
 
 midi2 is designed to be vendorized -- copy into your project tree. No build system required, no package manager dependency.
 
-### Option 1: Single-header (recommended)
+### Option 1: Pair (recommended)
 
-Copy one file: `src/midi2.h`. All 7 modules in a single header.
+Copy two files: `dist/midi2.h` + `dist/midi2.c`. Your build system compiles `midi2.c` alongside your code. No special defines needed.
+
+```c
+// In your code -- just include the header
+#include "midi2.h"
+```
+
+This works naturally with platforms that auto-compile `.c` files (Arduino, Teensy, PlatformIO, ESP-IDF components).
+
+### Option 2: Single-header (alternative)
+
+Copy one file: `dist/midi2.h`. Use the stb-style pattern:
 
 ```c
 // In any file -- declarations + inline functions
@@ -17,11 +28,9 @@ Copy one file: `src/midi2.h`. All 7 modules in a single header.
 #include "midi2.h"
 ```
 
-This follows the same single-header pattern used by SQLite (amalgamation), stb, cJSON, and cmidi2. The file is auto-generated from the multi-module sources via `tools/amalgamate.sh`.
+### Option 3: Multi-module (selective inclusion)
 
-### Option 2: Multi-module (selective inclusion)
-
-Copy individual source files for finer control over what gets compiled:
+Copy individual source files from `src/` for finer control over what gets compiled:
 
 ```bash
 cp midi2/src/midi2_msg.h       your_project/lib/midi2/
@@ -32,18 +41,28 @@ cp midi2/src/midi2_proc.*      your_project/lib/midi2/
 
 Add `lib/midi2/` to your include path. Compile the `.c` files with your project.
 
-### Option 3: Git submodule
+### Option 4: Git submodule
 
 ```bash
 git submodule add https://github.com/sauloverissimo/midi2.git lib/midi2
 ```
 
-### Option 4: PlatformIO
+### Option 5: PlatformIO
 
 `library.json` is included. Add to your `platformio.ini`:
 
 ```ini
 lib_deps = https://github.com/sauloverissimo/midi2.git
+```
+
+## Project Structure
+
+```
+midi2/
+  src/      Multi-module sources (development, PlatformIO)
+  dist/     Amalgamated midi2.h + midi2.c (vendoring)
+  tools/    amalgamate.sh (generates dist/ from src/)
+  test/     252 tests across 8 test suites
 ```
 
 ## Which Modules to Include
@@ -62,23 +81,18 @@ Pick only what you need:
 
 ## Build Examples
 
-### Single-header (any build system)
-
-```c
-// midi2_impl.c -- compile this one file
-#define MIDI2_IMPLEMENTATION
-#include "midi2.h"
-```
+### Pair (any build system)
 
 ```bash
-gcc -std=c99 -c midi2_impl.c -o midi2.o
+# Just compile midi2.c with your project
+gcc -std=c99 -c midi2.c -o midi2.o
 gcc -std=c99 your_app.c midi2.o -o your_app
 ```
 
-### CMake (single-header)
+### CMake (pair)
 
 ```cmake
-add_library(midi2 STATIC midi2_impl.c)
+add_library(midi2 STATIC midi2.c)
 target_include_directories(midi2 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_features(midi2 PRIVATE c_std_99)
 ```
@@ -101,27 +115,18 @@ target_compile_features(midi2 PRIVATE c_std_99)
 
 ```cmake
 idf_component_register(
-    SRCS "midi2_impl.c"
+    SRCS "midi2.c"
     INCLUDE_DIRS "."
 )
 ```
 
-Where `midi2_impl.c` contains only `#define MIDI2_IMPLEMENTATION` and `#include "midi2.h"`.
+### Arduino / Teensy
 
-### Arduino IDE
-
-Copy `midi2.h` into your Arduino library folder. Create `midi2.cpp`:
-
-```cpp
-#define MIDI2_IMPLEMENTATION
-#include "midi2.h"
-```
-
-The header includes `extern "C"` guards, so it works directly from C++ sketches.
+Copy `midi2.h` + `midi2.c` into your project or library folder. The build system compiles `midi2.c` automatically. The header includes `extern "C"` guards, so it works directly from C++ sketches.
 
 ### Makefile (bare metal)
 
 ```makefile
-midi2.o: midi2_impl.c midi2.h
+midi2.o: midi2.c midi2.h
     $(CC) -std=c99 -I. -c $< -o $@
 ```

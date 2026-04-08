@@ -64,7 +64,7 @@ midi2_dispatch_feed(w, 2, &dp);
 
 | File | What you get |
 |------|-------------|
-| **`midi2.h`** + **`midi2.c`** | Everything. All 7 modules. Drop both files into your project, done. |
+| **`dist/midi2.h`** + **`dist/midi2.c`** | Everything. All 7 modules. Drop both files into your project, done. |
 
 ## Modules
 
@@ -132,7 +132,7 @@ make test          # gcc by default
 make CC=clang test # or clang
 ```
 
-252 tests across 7 modules, zero warnings with `-Wall -Wextra -Wpedantic`.
+252 tests across 8 test suites (7 modules + amalgamated), zero warnings with `-Wall -Wextra -Wpedantic`.
 
 CI runs 11 jobs on every push:
 
@@ -160,14 +160,14 @@ CI runs 11 jobs on every push:
 | T-PicoC3 (SDK-Pico) | RP2040 | ✅ | -- | TinyUSB |
 | T-PicoC3 (ESP-IDF) | ESP32-C3 | ✅ | -- | TinyUSB |
 | ESP32-S3 (Arduino) | ESP32-S3 | ✅ | ✅ | TinyUSB, BLE |
-| 🌟 Teensy 4.1 | i.MX RT1062 | ✅ | ✅ | Native USB |
+| 🌟 Teensy 4.1 | i.MX RT1062 | ✅ | ✅ | Native USB (MIDI 2.0 UMP nativo, AS0/AS1) |
 | Raspberry Pi Pico | RP2040 | ✅ | -- | TinyUSB |
 | Waveshare RP2040-Zero | RP2040 | ✅ | -- | TinyUSB |
 | Raspberry Pi Pico 2 | RP2350 | ✅ | ✅ | TinyUSB, PIO-USB |
 | 🌟 Daisy Seed | STM32H750 | ✅ | -- | STM32 HAL USB |
 | ESP32-C6 | ESP32-C6 | 🔜 | -- | TinyUSB, BLE |
 | Nordic nRF52840 | nRF52840 | 🔜 | -- | TinyUSB, BLE |
-| 🌟 Adafruit Feather RP2040 Host | RP2040 | 🔜 | -- | TinyUSB, BLE |
+| 🌟 Adafruit Feather RP2040 Host | RP2040 | -- | ✅ | TinyUSB |
 | Xiao SAMD21 | SAMD21 | 🔜 | -- | TinyUSB |
 | Xiao Renesas RA4M1 | RA4M1 | 🔜 | -- | TinyUSB |
 | Windows | x86_64 | ✅ MSVC | -- | -- |
@@ -283,12 +283,12 @@ midi2 is designed to be vendorized (copied) into platform wrappers. Each platfor
 | Platform | Typical midi2 modules used |
 |----------|---------------------------|
 | **ESP32** (TinyUSB) | All -- transport delivers raw words, midi2 does everything |
-| **Teensy** (native USB) | msg + ci_msg + ci_dispatch -- Teensy USB already has typed dispatch |
+| **Teensy** (native USB) | All -- vendored as midi2.h + midi2.c, dual AS0/AS1 |
 | **Adafruit** (TinyUSB Arduino) | All -- similar to ESP32 |
 | **Daisy** (STM32/TinyUSB) | All -- similar to ESP32 |
 | **RP2040/RP2350** (TinyUSB/PIO-USB) | All -- similar to ESP32 |
 
-Platforms that already have typed dispatch at the transport level (Teensy) use fewer midi2 modules. Platforms that receive raw UMP words (TinyUSB-based) use the full stack.
+All platforms vendor the full midi2 library (via `dist/midi2.h` + `dist/midi2.c`).
 
 ### Optional modules
 
