@@ -44,8 +44,8 @@ test/test_midi2_ci_msg: test/test_midi2_ci_msg.c src/midi2_ci_msg.h
 test/test_midi2_ci_dispatch: test/test_midi2_ci_dispatch.c src/midi2_ci_dispatch.c src/midi2_ci_dispatch.h src/midi2_ci_msg.h
 	$(CC) $(CFLAGS) -o $@ test/test_midi2_ci_dispatch.c src/midi2_ci_dispatch.c
 
-test/test_midi2_amalgam: test/test_midi2_amalgam.c src/midi2.h
-	$(CC) $(CFLAGS) -o $@ $<
+test/test_midi2_amalgam: test/test_midi2_amalgam.c dist/midi2.h
+	$(CC) $(CFLAGS) -Idist -o $@ $<
 
 clean:
 	rm -f $(TESTS)

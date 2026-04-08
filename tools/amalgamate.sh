@@ -5,7 +5,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC="$SCRIPT_DIR/../src"
-OUT="${1:-$SRC/midi2.h}"
+DIST="$SCRIPT_DIR/../dist"
+mkdir -p "$DIST"
+OUT="${1:-$DIST/midi2.h}"
 VER=$(grep -o '"version".*"[0-9][^"]*"' "$SCRIPT_DIR/../library.json" 2>/dev/null \
   | grep -o '[0-9][^"]*' || echo "dev")
 

@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-/* Auto-generated from midi2 v0.2.3 -- 2026-04-07
+/* Auto-generated from midi2 v0.2.3 -- 2026-04-08
  * https://github.com/sauloverissimo/midi2
  *
  * Compile this file to get all midi2 symbols.

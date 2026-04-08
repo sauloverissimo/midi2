@@ -179,7 +179,7 @@ midi2 is designed to be vendored (copied into your project). There are two ways 
 
 ### Pair (recommended for vendoring)
 
-Copy `src/midi2.h` + `src/midi2.c` into your project. Your build system compiles `midi2.c` alongside your code. No special defines needed.
+Copy `dist/midi2.h` + `dist/midi2.c` into your project. Your build system compiles `midi2.c` alongside your code. No special defines needed.
 
 ```c
 // In your code -- just include the header
@@ -190,7 +190,7 @@ This is the simplest integration path and works naturally with platforms that au
 
 ### Single-header (alternative)
 
-If you prefer a single file, use only `src/midi2.h` with the stb-style pattern:
+If you prefer a single file, use only `dist/midi2.h` with the stb-style pattern:
 
 ```c
 // In any file -- declarations + inline functions
