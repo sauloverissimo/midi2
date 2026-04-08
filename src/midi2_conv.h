@@ -22,6 +22,16 @@
  * THE SOFTWARE.
  */
 
+/*
+ * midi2_conv.h - MIDI 1.0 byte stream to UMP, protocol translation
+ *
+ * Part of midi2 - Portable MIDI 2.0 library (C99)
+ * https://github.com/sauloverissimo/midi2
+ *
+ * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
+ * Version: 0.2.3
+ */
+
 #ifndef MIDI2_CONV_H
 #define MIDI2_CONV_H
 

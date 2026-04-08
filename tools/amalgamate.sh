@@ -47,6 +47,9 @@ SOURCES=(midi2_dispatch midi2_proc midi2_conv midi2_ci_dispatch midi2_ci)
 /* Auto-generated from midi2 v${VER} -- $(date -u +%Y-%m-%d)
  * https://github.com/sauloverissimo/midi2
  *
+ * Portable MIDI 2.0 library (C99, zero dependencies)
+ * Specs: MIDI 2.0 UMP (M2-104-UM v1.1.2), MIDI-CI (M2-101-UM v1.2)
+ *
  * Usage:
  *   #include "midi2.h"
  *   // In exactly ONE .c file:
@@ -102,6 +105,9 @@ OUT_C="${OUT%.h}.c"
 
 /* Auto-generated from midi2 v${VER} -- $(date -u +%Y-%m-%d)
  * https://github.com/sauloverissimo/midi2
+ *
+ * Portable MIDI 2.0 library (C99, zero dependencies)
+ * Specs: MIDI 2.0 UMP (M2-104-UM v1.1.2), MIDI-CI (M2-101-UM v1.2)
  *
  * Compile this file to get all midi2 symbols.
  * Include midi2.h in your headers for declarations.

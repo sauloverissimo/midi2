@@ -25,6 +25,9 @@
 /* Auto-generated from midi2 v0.2.3 -- 2026-04-08
  * https://github.com/sauloverissimo/midi2
  *
+ * Portable MIDI 2.0 library (C99, zero dependencies)
+ * Specs: MIDI 2.0 UMP (M2-104-UM v1.1.2), MIDI-CI (M2-101-UM v1.2)
+ *
  * Usage:
  *   #include "midi2.h"
  *   // In exactly ONE .c file:
@@ -45,6 +48,16 @@ extern "C" {
 
 /* == midi2_msg =========================================================== */
 
+
+/*
+ * midi2_msg.h - UMP message construction and parsing
+ *
+ * Part of midi2 - Portable MIDI 2.0 library (C99)
+ * https://github.com/sauloverissimo/midi2
+ *
+ * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
+ * Version: 0.2.3
+ */
 
 
 
@@ -1003,6 +1016,16 @@ static inline bool midi2_msg_mt2_to_mt4(uint32_t mt2_word, uint32_t out[2]) {
 /* == midi2_ci_msg ======================================================== */
 
 
+/*
+ * midi2_ci_msg.h - MIDI-CI message construction and parsing
+ *
+ * Part of midi2 - Portable MIDI 2.0 library (C99)
+ * https://github.com/sauloverissimo/midi2
+ *
+ * Spec: MIDI-CI (M2-101-UM v1.2, Jun 2023)
+ * Version: 0.2.3
+ */
+
 
 
 
@@ -1785,6 +1808,16 @@ static inline uint16_t midi2_ci_build_pi_midi_report_end(
 /* == midi2_dispatch ====================================================== */
 
 
+/*
+ * midi2_dispatch.h - UMP typed dispatch (42 callbacks)
+ *
+ * Part of midi2 - Portable MIDI 2.0 library (C99)
+ * https://github.com/sauloverissimo/midi2
+ *
+ * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
+ * Version: 0.2.3
+ */
+
 
 
 
@@ -2043,6 +2076,16 @@ void midi2_dispatch_feed(const uint32_t *words, uint8_t word_count, void *contex
 /* == midi2_proc ========================================================== */
 
 
+/*
+ * midi2_proc.h - UMP stream processing, group filtering, value scaling
+ *
+ * Part of midi2 - Portable MIDI 2.0 library (C99)
+ * https://github.com/sauloverissimo/midi2
+ *
+ * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
+ * Version: 0.2.3
+ */
+
 
 
 
@@ -2132,6 +2175,16 @@ void midi2_proc_send_sysex7(uint8_t group, const uint8_t *data, uint16_t length,
 /* == midi2_conv ========================================================== */
 
 
+/*
+ * midi2_conv.h - MIDI 1.0 byte stream to UMP, protocol translation
+ *
+ * Part of midi2 - Portable MIDI 2.0 library (C99)
+ * https://github.com/sauloverissimo/midi2
+ *
+ * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
+ * Version: 0.2.3
+ */
+
 
 
 
@@ -2193,6 +2246,16 @@ bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte);
 
 /* == midi2_ci_dispatch =================================================== */
 
+
+/*
+ * midi2_ci_dispatch.h - MIDI-CI typed dispatch (33 callbacks)
+ *
+ * Part of midi2 - Portable MIDI 2.0 library (C99)
+ * https://github.com/sauloverissimo/midi2
+ *
+ * Spec: MIDI-CI (M2-101-UM v1.2, Jun 2023)
+ * Version: 0.2.3
+ */
 
 
 
@@ -2408,6 +2471,16 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
 /* == midi2_ci ============================================================ */
 
 
+/*
+ * midi2_ci.h - MIDI-CI convenience responder
+ *
+ * Part of midi2 - Portable MIDI 2.0 library (C99)
+ * https://github.com/sauloverissimo/midi2
+ *
+ * Spec: MIDI-CI (M2-101-UM v1.2, Jun 2023)
+ * Version: 0.2.3
+ */
+
 
 
 
@@ -2546,6 +2619,16 @@ bool midi2_ci_process_sysex(midi2_ci_state *state,
 
 /* == midi2_dispatch (impl) =============================================== */
 
+
+/*
+ * midi2_dispatch.c - UMP typed dispatch implementation
+ *
+ * Part of midi2 - Portable MIDI 2.0 library (C99)
+ * https://github.com/sauloverissimo/midi2
+ *
+ * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
+ * Version: 0.2.3
+ */
 
 
 /*--------------------------------------------------------------------+
@@ -3110,6 +3193,16 @@ void midi2_dispatch_feed(const uint32_t *words, uint8_t word_count, void *contex
 /* == midi2_proc (impl) =================================================== */
 
 
+/*
+ * midi2_proc.c - UMP stream processing implementation
+ *
+ * Part of midi2 - Portable MIDI 2.0 library (C99)
+ * https://github.com/sauloverissimo/midi2
+ *
+ * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
+ * Version: 0.2.3
+ */
+
 
 /*--------------------------------------------------------------------+
  * Init
@@ -3343,6 +3436,16 @@ void midi2_proc_send_sysex7(uint8_t group, const uint8_t *data, uint16_t length,
 /* == midi2_conv (impl) =================================================== */
 
 
+/*
+ * midi2_conv.c - MIDI 1.0 byte stream to UMP implementation
+ *
+ * Part of midi2 - Portable MIDI 2.0 library (C99)
+ * https://github.com/sauloverissimo/midi2
+ *
+ * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
+ * Version: 0.2.3
+ */
+
 
 void midi2_conv_init(midi2_conv_state *state, uint8_t group) {
   memset(state, 0, sizeof(midi2_conv_state));
@@ -3518,6 +3621,16 @@ bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte) {
 
 /* == midi2_ci_dispatch (impl) ============================================ */
 
+
+/*
+ * midi2_ci_dispatch.c - MIDI-CI typed dispatch implementation
+ *
+ * Part of midi2 - Portable MIDI 2.0 library (C99)
+ * https://github.com/sauloverissimo/midi2
+ *
+ * Spec: MIDI-CI (M2-101-UM v1.2, Jun 2023)
+ * Version: 0.2.3
+ */
 
 
 void midi2_ci_dispatch_init(midi2_ci_dispatch *dp) {
@@ -3853,6 +3966,16 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
 
 /* == midi2_ci (impl) ===================================================== */
 
+
+/*
+ * midi2_ci.c - MIDI-CI convenience responder implementation
+ *
+ * Part of midi2 - Portable MIDI 2.0 library (C99)
+ * https://github.com/sauloverissimo/midi2
+ *
+ * Spec: MIDI-CI (M2-101-UM v1.2, Jun 2023)
+ * Version: 0.2.3
+ */
 
 
 /*--------------------------------------------------------------------+

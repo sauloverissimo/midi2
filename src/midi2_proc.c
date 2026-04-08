@@ -22,6 +22,16 @@
  * THE SOFTWARE.
  */
 
+/*
+ * midi2_proc.c - UMP stream processing implementation
+ *
+ * Part of midi2 - Portable MIDI 2.0 library (C99)
+ * https://github.com/sauloverissimo/midi2
+ *
+ * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
+ * Version: 0.2.3
+ */
+
 #include "midi2_proc.h"
 #include <string.h>
 

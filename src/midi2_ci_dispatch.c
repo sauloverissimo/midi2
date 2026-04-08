@@ -22,6 +22,16 @@
  * THE SOFTWARE.
  */
 
+/*
+ * midi2_ci_dispatch.c - MIDI-CI typed dispatch implementation
+ *
+ * Part of midi2 - Portable MIDI 2.0 library (C99)
+ * https://github.com/sauloverissimo/midi2
+ *
+ * Spec: MIDI-CI (M2-101-UM v1.2, Jun 2023)
+ * Version: 0.2.3
+ */
+
 #include "midi2_ci_dispatch.h"
 #include <string.h>
 
