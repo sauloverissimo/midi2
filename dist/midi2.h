@@ -56,7 +56,7 @@ extern "C" {
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
- * Version: 0.2.3
+ * Version: 0.2.4
  */
 
 
@@ -1023,7 +1023,7 @@ static inline bool midi2_msg_mt2_to_mt4(uint32_t mt2_word, uint32_t out[2]) {
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI-CI (M2-101-UM v1.2, Jun 2023)
- * Version: 0.2.3
+ * Version: 0.2.4
  */
 
 
@@ -1815,7 +1815,7 @@ static inline uint16_t midi2_ci_build_pi_midi_report_end(
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
- * Version: 0.2.3
+ * Version: 0.2.4
  */
 
 
@@ -2083,7 +2083,7 @@ void midi2_dispatch_feed(const uint32_t *words, uint8_t word_count, void *contex
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
- * Version: 0.2.3
+ * Version: 0.2.4
  */
 
 
@@ -2190,7 +2190,7 @@ void midi2_proc_send_fb_name(uint8_t fb_idx, const char *name,
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
- * Version: 0.2.3
+ * Version: 0.2.4
  */
 
 
@@ -2262,7 +2262,7 @@ bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte);
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI-CI (M2-101-UM v1.2, Jun 2023)
- * Version: 0.2.3
+ * Version: 0.2.4
  */
 
 
@@ -2486,7 +2486,7 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI-CI (M2-101-UM v1.2, Jun 2023)
- * Version: 0.2.3
+ * Version: 0.2.4
  */
 
 
@@ -2675,7 +2675,7 @@ bool midi2_ci_process_sysex(midi2_ci_state *state,
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
- * Version: 0.2.3
+ * Version: 0.2.4
  */
 
 
@@ -3248,7 +3248,7 @@ void midi2_dispatch_feed(const uint32_t *words, uint8_t word_count, void *contex
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
- * Version: 0.2.3
+ * Version: 0.2.4
  */
 
 
@@ -3541,7 +3541,7 @@ void midi2_proc_send_fb_name(uint8_t fb_idx, const char *name,
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
- * Version: 0.2.3
+ * Version: 0.2.4
  */
 
 
@@ -3727,7 +3727,7 @@ bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte) {
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI-CI (M2-101-UM v1.2, Jun 2023)
- * Version: 0.2.3
+ * Version: 0.2.4
  */
 
 
@@ -4072,7 +4072,7 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI-CI (M2-101-UM v1.2, Jun 2023)
- * Version: 0.2.3
+ * Version: 0.2.4
  */
 
 
@@ -4259,7 +4259,7 @@ static void ci_handle_pe_capability(midi2_ci_state *state, uint8_t group,
 
   uint8_t reply[24];
   uint16_t reply_len = midi2_ci_build_pe_capability_reply(
-      reply, MIDI2_CI_VERSION_1, state->muid, src_muid,
+      reply, MIDI2_CI_VERSION_2, state->muid, src_muid,
       /*max_simultaneous*/ 1,
       /*pe_ver_major*/     1,
       /*pe_ver_minor*/     0);

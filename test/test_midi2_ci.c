@@ -321,9 +321,12 @@ static void test_pe_capability_autoreply(void) {
   uint8_t body[16];
   uint16_t n = extract_sysex7_data(body, sizeof(body));
   TEST("PE Capability -> PE Capability Reply (0x31)");
-  CHECK(n > 13, "reply bytes captured");
+  CHECK(n >= 16, "reply bytes captured");
   CHECK(body[3] == 0x31, "Sub-ID#2 == PE_CAPABILITY_REPLY");
+  CHECK(body[4] == MIDI2_CI_VERSION_2, "version == CI v1.2 (for major/minor field)");
   CHECK(body[13] == 1, "max_simultaneous == 1");
+  CHECK(body[14] == 1, "pe_ver_major == 1");
+  CHECK(body[15] == 0, "pe_ver_minor == 0");
   PASS();
 }
 

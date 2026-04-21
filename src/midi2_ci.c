@@ -29,7 +29,7 @@
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI-CI (M2-101-UM v1.2, Jun 2023)
- * Version: 0.2.3
+ * Version: 0.2.4
  */
 
 #include "midi2_ci.h"
@@ -218,7 +218,7 @@ static void ci_handle_pe_capability(midi2_ci_state *state, uint8_t group,
 
   uint8_t reply[24];
   uint16_t reply_len = midi2_ci_build_pe_capability_reply(
-      reply, MIDI2_CI_VERSION_1, state->muid, src_muid,
+      reply, MIDI2_CI_VERSION_2, state->muid, src_muid,
       /*max_simultaneous*/ 1,
       /*pe_ver_major*/     1,
       /*pe_ver_minor*/     0);
