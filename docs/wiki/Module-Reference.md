@@ -154,6 +154,7 @@ All scaling is round-trip safe: `scale_down(scale_up(x)) == x`.
 - **SysEx7 reassembly**: multi-packet SysEx7 -> single callback with complete data
 - **SysEx8 reassembly**: multi-packet SysEx8 -> single callback with complete data
 - **SysEx7 fragmented send**: split large SysEx into 6-byte UMP packets
+- **Function Block Name send** (v0.2.4+): UMP Stream fragmentation (MT 0xF status 0x12) per M2-104-UM §7.1.9
 
 ### Usage
 
@@ -170,6 +171,10 @@ proc.on_sysex8 = my_sysex8_handler; /* reassembled SysEx8 */
 proc.group_mask = 0x000F;           /* accept groups 0-3 only */
 
 midi2_proc_feed(&proc, words, word_count);
+
+/* Out-going helpers (no state required) */
+midi2_proc_send_sysex7(group, bytes, len, write_fn, ctx);
+midi2_proc_send_fb_name(fb_idx, "My Function Block", write_fn, ctx);
 ```
 
 ---
@@ -264,19 +269,36 @@ midi2_ci_dispatch_feed(&ci_dp, group, sysex_data, sysex_len);
 
 **Type**: Compiled. Links with: `midi2_ci_msg.h`, `midi2_proc.h`.
 
-Convenience auto-responder for simple devices. Handles Discovery Reply, Profile Inquiry Reply, basic PE Get/Set, and Process Inquiry Capabilities.
+Convenience auto-responder for devices. Since **v0.2.4** it covers the
+full M2-101-UM Appendix E "minimum MIDI-CI" checklist when an RNG is
+installed and `nak_on_unknown` is enabled:
 
-**Limitations**: Simplified PE (no JSON parsing, returns first property). For full control, use `midi2_ci_dispatch` directly.
+- Discovery Reply advertising Profile + PE + Process Inquiry
+- Profile Inquiry Reply
+- PE Capability Reply + PE Get/Set
+- Process Inquiry Capability Reply
+- Invalidate MUID → regenerate state->muid via installed RNG
+- MUID collision detection → regenerate and broadcast Invalidate
+- NAK (Sub-ID#2 0x7F, status NOT_SUPPORTED) for unsupported sub-ids
 
 ```c
+static uint32_t platform_rng(void *ctx) { (void)ctx; return esp_random(); }
+
 midi2_ci_state ci;
 uint8_t profiles[4][5];
-midi2_ci_property props[2];
-midi2_ci_init(&ci, muid_seed, profiles, 4, props, 2);
+midi2_ci_property props[3];
+midi2_ci_init(&ci, muid_seed, profiles, 4, props, 3);
 midi2_ci_set_identity(&ci, mfr_id, family, model, version);
 midi2_ci_set_write_fn(&ci, my_sysex_write, ctx);
+midi2_ci_set_rng(&ci, platform_rng, NULL);       /* v0.2.4 */
+midi2_ci_set_nak_on_unknown(&ci, true);          /* v0.2.4 */
 midi2_ci_add_profile(&ci, gm2_profile_id);
+midi2_ci_add_property_static(&ci, "Product", "My Device");
 
-/* In your SysEx receive callback: */
+/* In your SysEx receive callback (works for both SysEx7 and SysEx8): */
 midi2_ci_process_sysex(&ci, group, data, length);
 ```
+
+**Simplified PE Get**: the built-in PE Get handler returns the first
+property with a non-NULL value (no JSON header parsing). For full
+control, wire `midi2_ci_dispatch` callbacks directly.
