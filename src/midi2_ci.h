@@ -90,6 +90,17 @@ typedef struct {
  *   midi2_ci_state ci;
  *   midi2_ci_init(&ci, seed, my_profiles, 4, my_props, 2);
  *--------------------------------------------------------------------*/
+/*--------------------------------------------------------------------+
+ * RNG callback (v0.2.4+)
+ *
+ * Platform-specific randomness source. When set via midi2_ci_set_rng(),
+ * the convenience responder automatically handles MUID regeneration on
+ * Invalidate MUID and peer MUID collisions. Only the lower 28 bits of
+ * the returned value are used. Reserved values 0x00000000 and
+ * 0x0FFFFFFF (broadcast) are automatically avoided by midi2_ci_new_muid.
+ *--------------------------------------------------------------------*/
+typedef uint32_t (*midi2_ci_rng_fn)(void *context);
+
 typedef struct {
   /* Device identity (configured by user) */
   uint32_t manufacturer_id;   /**< 3-byte SysEx Manufacturer ID in lower 24 bits */
@@ -116,6 +127,15 @@ typedef struct {
 
   /* User context for PE callbacks */
   void               *context;
+
+  /* RNG for MUID regeneration (v0.2.4+). NULL = no auto-regen. */
+  midi2_ci_rng_fn    rng;
+  void              *rng_context;
+
+  /* When true, process_sysex replies with a NAK (Sub-ID#2 0x7F) for any
+   * CI sub-id not handled by the convenience responder (v0.2.4+).
+   * Default false to preserve v0.2.3 behavior. */
+  bool               nak_on_unknown;
 } midi2_ci_state;
 
 /*--------------------------------------------------------------------+
@@ -141,6 +161,26 @@ void midi2_ci_set_identity(midi2_ci_state *state,
 /** Set the write function (how CI sends SysEx responses) */
 void midi2_ci_set_write_fn(midi2_ci_state *state,
                               midi2_proc_write_fn write_fn, void *context);
+
+/** Install a platform RNG so the convenience responder can regenerate the
+ *  MUID on Invalidate MUID messages and on peer MUID collisions. Without
+ *  this, both situations are silently ignored (v0.2.3 behavior).
+ *  The callback is invoked from within process_sysex; it must be re-entrant
+ *  and should return quickly. Only the lower 28 bits matter. (v0.2.4+) */
+void midi2_ci_set_rng(midi2_ci_state *state,
+                         midi2_ci_rng_fn rng, void *context);
+
+/** Enable/disable automatic NAK (Sub-ID#2 0x7F, status 0x01 NOT_SUPPORTED)
+ *  replies for CI sub-ids the convenience responder does not handle.
+ *  M2-101-UM Appendix E requires a device to "Be able to send a NAK message
+ *  when appropriate". Default: false (v0.2.3 compatible). (v0.2.4+) */
+void midi2_ci_set_nak_on_unknown(midi2_ci_state *state, bool enabled);
+
+/** Generate a fresh 28-bit MUID using the configured RNG, avoiding the
+ *  reserved values 0x00000000 and 0x0FFFFFFF (broadcast). If no RNG is
+ *  set, falls back to perturbing the current MUID. Returns the new MUID
+ *  and also stores it into state->muid. (v0.2.4+) */
+uint32_t midi2_ci_new_muid(midi2_ci_state *state);
 
 /** Add a profile. Returns MIDI2_CI_OK or MIDI2_CI_ERR_FULL. */
 int midi2_ci_add_profile(midi2_ci_state *state, const uint8_t profile_id[5]);

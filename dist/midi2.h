@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-/* Auto-generated from midi2 v0.2.3 -- 2026-04-08
+/* Auto-generated from midi2 v0.2.4 -- 2026-04-21
  * https://github.com/sauloverissimo/midi2
  *
  * Portable MIDI 2.0 library (C99, zero dependencies)
@@ -2172,6 +2172,14 @@ void midi2_proc_remap_group(midi2_proc_state *state, uint32_t *words);
 void midi2_proc_send_sysex7(uint8_t group, const uint8_t *data, uint16_t length,
                               midi2_proc_write_fn write_fn, void *context);
 
+/* M2-104-UM §7.1.9 Function Block Name Notification sender.
+ * UMP Stream MT 0xF, status 0x12. Fragments the UTF-8 name across
+ * Complete / Start / Continue / End 4-word packets (13 name bytes per
+ * UMP; total name limited to 91 bytes per spec). Remaining bytes of
+ * the final packet are zero-padded per spec. (v0.2.4+) */
+void midi2_proc_send_fb_name(uint8_t fb_idx, const char *name,
+                               midi2_proc_write_fn write_fn, void *context);
+
 /* == midi2_conv ========================================================== */
 
 
@@ -2530,6 +2538,17 @@ typedef struct {
  *   midi2_ci_state ci;
  *   midi2_ci_init(&ci, seed, my_profiles, 4, my_props, 2);
  *--------------------------------------------------------------------*/
+/*--------------------------------------------------------------------+
+ * RNG callback (v0.2.4+)
+ *
+ * Platform-specific randomness source. When set via midi2_ci_set_rng(),
+ * the convenience responder automatically handles MUID regeneration on
+ * Invalidate MUID and peer MUID collisions. Only the lower 28 bits of
+ * the returned value are used. Reserved values 0x00000000 and
+ * 0x0FFFFFFF (broadcast) are automatically avoided by midi2_ci_new_muid.
+ *--------------------------------------------------------------------*/
+typedef uint32_t (*midi2_ci_rng_fn)(void *context);
+
 typedef struct {
   /* Device identity (configured by user) */
   uint32_t manufacturer_id;   /**< 3-byte SysEx Manufacturer ID in lower 24 bits */
@@ -2556,6 +2575,15 @@ typedef struct {
 
   /* User context for PE callbacks */
   void               *context;
+
+  /* RNG for MUID regeneration (v0.2.4+). NULL = no auto-regen. */
+  midi2_ci_rng_fn    rng;
+  void              *rng_context;
+
+  /* When true, process_sysex replies with a NAK (Sub-ID#2 0x7F) for any
+   * CI sub-id not handled by the convenience responder (v0.2.4+).
+   * Default false to preserve v0.2.3 behavior. */
+  bool               nak_on_unknown;
 } midi2_ci_state;
 
 /*--------------------------------------------------------------------+
@@ -2581,6 +2609,26 @@ void midi2_ci_set_identity(midi2_ci_state *state,
 /** Set the write function (how CI sends SysEx responses) */
 void midi2_ci_set_write_fn(midi2_ci_state *state,
                               midi2_proc_write_fn write_fn, void *context);
+
+/** Install a platform RNG so the convenience responder can regenerate the
+ *  MUID on Invalidate MUID messages and on peer MUID collisions. Without
+ *  this, both situations are silently ignored (v0.2.3 behavior).
+ *  The callback is invoked from within process_sysex; it must be re-entrant
+ *  and should return quickly. Only the lower 28 bits matter. (v0.2.4+) */
+void midi2_ci_set_rng(midi2_ci_state *state,
+                         midi2_ci_rng_fn rng, void *context);
+
+/** Enable/disable automatic NAK (Sub-ID#2 0x7F, status 0x01 NOT_SUPPORTED)
+ *  replies for CI sub-ids the convenience responder does not handle.
+ *  M2-101-UM Appendix E requires a device to "Be able to send a NAK message
+ *  when appropriate". Default: false (v0.2.3 compatible). (v0.2.4+) */
+void midi2_ci_set_nak_on_unknown(midi2_ci_state *state, bool enabled);
+
+/** Generate a fresh 28-bit MUID using the configured RNG, avoiding the
+ *  reserved values 0x00000000 and 0x0FFFFFFF (broadcast). If no RNG is
+ *  set, falls back to perturbing the current MUID. Returns the new MUID
+ *  and also stores it into state->muid. (v0.2.4+) */
+uint32_t midi2_ci_new_muid(midi2_ci_state *state);
 
 /** Add a profile. Returns MIDI2_CI_OK or MIDI2_CI_ERR_FULL. */
 int midi2_ci_add_profile(midi2_ci_state *state, const uint8_t profile_id[5]);
@@ -3433,6 +3481,56 @@ void midi2_proc_send_sysex7(uint8_t group, const uint8_t *data, uint16_t length,
   }
 }
 
+/*--------------------------------------------------------------------+
+ * Function Block Name Notification (UMP Stream MT 0xF status 0x12)
+ *
+ * M2-104-UM §7.1.9. 4-word packet; 1 name byte at byte 3 of word 0 plus
+ * 12 more bytes across words 1-3, so 13 bytes of name per UMP. Uses
+ * Form = Complete (0) for <=13 bytes, Start/Continue/End otherwise.
+ * Spec mandates max 91 bytes total; we silently truncate at 91.
+ *--------------------------------------------------------------------*/
+#define MIDI2_FB_NAME_BYTES_PER_UMP 13u
+#define MIDI2_FB_NAME_MAX_BYTES     91u
+
+void midi2_proc_send_fb_name(uint8_t fb_idx, const char *name,
+                               midi2_proc_write_fn write_fn, void *context) {
+  if (!write_fn || !name) return;
+
+  uint16_t total = 0;
+  while (name[total] && total < MIDI2_FB_NAME_MAX_BYTES) total++;
+  if (total == 0) return;
+
+  uint16_t offset = 0;
+  while (offset < total) {
+    uint16_t remaining = (uint16_t)(total - offset);
+    uint8_t  n = (remaining > MIDI2_FB_NAME_BYTES_PER_UMP)
+                 ? (uint8_t)MIDI2_FB_NAME_BYTES_PER_UMP
+                 : (uint8_t)remaining;
+    uint8_t is_first = (offset == 0);
+    uint8_t is_last  = (remaining <= MIDI2_FB_NAME_BYTES_PER_UMP);
+    uint8_t form = (is_first && is_last) ? 0u   /* Complete */
+                 : is_first              ? 1u   /* Start */
+                 : is_last               ? 3u   /* End */
+                                         : 2u;  /* Continue */
+
+    uint32_t msg[4] = {0};
+    msg[0] = ((uint32_t)0xFu << 28)
+           | ((uint32_t)form << 26)
+           | ((uint32_t)0x12u << 16)
+           | ((uint32_t)fb_idx << 8);
+    const uint8_t *p = (const uint8_t *)(name + offset);
+    if (n > 0) msg[0] |= (uint32_t)p[0];
+    uint8_t i;
+    for (i = 1; i < n; i++) {
+      uint8_t widx  = (uint8_t)(1u + (i - 1u) / 4u);
+      uint8_t shift = (uint8_t)(24u - ((i - 1u) % 4u) * 8u);
+      msg[widx] |= ((uint32_t)p[i] << shift);
+    }
+    write_fn(msg, 4, context);
+    offset += n;
+  }
+}
+
 /* == midi2_conv (impl) =================================================== */
 
 
@@ -4007,6 +4105,34 @@ void midi2_ci_set_write_fn(midi2_ci_state *state,
   state->write_context = context;
 }
 
+void midi2_ci_set_rng(midi2_ci_state *state,
+                         midi2_ci_rng_fn rng, void *context) {
+  state->rng         = rng;
+  state->rng_context = context;
+}
+
+void midi2_ci_set_nak_on_unknown(midi2_ci_state *state, bool enabled) {
+  state->nak_on_unknown = enabled;
+}
+
+uint32_t midi2_ci_new_muid(midi2_ci_state *state) {
+  uint32_t m;
+  uint8_t tries = 0;
+  do {
+    if (state->rng) {
+      m = state->rng(state->rng_context) & 0x0FFFFFFFu;
+    } else {
+      /* Fallback: perturb current MUID. Better than returning a reserved
+       * value. Real devices should always install an RNG. */
+      m = (state->muid * 1103515245u + 12345u) & 0x0FFFFFFFu;
+    }
+    if (++tries > 8) break; /* avoid pathological loop */
+  } while (m == 0u || m == 0x0FFFFFFFu);
+  if (m == 0u || m == 0x0FFFFFFFu) m = 0x12345678u; /* hard fallback */
+  state->muid = m;
+  return m;
+}
+
 /*--------------------------------------------------------------------+
  * Profiles
  *--------------------------------------------------------------------*/
@@ -4080,7 +4206,14 @@ static bool ci_handle_discovery(midi2_ci_state *state, uint8_t group,
   if (length < 13 || state->manufacturer_id == 0) return false;
 
   uint32_t src_muid = midi2_ci_get_src_muid(data);
-  uint8_t ci_cat = MIDI2_CI_CAT_PROFILE_CONFIG | MIDI2_CI_CAT_PROPERTY_EXCHANGE;
+  /* Declare every CI Category the convenience responder actually handles.
+   * The handlers for Profile Inquiry, PE, and PI Capability all live here;
+   * Discovery must advertise them so Initiators know to send the related
+   * inquiries. Bug present through v0.2.3: Process Inquiry was handled but
+   * not announced. */
+  uint8_t ci_cat = MIDI2_CI_CAT_PROFILE_CONFIG
+                 | MIDI2_CI_CAT_PROPERTY_EXCHANGE
+                 | MIDI2_CI_CAT_PROCESS_INQUIRY;
 
   uint8_t reply[32];
   uint16_t reply_len = midi2_ci_build_discovery_reply(
@@ -4107,6 +4240,29 @@ static void ci_handle_profile_inquiry(midi2_ci_state *state, uint8_t group,
       midi2_ci_get_device_id(data),
       (const uint8_t (*)[5])state->profiles, state->profile_count,
       NULL, 0);
+
+  ci_send(state, group, reply, reply_len);
+}
+
+/*--------------------------------------------------------------------+
+ * PE Capability Reply -- uses midi2_ci_build_pe_capability_reply
+ *
+ * Parallels Profile Inquiry and PI Capability: without this, an
+ * Initiator asking "do you do PE?" gets no answer and never tries
+ * PE GET/SET. Advertises max_simultaneous=1 and PE v1.0 (basic).
+ *--------------------------------------------------------------------*/
+static void ci_handle_pe_capability(midi2_ci_state *state, uint8_t group,
+                                      const uint8_t *data, uint16_t length) {
+  if (length < 13) return;
+
+  uint32_t src_muid = midi2_ci_get_src_muid(data);
+
+  uint8_t reply[24];
+  uint16_t reply_len = midi2_ci_build_pe_capability_reply(
+      reply, MIDI2_CI_VERSION_1, state->muid, src_muid,
+      /*max_simultaneous*/ 1,
+      /*pe_ver_major*/     1,
+      /*pe_ver_minor*/     0);
 
   ci_send(state, group, reply, reply_len);
 }
@@ -4174,6 +4330,63 @@ static void ci_handle_pe_set(midi2_ci_state *state, uint8_t group,
 }
 
 /*--------------------------------------------------------------------+
+ * Invalidate MUID handler (M2-101-UM §3.5 + Appendix E)
+ *
+ * If the message's target MUID matches ours, regenerate it via the
+ * installed RNG. Without an RNG the request is silently ignored (v0.2.3
+ * behavior preserved).
+ *--------------------------------------------------------------------*/
+static void ci_handle_invalidate_muid(midi2_ci_state *state, uint8_t group,
+                                         const uint8_t *data, uint16_t length) {
+  (void)group;
+  if (length < 17) return;
+  if (!state->rng) return;
+  uint32_t target = midi2_ci_get_target_muid(data);
+  if (target != state->muid) return;
+  midi2_ci_new_muid(state);
+}
+
+/*--------------------------------------------------------------------+
+ * MUID collision detection (M2-101-UM Appendix E §2)
+ *
+ * Any inbound CI message whose src_muid matches ours means a peer is
+ * using our MUID. Resolution: pick a new MUID and broadcast Invalidate
+ * for the old value. No-op without an RNG.
+ *--------------------------------------------------------------------*/
+static void ci_check_muid_collision(midi2_ci_state *state, uint8_t group,
+                                       uint32_t peer_src_muid) {
+  if (!state->rng) return;
+  if (peer_src_muid != state->muid) return;
+  uint32_t old = state->muid;
+  midi2_ci_new_muid(state);
+  if (!state->write_fn) return;
+  uint8_t buf[24];
+  uint16_t len = midi2_ci_build_invalidate_muid(
+      buf, MIDI2_CI_VERSION_1, state->muid, old);
+  ci_send(state, group, buf, len);
+}
+
+/*--------------------------------------------------------------------+
+ * NAK builder (M2-101-UM Appendix E)
+ *
+ * Build a Sub-ID#2 0x7F NAK with status NOT_SUPPORTED for a given
+ * original sub-id. Used when nak_on_unknown is enabled.
+ *--------------------------------------------------------------------*/
+static void ci_send_nak_not_supported(midi2_ci_state *state, uint8_t group,
+                                         const uint8_t *data,
+                                         uint8_t orig_sub_id) {
+  if (!state->write_fn) return;
+  uint32_t src_muid = midi2_ci_get_src_muid(data);
+  uint8_t device_id = midi2_ci_get_device_id(data);
+  uint8_t buf[32];
+  uint16_t len = midi2_ci_build_nak(
+      buf, MIDI2_CI_VERSION_2, state->muid, src_muid, device_id,
+      orig_sub_id, MIDI2_CI_NAK_NOT_SUPPORTED, 0,
+      NULL, 0, NULL);
+  ci_send(state, group, buf, len);
+}
+
+/*--------------------------------------------------------------------+
  * Process Inquiry handler -- uses midi2_ci_build_pi_capability_reply
  *--------------------------------------------------------------------*/
 static void ci_handle_process_inquiry(midi2_ci_state *state, uint8_t group,
@@ -4196,12 +4409,25 @@ bool midi2_ci_process_sysex(midi2_ci_state *state,
                                uint8_t group, const uint8_t *data, uint16_t length) {
   if (!midi2_ci_is_ci(data, length)) return false;
 
-  switch (midi2_ci_get_sub_id(data)) {
+  /* Every inbound CI message is an opportunity to detect MUID collisions.
+   * Do this before dispatching so a reply (if any) carries the new MUID. */
+  ci_check_muid_collision(state, group, midi2_ci_get_src_muid(data));
+
+  uint8_t sub_id = midi2_ci_get_sub_id(data);
+  switch (sub_id) {
     case MIDI2_CI_DISCOVERY:
       return ci_handle_discovery(state, group, data, length);
 
+    case MIDI2_CI_INVALIDATE_MUID:
+      ci_handle_invalidate_muid(state, group, data, length);
+      return true;
+
     case MIDI2_CI_PROFILE_INQUIRY:
       ci_handle_profile_inquiry(state, group, data, length);
+      return true;
+
+    case MIDI2_CI_PE_CAPABILITY:
+      ci_handle_pe_capability(state, group, data, length);
       return true;
 
     case MIDI2_CI_PE_GET:
@@ -4217,6 +4443,14 @@ bool midi2_ci_process_sysex(midi2_ci_state *state,
       return true;
 
     default:
+      /* Appendix E: "Be able to send a NAK message when appropriate."
+       * When nak_on_unknown is set, reply with Sub-ID#2 0x7F
+       * status NOT_SUPPORTED. Otherwise the v0.2.3 behavior (silent
+       * fall-through to return false) is preserved. */
+      if (state->nak_on_unknown) {
+        ci_send_nak_not_supported(state, group, data, sub_id);
+        return true;
+      }
       return false;
   }
 }

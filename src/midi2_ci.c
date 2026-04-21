@@ -64,6 +64,34 @@ void midi2_ci_set_write_fn(midi2_ci_state *state,
   state->write_context = context;
 }
 
+void midi2_ci_set_rng(midi2_ci_state *state,
+                         midi2_ci_rng_fn rng, void *context) {
+  state->rng         = rng;
+  state->rng_context = context;
+}
+
+void midi2_ci_set_nak_on_unknown(midi2_ci_state *state, bool enabled) {
+  state->nak_on_unknown = enabled;
+}
+
+uint32_t midi2_ci_new_muid(midi2_ci_state *state) {
+  uint32_t m;
+  uint8_t tries = 0;
+  do {
+    if (state->rng) {
+      m = state->rng(state->rng_context) & 0x0FFFFFFFu;
+    } else {
+      /* Fallback: perturb current MUID. Better than returning a reserved
+       * value. Real devices should always install an RNG. */
+      m = (state->muid * 1103515245u + 12345u) & 0x0FFFFFFFu;
+    }
+    if (++tries > 8) break; /* avoid pathological loop */
+  } while (m == 0u || m == 0x0FFFFFFFu);
+  if (m == 0u || m == 0x0FFFFFFFu) m = 0x12345678u; /* hard fallback */
+  state->muid = m;
+  return m;
+}
+
 /*--------------------------------------------------------------------+
  * Profiles
  *--------------------------------------------------------------------*/
@@ -137,7 +165,14 @@ static bool ci_handle_discovery(midi2_ci_state *state, uint8_t group,
   if (length < 13 || state->manufacturer_id == 0) return false;
 
   uint32_t src_muid = midi2_ci_get_src_muid(data);
-  uint8_t ci_cat = MIDI2_CI_CAT_PROFILE_CONFIG | MIDI2_CI_CAT_PROPERTY_EXCHANGE;
+  /* Declare every CI Category the convenience responder actually handles.
+   * The handlers for Profile Inquiry, PE, and PI Capability all live here;
+   * Discovery must advertise them so Initiators know to send the related
+   * inquiries. Bug present through v0.2.3: Process Inquiry was handled but
+   * not announced. */
+  uint8_t ci_cat = MIDI2_CI_CAT_PROFILE_CONFIG
+                 | MIDI2_CI_CAT_PROPERTY_EXCHANGE
+                 | MIDI2_CI_CAT_PROCESS_INQUIRY;
 
   uint8_t reply[32];
   uint16_t reply_len = midi2_ci_build_discovery_reply(
@@ -164,6 +199,29 @@ static void ci_handle_profile_inquiry(midi2_ci_state *state, uint8_t group,
       midi2_ci_get_device_id(data),
       (const uint8_t (*)[5])state->profiles, state->profile_count,
       NULL, 0);
+
+  ci_send(state, group, reply, reply_len);
+}
+
+/*--------------------------------------------------------------------+
+ * PE Capability Reply -- uses midi2_ci_build_pe_capability_reply
+ *
+ * Parallels Profile Inquiry and PI Capability: without this, an
+ * Initiator asking "do you do PE?" gets no answer and never tries
+ * PE GET/SET. Advertises max_simultaneous=1 and PE v1.0 (basic).
+ *--------------------------------------------------------------------*/
+static void ci_handle_pe_capability(midi2_ci_state *state, uint8_t group,
+                                      const uint8_t *data, uint16_t length) {
+  if (length < 13) return;
+
+  uint32_t src_muid = midi2_ci_get_src_muid(data);
+
+  uint8_t reply[24];
+  uint16_t reply_len = midi2_ci_build_pe_capability_reply(
+      reply, MIDI2_CI_VERSION_1, state->muid, src_muid,
+      /*max_simultaneous*/ 1,
+      /*pe_ver_major*/     1,
+      /*pe_ver_minor*/     0);
 
   ci_send(state, group, reply, reply_len);
 }
@@ -231,6 +289,63 @@ static void ci_handle_pe_set(midi2_ci_state *state, uint8_t group,
 }
 
 /*--------------------------------------------------------------------+
+ * Invalidate MUID handler (M2-101-UM §3.5 + Appendix E)
+ *
+ * If the message's target MUID matches ours, regenerate it via the
+ * installed RNG. Without an RNG the request is silently ignored (v0.2.3
+ * behavior preserved).
+ *--------------------------------------------------------------------*/
+static void ci_handle_invalidate_muid(midi2_ci_state *state, uint8_t group,
+                                         const uint8_t *data, uint16_t length) {
+  (void)group;
+  if (length < 17) return;
+  if (!state->rng) return;
+  uint32_t target = midi2_ci_get_target_muid(data);
+  if (target != state->muid) return;
+  midi2_ci_new_muid(state);
+}
+
+/*--------------------------------------------------------------------+
+ * MUID collision detection (M2-101-UM Appendix E §2)
+ *
+ * Any inbound CI message whose src_muid matches ours means a peer is
+ * using our MUID. Resolution: pick a new MUID and broadcast Invalidate
+ * for the old value. No-op without an RNG.
+ *--------------------------------------------------------------------*/
+static void ci_check_muid_collision(midi2_ci_state *state, uint8_t group,
+                                       uint32_t peer_src_muid) {
+  if (!state->rng) return;
+  if (peer_src_muid != state->muid) return;
+  uint32_t old = state->muid;
+  midi2_ci_new_muid(state);
+  if (!state->write_fn) return;
+  uint8_t buf[24];
+  uint16_t len = midi2_ci_build_invalidate_muid(
+      buf, MIDI2_CI_VERSION_1, state->muid, old);
+  ci_send(state, group, buf, len);
+}
+
+/*--------------------------------------------------------------------+
+ * NAK builder (M2-101-UM Appendix E)
+ *
+ * Build a Sub-ID#2 0x7F NAK with status NOT_SUPPORTED for a given
+ * original sub-id. Used when nak_on_unknown is enabled.
+ *--------------------------------------------------------------------*/
+static void ci_send_nak_not_supported(midi2_ci_state *state, uint8_t group,
+                                         const uint8_t *data,
+                                         uint8_t orig_sub_id) {
+  if (!state->write_fn) return;
+  uint32_t src_muid = midi2_ci_get_src_muid(data);
+  uint8_t device_id = midi2_ci_get_device_id(data);
+  uint8_t buf[32];
+  uint16_t len = midi2_ci_build_nak(
+      buf, MIDI2_CI_VERSION_2, state->muid, src_muid, device_id,
+      orig_sub_id, MIDI2_CI_NAK_NOT_SUPPORTED, 0,
+      NULL, 0, NULL);
+  ci_send(state, group, buf, len);
+}
+
+/*--------------------------------------------------------------------+
  * Process Inquiry handler -- uses midi2_ci_build_pi_capability_reply
  *--------------------------------------------------------------------*/
 static void ci_handle_process_inquiry(midi2_ci_state *state, uint8_t group,
@@ -253,12 +368,25 @@ bool midi2_ci_process_sysex(midi2_ci_state *state,
                                uint8_t group, const uint8_t *data, uint16_t length) {
   if (!midi2_ci_is_ci(data, length)) return false;
 
-  switch (midi2_ci_get_sub_id(data)) {
+  /* Every inbound CI message is an opportunity to detect MUID collisions.
+   * Do this before dispatching so a reply (if any) carries the new MUID. */
+  ci_check_muid_collision(state, group, midi2_ci_get_src_muid(data));
+
+  uint8_t sub_id = midi2_ci_get_sub_id(data);
+  switch (sub_id) {
     case MIDI2_CI_DISCOVERY:
       return ci_handle_discovery(state, group, data, length);
 
+    case MIDI2_CI_INVALIDATE_MUID:
+      ci_handle_invalidate_muid(state, group, data, length);
+      return true;
+
     case MIDI2_CI_PROFILE_INQUIRY:
       ci_handle_profile_inquiry(state, group, data, length);
+      return true;
+
+    case MIDI2_CI_PE_CAPABILITY:
+      ci_handle_pe_capability(state, group, data, length);
       return true;
 
     case MIDI2_CI_PE_GET:
@@ -274,6 +402,14 @@ bool midi2_ci_process_sysex(midi2_ci_state *state,
       return true;
 
     default:
+      /* Appendix E: "Be able to send a NAK message when appropriate."
+       * When nak_on_unknown is set, reply with Sub-ID#2 0x7F
+       * status NOT_SUPPORTED. Otherwise the v0.2.3 behavior (silent
+       * fall-through to return false) is preserved. */
+      if (state->nak_on_unknown) {
+        ci_send_nak_not_supported(state, group, data, sub_id);
+        return true;
+      }
       return false;
   }
 }

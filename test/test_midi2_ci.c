@@ -270,6 +270,184 @@ void test_ci_without_identity_ignored(void) {
   PASS();
 }
 
+/* --- v0.2.4 new features --- */
+
+/* Discovery reply now advertises PROCESS_INQUIRY (bit 4) in ci_cat. */
+static void test_discovery_reply_ci_cat_includes_pi(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x12345678, test_profiles, 8, test_props, 4);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  reset();
+
+  uint8_t req[30] = {0};
+  req[0]=0x7E; req[1]=0x7F; req[2]=0x0D; req[3]=0x70; req[4]=0x01;
+  midi2_ci_process_sysex(&s, 0, req, 30);
+
+  uint8_t body[64];
+  uint16_t n = extract_sysex7_data(body, sizeof(body));
+  TEST("discovery reply advertises PROCESS_INQUIRY in ci_cat");
+  CHECK(n >= 28, "reply present");
+  /* Discovery Reply body layout (Table 8):
+   *  [0..12]  common header (7E, dev_id, 0D, sub_id, ver, src_muid×4, dst_muid×4)
+   *  [13..15] manufacturer id (3 bytes)
+   *  [16..17] family (2 bytes)
+   *  [18..19] model (2 bytes)
+   *  [20..23] sw_rev (4 bytes)
+   *  [24]     ci_category   <-- here
+   *  [25..28] max_sysex (4 bytes)
+   */
+  uint8_t ci_cat = body[24];
+  CHECK((ci_cat & 0x04) != 0, "CAT_PROFILE_CONFIG set");
+  CHECK((ci_cat & 0x08) != 0, "CAT_PROPERTY_EXCHANGE set");
+  CHECK((ci_cat & 0x10) != 0, "CAT_PROCESS_INQUIRY set");
+  PASS();
+}
+
+/* PE Capability inquiry gets an auto-reply with Sub-ID#2 0x31. */
+static void test_pe_capability_autoreply(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x12345678, test_profiles, 8, test_props, 4);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  reset();
+
+  /* PE Capability Inquiry body */
+  uint8_t req[16] = {0};
+  req[0]=0x7E; req[1]=0x7F; req[2]=0x0D;
+  req[3]=0x30; req[4]=0x01;
+  midi2_ci_process_sysex(&s, 0, req, 16);
+
+  uint8_t body[16];
+  uint16_t n = extract_sysex7_data(body, sizeof(body));
+  TEST("PE Capability -> PE Capability Reply (0x31)");
+  CHECK(n > 13, "reply bytes captured");
+  CHECK(body[3] == 0x31, "Sub-ID#2 == PE_CAPABILITY_REPLY");
+  CHECK(body[13] == 1, "max_simultaneous == 1");
+  PASS();
+}
+
+static uint32_t _rng_value = 0;
+static uint32_t fake_rng(void *ctx) { (void)ctx; return _rng_value; }
+
+static void test_new_muid_avoids_reserved(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x12345678, NULL, 0, NULL, 0);
+  midi2_ci_set_rng(&s, fake_rng, NULL);
+
+  TEST("new_muid avoids zero (rng returns 0)");
+  _rng_value = 0;
+  uint32_t m = midi2_ci_new_muid(&s);
+  CHECK(m != 0 && m != 0x0FFFFFFFu, "not reserved");
+  PASS();
+
+  TEST("new_muid avoids 0x0FFFFFFF");
+  _rng_value = 0x0FFFFFFFu;
+  m = midi2_ci_new_muid(&s);
+  CHECK(m != 0 && m != 0x0FFFFFFFu, "not reserved");
+  PASS();
+
+  TEST("new_muid returns 28-bit value");
+  _rng_value = 0xDEADBEEFu;
+  m = midi2_ci_new_muid(&s);
+  CHECK((m & 0xF0000000u) == 0, "upper nibble clear");
+  PASS();
+}
+
+static void test_invalidate_muid_regen_with_rng(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x00ABCDEF, NULL, 0, NULL, 0);
+  _rng_value = 0x01111111u;
+  midi2_ci_set_rng(&s, fake_rng, NULL);
+
+  uint32_t old = s.muid;
+  uint8_t req[17] = {0};
+  req[0]=0x7E; req[1]=0x7F; req[2]=0x0D; req[3]=0x7E; req[4]=0x01;
+  req[5]=0x02;
+  req[9]=0x7F; req[10]=0x7F; req[11]=0x7F; req[12]=0x7F;
+  req[13] = old & 0x7F;
+  req[14] = (old >> 7) & 0x7F;
+  req[15] = (old >> 14) & 0x7F;
+  req[16] = (old >> 21) & 0x7F;
+
+  midi2_ci_process_sysex(&s, 0, req, 17);
+
+  TEST("Invalidate MUID (target==ours) regenerates via RNG");
+  CHECK(s.muid != old, "MUID changed");
+  PASS();
+}
+
+static void test_invalidate_muid_ignore_other_target(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x00ABCDEF, NULL, 0, NULL, 0);
+  _rng_value = 0x01111111u;
+  midi2_ci_set_rng(&s, fake_rng, NULL);
+
+  uint32_t old = s.muid;
+  uint8_t req[17] = {0};
+  req[0]=0x7E; req[1]=0x7F; req[2]=0x0D; req[3]=0x7E; req[4]=0x01;
+  req[5]=0x02; req[9]=0x7F; req[10]=0x7F; req[11]=0x7F; req[12]=0x7F;
+  req[13]=0x55; req[14]=0x0A;
+
+  midi2_ci_process_sysex(&s, 0, req, 17);
+
+  TEST("Invalidate MUID with other target is ignored");
+  CHECK(s.muid == old, "MUID unchanged");
+  PASS();
+}
+
+static void test_muid_collision_triggers_regen(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x00ABCDEF, NULL, 0, NULL, 0);
+  _rng_value = 0x02222222u;
+  midi2_ci_set_rng(&s, fake_rng, NULL);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  reset();
+
+  uint32_t old = s.muid;
+  uint8_t req[30] = {0};
+  req[0]=0x7E; req[1]=0x7F; req[2]=0x0D; req[3]=0x70; req[4]=0x01;
+  req[5]  = old & 0x7F;
+  req[6]  = (old >> 7) & 0x7F;
+  req[7]  = (old >> 14) & 0x7F;
+  req[8]  = (old >> 21) & 0x7F;
+  req[9]=0x7F; req[10]=0x7F; req[11]=0x7F; req[12]=0x7F;
+
+  midi2_ci_process_sysex(&s, 0, req, 30);
+
+  TEST("MUID collision triggers regen");
+  CHECK(s.muid != old, "MUID changed");
+  PASS();
+}
+
+static void test_nak_on_unknown_opt_in(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x12345678, NULL, 0, NULL, 0);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  reset();
+
+  uint8_t req[14] = {0};
+  req[0]=0x7E; req[1]=0x7F; req[2]=0x0D; req[3]=0x55; req[4]=0x02;
+
+  bool h1 = midi2_ci_process_sysex(&s, 0, req, 14);
+  TEST("nak_on_unknown=false: unknown sub_id is silent");
+  CHECK(!h1 && write_pos == 0, "no reply sent");
+  PASS();
+
+  midi2_ci_set_nak_on_unknown(&s, true);
+  reset();
+  bool h2 = midi2_ci_process_sysex(&s, 0, req, 14);
+  uint8_t body[32];
+  uint16_t n = extract_sysex7_data(body, sizeof(body));
+  TEST("nak_on_unknown=true: unknown sub_id gets NAK 0x7F");
+  CHECK(h2, "handled");
+  CHECK(n > 14, "NAK body captured");
+  CHECK(body[3] == 0x7F, "Sub-ID#2 == NAK");
+  PASS();
+}
+
 /* --- Main --- */
 
 int main(void) {
@@ -298,6 +476,15 @@ int main(void) {
   printf("\n[Edge Cases]\n");
   test_non_ci_returns_false();
   test_ci_without_identity_ignored();
+
+  printf("\n[v0.2.4 compliance features]\n");
+  test_discovery_reply_ci_cat_includes_pi();
+  test_pe_capability_autoreply();
+  test_new_muid_avoids_reserved();
+  test_invalidate_muid_regen_with_rng();
+  test_invalidate_muid_ignore_other_target();
+  test_muid_collision_triggers_regen();
+  test_nak_on_unknown_opt_in();
 
   printf("\n=== Results: %d passed, %d failed ===\n\n", passed, failed);
   return failed > 0 ? 1 : 0;

@@ -126,6 +126,14 @@ void midi2_proc_remap_group(midi2_proc_state *state, uint32_t *words);
 void midi2_proc_send_sysex7(uint8_t group, const uint8_t *data, uint16_t length,
                               midi2_proc_write_fn write_fn, void *context);
 
+/* M2-104-UM §7.1.9 Function Block Name Notification sender.
+ * UMP Stream MT 0xF, status 0x12. Fragments the UTF-8 name across
+ * Complete / Start / Continue / End 4-word packets (13 name bytes per
+ * UMP; total name limited to 91 bytes per spec). Remaining bytes of
+ * the final packet are zero-padded per spec. (v0.2.4+) */
+void midi2_proc_send_fb_name(uint8_t fb_idx, const char *name,
+                               midi2_proc_write_fn write_fn, void *context);
+
 #ifdef __cplusplus
 }
 #endif

@@ -333,6 +333,51 @@ void test_send_sysex7_exact_12(void) {
   PASS();
 }
 
+/* --- FB Name Notification (v0.2.4+) --- */
+
+void test_send_fb_name_short(void) {
+  TEST("send fb_name: 8 bytes = 1 complete packet (4 words)");
+  reset_state();
+  midi2_proc_send_fb_name(0, "gingo.p4", test_write_fn, NULL);
+  CHECK(write_buf_pos == 4, "1 packet = 4 words");
+  uint32_t w0 = write_buf[0];
+  CHECK(((w0 >> 28) & 0x0F) == 0x0F, "MT == Stream");
+  CHECK(((w0 >> 26) & 0x03) == 0x00, "Form == Complete");
+  CHECK(((w0 >> 16) & 0x3FF) == 0x012, "status == FB Name");
+  CHECK(((w0 >> 8) & 0xFF) == 0x00, "FB# == 0");
+  CHECK((w0 & 0xFF) == 'g', "first name byte at bits 0-7");
+  PASS();
+}
+
+void test_send_fb_name_long(void) {
+  TEST("send fb_name: 15 bytes = 2 packets (start+end)");
+  reset_state();
+  midi2_proc_send_fb_name(1, "gingo.p4 Router", test_write_fn, NULL);
+  CHECK(write_buf_pos == 8, "2 packets = 8 words");
+  CHECK(((write_buf[0] >> 26) & 0x03) == 0x01, "packet 1 == Start");
+  CHECK(((write_buf[4] >> 26) & 0x03) == 0x03, "packet 2 == End");
+  CHECK(((write_buf[0] >> 8) & 0xFF) == 0x01, "FB# == 1 on packet 1");
+  CHECK(((write_buf[4] >> 8) & 0xFF) == 0x01, "FB# == 1 on packet 2");
+  PASS();
+}
+
+void test_send_fb_name_exact_13(void) {
+  TEST("send fb_name: 13 bytes = 1 complete packet");
+  reset_state();
+  midi2_proc_send_fb_name(2, "0123456789abc", test_write_fn, NULL);
+  CHECK(write_buf_pos == 4, "1 packet");
+  CHECK(((write_buf[0] >> 26) & 0x03) == 0x00, "Form == Complete");
+  PASS();
+}
+
+void test_send_fb_name_empty_noop(void) {
+  TEST("send fb_name: empty string sends nothing");
+  reset_state();
+  midi2_proc_send_fb_name(0, "", test_write_fn, NULL);
+  CHECK(write_buf_pos == 0, "no packets");
+  PASS();
+}
+
 /* --- SysEx8 reassembly --- */
 
 static uint8_t  last_sysex8_stream_id;
@@ -425,6 +470,10 @@ int main(void) {
   test_send_sysex7_long();
   test_send_sysex7_exact_6();
   test_send_sysex7_exact_12();
+  test_send_fb_name_short();
+  test_send_fb_name_long();
+  test_send_fb_name_exact_13();
+  test_send_fb_name_empty_noop();
 
   printf("\n[SysEx8 Reassembly]\n");
   test_sysex8_complete();

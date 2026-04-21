@@ -263,3 +263,53 @@ void midi2_proc_send_sysex7(uint8_t group, const uint8_t *data, uint16_t length,
     write_fn(w, 2, context);
   }
 }
+
+/*--------------------------------------------------------------------+
+ * Function Block Name Notification (UMP Stream MT 0xF status 0x12)
+ *
+ * M2-104-UM §7.1.9. 4-word packet; 1 name byte at byte 3 of word 0 plus
+ * 12 more bytes across words 1-3, so 13 bytes of name per UMP. Uses
+ * Form = Complete (0) for <=13 bytes, Start/Continue/End otherwise.
+ * Spec mandates max 91 bytes total; we silently truncate at 91.
+ *--------------------------------------------------------------------*/
+#define MIDI2_FB_NAME_BYTES_PER_UMP 13u
+#define MIDI2_FB_NAME_MAX_BYTES     91u
+
+void midi2_proc_send_fb_name(uint8_t fb_idx, const char *name,
+                               midi2_proc_write_fn write_fn, void *context) {
+  if (!write_fn || !name) return;
+
+  uint16_t total = 0;
+  while (name[total] && total < MIDI2_FB_NAME_MAX_BYTES) total++;
+  if (total == 0) return;
+
+  uint16_t offset = 0;
+  while (offset < total) {
+    uint16_t remaining = (uint16_t)(total - offset);
+    uint8_t  n = (remaining > MIDI2_FB_NAME_BYTES_PER_UMP)
+                 ? (uint8_t)MIDI2_FB_NAME_BYTES_PER_UMP
+                 : (uint8_t)remaining;
+    uint8_t is_first = (offset == 0);
+    uint8_t is_last  = (remaining <= MIDI2_FB_NAME_BYTES_PER_UMP);
+    uint8_t form = (is_first && is_last) ? 0u   /* Complete */
+                 : is_first              ? 1u   /* Start */
+                 : is_last               ? 3u   /* End */
+                                         : 2u;  /* Continue */
+
+    uint32_t msg[4] = {0};
+    msg[0] = ((uint32_t)0xFu << 28)
+           | ((uint32_t)form << 26)
+           | ((uint32_t)0x12u << 16)
+           | ((uint32_t)fb_idx << 8);
+    const uint8_t *p = (const uint8_t *)(name + offset);
+    if (n > 0) msg[0] |= (uint32_t)p[0];
+    uint8_t i;
+    for (i = 1; i < n; i++) {
+      uint8_t widx  = (uint8_t)(1u + (i - 1u) / 4u);
+      uint8_t shift = (uint8_t)(24u - ((i - 1u) % 4u) * 8u);
+      msg[widx] |= ((uint32_t)p[i] << shift);
+    }
+    write_fn(msg, 4, context);
+    offset += n;
+  }
+}
