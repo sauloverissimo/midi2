@@ -165,10 +165,10 @@ CI runs 11 jobs on every push:
 | Waveshare RP2040-Zero | RP2040 | ✅ | -- | TinyUSB |
 | Raspberry Pi Pico 2 | RP2350 | ✅ | ✅ | TinyUSB, PIO-USB |
 | 🌟 Daisy Seed | STM32H750 | ✅ | -- | STM32 HAL USB |
-| ESP32-C6 | ESP32-C6 | 🔜 | -- | TinyUSB, BLE |
-| Nordic nRF52840 | nRF52840 | 🔜 | -- | TinyUSB, BLE |
+| ESP32-C6 | ESP32-C6 | ✅ | -- | TinyUSB, BLE |
+| Nordic nRF52840 | nRF52840 | ✅ | -- | TinyUSB, BLE |
 | 🌟 Adafruit Feather RP2040 Host | RP2040 | -- | ✅ | TinyUSB |
-| Xiao SAMD21 | SAMD21 | 🔜 | -- | TinyUSB |
+| Xiao SAMD21 | SAMD21 | ✅ | -- | TinyUSB |
 | Xiao Renesas RA4M1 | RA4M1 | 🔜 | -- | TinyUSB |
 | Windows | x86_64 | ✅ MSVC | -- | -- |
 | Linux | x86_64 | ✅ gcc/clang | -- | -- |
