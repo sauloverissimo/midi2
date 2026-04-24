@@ -198,6 +198,20 @@ int midi2_ci_add_property_dynamic(midi2_ci_state *state,
                                      midi2_ci_pe_getter getter,
                                      midi2_ci_pe_setter setter);
 
+/** Remove a property by name. Remaining properties are shifted left to
+ *  preserve contiguous storage. Returns MIDI2_CI_OK or
+ *  MIDI2_CI_ERR_NOT_FOUND. Symmetric with midi2_ci_remove_profile.
+ *  (v0.3.0+) */
+int midi2_ci_remove_property(midi2_ci_state *state, const char *name);
+
+/** Clear all registered profiles (count-only reset; storage contents are
+ *  left intact for caller inspection or reuse). (v0.3.0+) */
+void midi2_ci_reset_profiles(midi2_ci_state *state);
+
+/** Clear all registered properties (count-only reset; storage contents
+ *  are left intact for caller inspection or reuse). (v0.3.0+) */
+void midi2_ci_reset_properties(midi2_ci_state *state);
+
 /** Process incoming SysEx that might be MIDI-CI.
  *  Returns true if the message was handled (CI), false if not.
  *  Automatically sends Discovery Reply, Profile Inquiry Reply, PE responses.

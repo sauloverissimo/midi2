@@ -147,6 +147,33 @@ int midi2_ci_add_property_dynamic(midi2_ci_state *state,
   return MIDI2_CI_OK;
 }
 
+int midi2_ci_remove_property(midi2_ci_state *state, const char *name) {
+  uint8_t i;
+  if (state == NULL || name == NULL) return MIDI2_CI_ERR_NOT_FOUND;
+  for (i = 0; i < state->property_count; i++) {
+    if (state->properties[i].name != NULL
+        && strcmp(state->properties[i].name, name) == 0) {
+      uint8_t j;
+      for (j = i; j + 1 < state->property_count; j++) {
+        state->properties[j] = state->properties[j + 1];
+      }
+      state->property_count--;
+      return MIDI2_CI_OK;
+    }
+  }
+  return MIDI2_CI_ERR_NOT_FOUND;
+}
+
+void midi2_ci_reset_profiles(midi2_ci_state *state) {
+  if (state == NULL) return;
+  state->profile_count = 0;
+}
+
+void midi2_ci_reset_properties(midi2_ci_state *state) {
+  if (state == NULL) return;
+  state->property_count = 0;
+}
+
 /*--------------------------------------------------------------------+
  * Internal: send SysEx via write function
  *--------------------------------------------------------------------*/

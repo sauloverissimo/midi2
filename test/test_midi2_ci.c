@@ -120,6 +120,43 @@ void test_add_property_static(void) {
   PASS();
 }
 
+void test_remove_property(void) {
+  TEST("remove_property: removes and shifts remaining entries (v0.3.0)");
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0, test_profiles, 8, test_props, 4);
+  CHECK(midi2_ci_add_property_static(&s, "A", "1") == MIDI2_CI_OK, "add A");
+  CHECK(midi2_ci_add_property_static(&s, "B", "2") == MIDI2_CI_OK, "add B");
+  CHECK(midi2_ci_add_property_static(&s, "C", "3") == MIDI2_CI_OK, "add C");
+  CHECK(s.property_count == 3, "three properties added");
+  CHECK(midi2_ci_remove_property(&s, "B") == MIDI2_CI_OK, "remove B");
+  CHECK(s.property_count == 2, "count drops after remove");
+  CHECK(strcmp(s.properties[0].name, "A") == 0, "A still at index 0");
+  CHECK(strcmp(s.properties[1].name, "C") == 0, "C shifted into index 1");
+  CHECK(midi2_ci_remove_property(&s, "zzz") == MIDI2_CI_ERR_NOT_FOUND,
+        "missing name returns NOT_FOUND");
+  PASS();
+}
+
+void test_reset_profiles_and_properties(void) {
+  TEST("reset_profiles / reset_properties: clear registries (v0.3.0)");
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0, test_profiles, 8, test_props, 4);
+  uint8_t pid[] = {0x00, 0x21, 0x09, 0x00, 0x01};
+  midi2_ci_add_profile(&s, pid);
+  midi2_ci_add_profile(&s, pid);
+  midi2_ci_add_property_static(&s, "DeviceName", "TestSynth");
+  CHECK(s.profile_count == 2, "two profiles added");
+  CHECK(s.property_count == 1, "one property added");
+
+  midi2_ci_reset_profiles(&s);
+  CHECK(s.profile_count == 0, "profile_count cleared");
+  CHECK(s.property_count == 1, "reset_profiles leaves properties intact");
+
+  midi2_ci_reset_properties(&s);
+  CHECK(s.property_count == 0, "property_count cleared");
+  PASS();
+}
+
 /* --- Discovery Reply test --- */
 
 void test_discovery_reply(void) {
@@ -466,6 +503,8 @@ int main(void) {
 
   printf("\n[Properties]\n");
   test_add_property_static();
+  test_remove_property();
+  test_reset_profiles_and_properties();
 
   printf("\n[Discovery]\n");
   test_discovery_reply();
