@@ -531,6 +531,158 @@ static void test_collision_broadcast_can_be_disabled(void) {
   PASS();
 }
 
+/* --- Subscribe / Notify (v0.3.0) --- */
+
+static midi2_ci_subscriber test_subs[4];
+
+static void test_init_ex_zeroes_subscriber_count(void) {
+  TEST("init_ex: subscribers array bound and count zeroed");
+  midi2_ci_state s;
+  midi2_ci_init_ex(&s, 0xBEEF, test_profiles, 8, test_props, 4,
+                    test_subs, 4);
+  CHECK(s.subscribers == test_subs, "subscribers pointer bound");
+  CHECK(s.subscriber_capacity == 4, "capacity stored");
+  CHECK(s.subscriber_count == 0, "count zero");
+  PASS();
+}
+
+static void test_classic_init_leaves_no_subscribers(void) {
+  TEST("legacy midi2_ci_init delegates to init_ex with NULL subscribers");
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0xCAFE, test_profiles, 8, test_props, 4);
+  CHECK(s.subscribers == NULL, "no subscriber array");
+  CHECK(s.subscriber_capacity == 0, "capacity zero");
+  CHECK(s.subscriber_count == 0, "count zero");
+  PASS();
+}
+
+static void test_pe_set_subscribable_toggle(void) {
+  TEST("pe_set_subscribable: flips property flag at runtime");
+  midi2_ci_state s;
+  midi2_ci_init_ex(&s, 0xFEED, NULL, 0, test_props, 4, test_subs, 4);
+  midi2_ci_add_property_static(&s, "Temp", "22");
+  CHECK(!s.properties[0].subscribable, "flag default false");
+  CHECK(midi2_ci_pe_set_subscribable(&s, "Temp", true) == MIDI2_CI_OK, "on ok");
+  CHECK(s.properties[0].subscribable, "flag flipped on");
+  CHECK(midi2_ci_pe_set_subscribable(&s, "Temp", false) == MIDI2_CI_OK, "off ok");
+  CHECK(!s.properties[0].subscribable, "flag flipped off");
+  CHECK(midi2_ci_pe_set_subscribable(&s, "missing", true) == MIDI2_CI_ERR_NOT_FOUND,
+        "unknown property");
+  PASS();
+}
+
+static void test_subscribe_add_remove_basic(void) {
+  TEST("subscribe_add/remove: basic lifecycle with 2 subscribers");
+  midi2_ci_state s;
+  midi2_ci_init_ex(&s, 0x1234, NULL, 0, test_props, 4, test_subs, 4);
+  midi2_ci_add_property_static(&s, "Temp", "22");
+  midi2_ci_pe_set_subscribable(&s, "Temp", true);
+
+  CHECK(midi2_ci_subscribe_add(&s, 0xAAA, "Temp") == MIDI2_CI_OK, "add #1");
+  CHECK(midi2_ci_subscribe_add(&s, 0xBBB, "Temp") == MIDI2_CI_OK, "add #2");
+  CHECK(midi2_ci_get_subscriber_count(&s) == 2, "count 2");
+
+  /* Duplicate is idempotent */
+  CHECK(midi2_ci_subscribe_add(&s, 0xAAA, "Temp") == MIDI2_CI_OK, "duplicate ok");
+  CHECK(midi2_ci_get_subscriber_count(&s) == 2, "still 2");
+
+  CHECK(midi2_ci_subscribe_remove(&s, 0xAAA, "Temp") == MIDI2_CI_OK, "remove #1");
+  CHECK(midi2_ci_get_subscriber_count(&s) == 1, "count 1");
+  CHECK(midi2_ci_subscribe_remove(&s, 0x999, "Temp") == MIDI2_CI_ERR_NOT_FOUND,
+        "unknown muid NOT_FOUND");
+  PASS();
+}
+
+static void test_subscribe_rejects_non_subscribable(void) {
+  TEST("subscribe_add: property not marked subscribable returns NOT_FOUND");
+  midi2_ci_state s;
+  midi2_ci_init_ex(&s, 0x2222, NULL, 0, test_props, 4, test_subs, 4);
+  midi2_ci_add_property_static(&s, "X", "v");
+  /* NOT calling pe_set_subscribable: property stays non-subscribable */
+  CHECK(midi2_ci_subscribe_add(&s, 0x1, "X") == MIDI2_CI_ERR_NOT_FOUND,
+        "rejected");
+  CHECK(midi2_ci_subscribe_add(&s, 0x1, "missing") == MIDI2_CI_ERR_NOT_FOUND,
+        "unknown prop");
+  PASS();
+}
+
+static void test_subscribe_full(void) {
+  TEST("subscribe_add: returns ERR_FULL at capacity");
+  midi2_ci_subscriber subs2[2];
+  midi2_ci_state s;
+  midi2_ci_init_ex(&s, 0x3333, NULL, 0, test_props, 4, subs2, 2);
+  midi2_ci_add_property_static(&s, "X", "v");
+  midi2_ci_pe_set_subscribable(&s, "X", true);
+  CHECK(midi2_ci_subscribe_add(&s, 0x1, "X") == MIDI2_CI_OK, "#1");
+  CHECK(midi2_ci_subscribe_add(&s, 0x2, "X") == MIDI2_CI_OK, "#2");
+  CHECK(midi2_ci_subscribe_add(&s, 0x3, "X") == MIDI2_CI_ERR_FULL, "#3 full");
+  PASS();
+}
+
+static void test_subscribe_requires_subscribers_array(void) {
+  TEST("subscribe_add: state without subscribers array returns ERR_FULL");
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x4444, NULL, 0, test_props, 4);
+  midi2_ci_add_property_static(&s, "X", "v");
+  midi2_ci_pe_set_subscribable(&s, "X", true);
+  CHECK(midi2_ci_subscribe_add(&s, 0x1, "X") == MIDI2_CI_ERR_FULL,
+        "no subs array means FULL");
+  CHECK(midi2_ci_get_subscriber_count(&s) == 0, "count untouched");
+  PASS();
+}
+
+static void test_notify_property_changed_emits(void) {
+  TEST("notify_property_changed: emits PE Notify to each subscriber");
+  midi2_ci_state s;
+  midi2_ci_init_ex(&s, 0x5555, NULL, 0, test_props, 4, test_subs, 4);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  midi2_ci_add_property_static(&s, "Temp", "22");
+  midi2_ci_pe_set_subscribable(&s, "Temp", true);
+  midi2_ci_subscribe_add(&s, 0x100, "Temp");
+  midi2_ci_subscribe_add(&s, 0x200, "Temp");
+  reset();
+
+  CHECK(midi2_ci_notify_property_changed(&s, "Temp") == MIDI2_CI_OK, "returns OK");
+  CHECK(write_pos > 0, "UMP emitted");
+
+  /* Scan captured SysEx for PE Notify (sub-ID 0x3F) -- should see 2 frames. */
+  uint8_t body[512];
+  uint16_t n = extract_sysex7_data(body, sizeof body);
+  int notifies = 0;
+  uint16_t i;
+  for (i = 0; i + 13 <= n; i++) {
+    if (body[i] == 0x7E && body[i + 2] == 0x0D && body[i + 3] == 0x3F)
+      notifies++;
+  }
+  CHECK(notifies == 2, "two PE Notify frames emitted");
+  PASS();
+}
+
+static void test_notify_unknown_property(void) {
+  TEST("notify_property_changed: unknown name returns ERR_NOT_FOUND");
+  midi2_ci_state s;
+  midi2_ci_init_ex(&s, 0x6666, NULL, 0, test_props, 4, test_subs, 4);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  reset();
+  CHECK(midi2_ci_notify_property_changed(&s, "nope") == MIDI2_CI_ERR_NOT_FOUND,
+        "NOT_FOUND");
+  CHECK(write_pos == 0, "no UMP emitted");
+  PASS();
+}
+
+static void test_notify_without_subscribers_is_ok(void) {
+  TEST("notify_property_changed: zero subscribers is OK with no emit");
+  midi2_ci_state s;
+  midi2_ci_init_ex(&s, 0x7777, NULL, 0, test_props, 4, test_subs, 4);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  midi2_ci_add_property_static(&s, "X", "v");
+  midi2_ci_pe_set_subscribable(&s, "X", true);
+  reset();
+  CHECK(midi2_ci_notify_property_changed(&s, "X") == MIDI2_CI_OK, "OK");
+  CHECK(write_pos == 0, "no emit without subscribers");
+  PASS();
+}
+
 static void test_nak_on_unknown_opt_in(void) {
   midi2_ci_state s;
   midi2_ci_init(&s, 0x12345678, NULL, 0, NULL, 0);
@@ -599,6 +751,18 @@ int main(void) {
   test_collision_broadcasts_invalidate_muid();
   test_collision_broadcast_can_be_disabled();
   test_nak_on_unknown_opt_in();
+
+  printf("\n[Subscribe / Notify (v0.3.0)]\n");
+  test_init_ex_zeroes_subscriber_count();
+  test_classic_init_leaves_no_subscribers();
+  test_pe_set_subscribable_toggle();
+  test_subscribe_add_remove_basic();
+  test_subscribe_rejects_non_subscribable();
+  test_subscribe_full();
+  test_subscribe_requires_subscribers_array();
+  test_notify_property_changed_emits();
+  test_notify_unknown_property();
+  test_notify_without_subscribers_is_ok();
 
   printf("\n=== Results: %d passed, %d failed ===\n\n", passed, failed);
   return failed > 0 ? 1 : 0;

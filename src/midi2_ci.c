@@ -38,16 +38,34 @@
 /*--------------------------------------------------------------------+
  * Init
  *--------------------------------------------------------------------*/
-void midi2_ci_init(midi2_ci_state *state, uint32_t muid_seed,
-                     uint8_t (*profiles)[5], uint8_t max_profiles,
-                     midi2_ci_property *properties, uint8_t max_properties) {
+void midi2_ci_init_ex(midi2_ci_state *state, uint32_t muid_seed,
+                       uint8_t (*profiles)[5], uint8_t max_profiles,
+                       midi2_ci_property *properties, uint8_t max_properties,
+                       midi2_ci_subscriber *subscribers, uint8_t max_subscribers) {
   memset(state, 0, sizeof(midi2_ci_state));
   state->muid = muid_seed & 0x0FFFFFFF;
   state->profiles = profiles;
   state->profile_capacity = max_profiles;
   state->properties = properties;
   state->property_capacity = max_properties;
+  state->subscribers = subscribers;
+  state->subscriber_capacity = max_subscribers;
+  /* Clear caller-provided subscriber slots so the `in_use` sentinel starts
+   * zero. That field is a midi2 implementation detail, not part of the
+   * caller contract, so init owns it. */
+  if (subscribers != NULL && max_subscribers > 0) {
+    memset(subscribers, 0, sizeof(midi2_ci_subscriber) * max_subscribers);
+  }
   state->auto_invalidate_on_collision = true; /* v0.3.0+ default on */
+}
+
+void midi2_ci_init(midi2_ci_state *state, uint32_t muid_seed,
+                     uint8_t (*profiles)[5], uint8_t max_profiles,
+                     midi2_ci_property *properties, uint8_t max_properties) {
+  midi2_ci_init_ex(state, muid_seed,
+                    profiles, max_profiles,
+                    properties, max_properties,
+                    NULL, 0);
 }
 
 void midi2_ci_set_identity(midi2_ci_state *state,
@@ -135,6 +153,7 @@ int midi2_ci_add_property_static(midi2_ci_state *state,
   state->properties[state->property_count].static_value = value;
   state->properties[state->property_count].getter = NULL;
   state->properties[state->property_count].setter = NULL;
+  state->properties[state->property_count].subscribable = false; /* v0.3.0+ */
   state->property_count++;
   return MIDI2_CI_OK;
 }
@@ -149,6 +168,7 @@ int midi2_ci_add_property_dynamic(midi2_ci_state *state,
   state->properties[state->property_count].static_value = NULL;
   state->properties[state->property_count].getter = getter;
   state->properties[state->property_count].setter = setter;
+  state->properties[state->property_count].subscribable = false; /* v0.3.0+ */
   state->property_count++;
   return MIDI2_CI_OK;
 }
@@ -181,6 +201,88 @@ void midi2_ci_reset_properties(midi2_ci_state *state) {
 }
 
 /*--------------------------------------------------------------------+
+ * Subscribe / Notify (v0.3.0)
+ *
+ * Registry is caller-provided (state->subscribers). Each slot carries
+ * a stable 36-char copy of the resource name so the responder does
+ * not depend on app-owned string lifetimes.
+ *--------------------------------------------------------------------*/
+static int find_property_idx(const midi2_ci_state *state, const char *name) {
+  uint8_t i;
+  if (state == NULL || name == NULL) return -1;
+  for (i = 0; i < state->property_count; i++) {
+    if (state->properties[i].name != NULL
+        && strcmp(state->properties[i].name, name) == 0) {
+      return (int)i;
+    }
+  }
+  return -1;
+}
+
+static int find_subscriber_idx(const midi2_ci_state *state, uint32_t muid,
+                                const char *name) {
+  uint8_t i;
+  if (state == NULL || state->subscribers == NULL || name == NULL) return -1;
+  for (i = 0; i < state->subscriber_capacity; i++) {
+    if (!state->subscribers[i].in_use) continue;
+    if (state->subscribers[i].caller_muid != muid) continue;
+    if (strncmp(state->subscribers[i].name_copy, name, 36) != 0) continue;
+    return (int)i;
+  }
+  return -1;
+}
+
+int midi2_ci_pe_set_subscribable(midi2_ci_state *state, const char *name,
+                                  bool subscribable) {
+  int idx = find_property_idx(state, name);
+  if (idx < 0) return MIDI2_CI_ERR_NOT_FOUND;
+  state->properties[idx].subscribable = subscribable;
+  return MIDI2_CI_OK;
+}
+
+int midi2_ci_subscribe_add(midi2_ci_state *state, uint32_t caller_muid,
+                            const char *resource_name) {
+  uint8_t i;
+  int pi;
+  size_t n;
+  if (state == NULL || resource_name == NULL) return MIDI2_CI_ERR_NOT_FOUND;
+  if (state->subscribers == NULL) return MIDI2_CI_ERR_FULL;
+  pi = find_property_idx(state, resource_name);
+  if (pi < 0) return MIDI2_CI_ERR_NOT_FOUND;
+  if (!state->properties[pi].subscribable) return MIDI2_CI_ERR_NOT_FOUND;
+  if (find_subscriber_idx(state, caller_muid, resource_name) >= 0) {
+    return MIDI2_CI_OK; /* idempotent duplicate */
+  }
+  for (i = 0; i < state->subscriber_capacity; i++) {
+    if (state->subscribers[i].in_use) continue;
+    state->subscribers[i].caller_muid = caller_muid;
+    n = strlen(resource_name);
+    if (n > 36) n = 36;
+    memcpy(state->subscribers[i].name_copy, resource_name, n);
+    state->subscribers[i].name_copy[n] = '\0';
+    state->subscribers[i].in_use = 1;
+    state->subscriber_count++;
+    return MIDI2_CI_OK;
+  }
+  return MIDI2_CI_ERR_FULL;
+}
+
+int midi2_ci_subscribe_remove(midi2_ci_state *state, uint32_t caller_muid,
+                               const char *resource_name) {
+  int idx = find_subscriber_idx(state, caller_muid, resource_name);
+  if (idx < 0) return MIDI2_CI_ERR_NOT_FOUND;
+  state->subscribers[idx].in_use = 0;
+  state->subscribers[idx].caller_muid = 0;
+  state->subscribers[idx].name_copy[0] = '\0';
+  state->subscriber_count--;
+  return MIDI2_CI_OK;
+}
+
+uint8_t midi2_ci_get_subscriber_count(const midi2_ci_state *state) {
+  return (state == NULL) ? 0u : state->subscriber_count;
+}
+
+/*--------------------------------------------------------------------+
  * Internal: send SysEx via write function
  *--------------------------------------------------------------------*/
 static void ci_send(midi2_ci_state *state, uint8_t group,
@@ -188,6 +290,62 @@ static void ci_send(midi2_ci_state *state, uint8_t group,
   if (state->write_fn) {
     midi2_proc_send_sysex7(group, data, length, state->write_fn, state->write_context);
   }
+}
+
+/*--------------------------------------------------------------------+
+ * PE Notify fan-out (v0.3.0)
+ *
+ * Walks the subscriber registry and, for every slot matching the
+ * resource name, emits a PE Notify frame carrying a minimal JSON
+ * header `{"resource":"<name>"}`. The actual property value is not
+ * embedded; consumers issue a PE Get to fetch the new value. Matches
+ * the common M2-103 pattern for PE where Notify signals invalidation.
+ *--------------------------------------------------------------------*/
+int midi2_ci_notify_property_changed(midi2_ci_state *state,
+                                      const char *resource_name) {
+  /* JSON header template `{"resource":"<name>"}`. <name> is bounded by
+   * MIDI2_CI_RESOURCE_NAME_MAX (36 per M2-105) and stored in the
+   * subscriber's name_copy slot, so the worst-case header is
+   * 13 (prefix) + 36 (name) + 2 (suffix) = 51 bytes. Buffer of 64 is
+   * comfortable. No <stdio.h> dependency. */
+  static const char HDR_PREFIX[] = "{\"resource\":\"";
+  static const char HDR_SUFFIX[] = "\"}";
+  uint8_t i;
+  int pi;
+  if (state == NULL || resource_name == NULL) return MIDI2_CI_ERR_NOT_FOUND;
+  pi = find_property_idx(state, resource_name);
+  if (pi < 0) return MIDI2_CI_ERR_NOT_FOUND;
+  if (state->write_fn == NULL || state->subscribers == NULL) return MIDI2_CI_OK;
+
+  for (i = 0; i < state->subscriber_capacity; i++) {
+    if (!state->subscribers[i].in_use) continue;
+    if (strncmp(state->subscribers[i].name_copy, resource_name, 36) != 0) continue;
+
+    uint8_t frame[128];
+    uint8_t hdr[64];
+    uint16_t hdr_n = 0;
+    size_t name_len = strlen(state->subscribers[i].name_copy);
+    if (name_len > 36u) name_len = 36u;
+
+    memcpy(hdr + hdr_n, HDR_PREFIX, sizeof HDR_PREFIX - 1u);
+    hdr_n = (uint16_t)(hdr_n + (sizeof HDR_PREFIX - 1u));
+    memcpy(hdr + hdr_n, state->subscribers[i].name_copy, name_len);
+    hdr_n = (uint16_t)(hdr_n + name_len);
+    memcpy(hdr + hdr_n, HDR_SUFFIX, sizeof HDR_SUFFIX - 1u);
+    hdr_n = (uint16_t)(hdr_n + (sizeof HDR_SUFFIX - 1u));
+
+    uint16_t frame_n = midi2_ci_build_pe_notify(
+        frame, MIDI2_CI_VERSION_1,
+        state->muid,
+        state->subscribers[i].caller_muid,
+        0 /* request_id */,
+        hdr, hdr_n,
+        1, 1,
+        NULL, 0);
+    if (frame_n == 0) continue;
+    ci_send(state, 0 /* group */, frame, frame_n);
+  }
+  return MIDI2_CI_OK;
 }
 
 /*--------------------------------------------------------------------+

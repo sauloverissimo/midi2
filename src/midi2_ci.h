@@ -76,7 +76,21 @@ typedef struct {
   const char         *static_value;  /**< used if getter is NULL */
   midi2_ci_pe_getter  getter;
   midi2_ci_pe_setter  setter;
+  bool                subscribable;  /**< v0.3.0+: eligible for PE Subscribe */
 } midi2_ci_property;
+
+/*--------------------------------------------------------------------+
+ * Subscriber registry entry (caller-provided array, v0.3.0+)
+ *
+ * name_copy holds up to 36 chars per M2-105 PE resource name limit
+ * plus NUL terminator, so the responder keeps a stable reference even
+ * if the app frees the resource name string passed to subscribe_add.
+ *--------------------------------------------------------------------*/
+typedef struct {
+  uint32_t caller_muid;
+  char     name_copy[37];
+  uint8_t  in_use;  /**< 0 = free slot; non-zero = active */
+} midi2_ci_subscriber;
 
 /*--------------------------------------------------------------------+
  * State struct (user-allocated)
@@ -143,6 +157,12 @@ typedef struct {
    * (v0.3.0+). Implementation was already present in v0.2.4 but always
    * on; this flag gates it. */
   bool               auto_invalidate_on_collision;
+
+  /* Subscribers: caller-provided storage (v0.3.0+). NULL when the state
+   * was built with the legacy midi2_ci_init (no subscribe/notify). */
+  midi2_ci_subscriber *subscribers;
+  uint8_t              subscriber_capacity;
+  uint8_t              subscriber_count;
 } midi2_ci_state;
 
 /*--------------------------------------------------------------------+
@@ -150,6 +170,8 @@ typedef struct {
  *--------------------------------------------------------------------*/
 
 /** Initialize state with caller-provided storage.
+ *  Delegates to midi2_ci_init_ex(..., NULL, 0), so the subscriber
+ *  registry is absent and subscribe/notify APIs return ERR_FULL.
  *  @param state         State struct (caller-allocated)
  *  @param muid_seed     Random or unique value for MUID generation (28-bit)
  *  @param profiles      Caller's profile array, or NULL if no profiles needed
@@ -159,6 +181,15 @@ typedef struct {
 void midi2_ci_init(midi2_ci_state *state, uint32_t muid_seed,
                      uint8_t (*profiles)[5], uint8_t max_profiles,
                      midi2_ci_property *properties, uint8_t max_properties);
+
+/** Extended initializer that also wires a subscriber-registry array
+ *  for PE Subscribe / Notify. Pass NULL / 0 for the subscribers
+ *  argument to match midi2_ci_init semantics.
+ *  (v0.3.0+) */
+void midi2_ci_init_ex(midi2_ci_state *state, uint32_t muid_seed,
+                       uint8_t (*profiles)[5], uint8_t max_profiles,
+                       midi2_ci_property *properties, uint8_t max_properties,
+                       midi2_ci_subscriber *subscribers, uint8_t max_subscribers);
 
 /** Configure device identity */
 void midi2_ci_set_identity(midi2_ci_state *state,
@@ -223,6 +254,38 @@ void midi2_ci_reset_profiles(midi2_ci_state *state);
 /** Clear all registered properties (count-only reset; storage contents
  *  are left intact for caller inspection or reuse). (v0.3.0+) */
 void midi2_ci_reset_properties(midi2_ci_state *state);
+
+/** Toggle the subscribable flag on a registered property at runtime.
+ *  Returns MIDI2_CI_OK or MIDI2_CI_ERR_NOT_FOUND. (v0.3.0+) */
+int midi2_ci_pe_set_subscribable(midi2_ci_state *state,
+                                  const char *name, bool subscribable);
+
+/** Register a subscriber (caller_muid) for the named PE resource. The
+ *  property must be registered and marked subscribable. Duplicate
+ *  (muid, name) pairs are idempotent and return OK.
+ *  @return MIDI2_CI_OK, MIDI2_CI_ERR_NOT_FOUND (property unknown or
+ *          not subscribable), or MIDI2_CI_ERR_FULL (no subscriber
+ *          capacity, including the case of midi2_ci_init without a
+ *          subscribers array). (v0.3.0+) */
+int midi2_ci_subscribe_add(midi2_ci_state *state, uint32_t caller_muid,
+                            const char *resource_name);
+
+/** Remove a subscriber from the named resource.
+ *  @return MIDI2_CI_OK or MIDI2_CI_ERR_NOT_FOUND. (v0.3.0+) */
+int midi2_ci_subscribe_remove(midi2_ci_state *state, uint32_t caller_muid,
+                               const char *resource_name);
+
+/** Fan out a PE Notify frame to every subscriber of the named resource.
+ *  Returns MIDI2_CI_OK even when the subscriber list is empty, or
+ *  MIDI2_CI_ERR_NOT_FOUND when the property is unknown. Emission uses
+ *  the state's write_fn (same path as Discovery / PE Reply).
+ *  (v0.3.0+) */
+int midi2_ci_notify_property_changed(midi2_ci_state *state,
+                                      const char *resource_name);
+
+/** Return the current number of active subscribers across all
+ *  resources. (v0.3.0+) */
+uint8_t midi2_ci_get_subscriber_count(const midi2_ci_state *state);
 
 /** Process incoming SysEx that might be MIDI-CI.
  *  Returns true if the message was handled (CI), false if not.
