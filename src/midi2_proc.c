@@ -313,3 +313,111 @@ void midi2_proc_send_fb_name(uint8_t fb_idx, const char *name,
     offset += n;
   }
 }
+
+/*--------------------------------------------------------------------+
+ * UMP Stream text senders: Endpoint Name (status 0x003),
+ * Product Instance ID (status 0x004). M2-104-UM §7.1.7 / §7.1.8.
+ *
+ * 14 payload bytes per UMP (bytes 0-1 live in word 0 bits [15:0],
+ * bytes 2-13 in words 1-3). Fragments into Complete / Start /
+ * Continue / End packets. Reuses midi2_msg_stream_endpoint_name /
+ * midi2_msg_stream_product_id inline builders so the word layout
+ * stays canonical.
+ *--------------------------------------------------------------------*/
+#define MIDI2_STREAM_TEXT_BYTES_PER_UMP 14u
+#define MIDI2_STREAM_TEXT_MAX_BYTES     98u /* 7 UMPs cap per spec */
+
+typedef void (*stream_text_builder_fn)(uint32_t *w, uint8_t format,
+                                       const uint8_t *data, uint8_t len);
+
+static void stream_text_emit(stream_text_builder_fn builder,
+                              const char *text,
+                              midi2_proc_write_fn write_fn, void *context) {
+  if (!write_fn || !text) return;
+  uint16_t total = 0;
+  while (text[total] && total < MIDI2_STREAM_TEXT_MAX_BYTES) total++;
+  if (total == 0) return;
+
+  uint16_t offset = 0;
+  while (offset < total) {
+    uint16_t remaining = (uint16_t)(total - offset);
+    uint8_t  n = (remaining > MIDI2_STREAM_TEXT_BYTES_PER_UMP)
+                 ? (uint8_t)MIDI2_STREAM_TEXT_BYTES_PER_UMP
+                 : (uint8_t)remaining;
+    uint8_t is_first = (offset == 0);
+    uint8_t is_last  = (remaining <= MIDI2_STREAM_TEXT_BYTES_PER_UMP);
+    uint8_t form = (is_first && is_last) ? 0u   /* Complete */
+                 : is_first              ? 1u   /* Start */
+                 : is_last               ? 3u   /* End */
+                                         : 2u;  /* Continue */
+    uint32_t msg[4];
+    builder(msg, form, (const uint8_t *)(text + offset), n);
+    write_fn(msg, 4, context);
+    offset += n;
+  }
+}
+
+void midi2_proc_send_endpoint_name(const char *name,
+                                    midi2_proc_write_fn write_fn, void *context) {
+  stream_text_emit(midi2_msg_stream_endpoint_name, name, write_fn, context);
+}
+
+void midi2_proc_send_product_id(const char *id,
+                                 midi2_proc_write_fn write_fn, void *context) {
+  stream_text_emit(midi2_msg_stream_product_id, id, write_fn, context);
+}
+
+/*--------------------------------------------------------------------+
+ * Device Identity Notification sender (M2-104-UM §7.1.6).
+ * Single 4-word UMP, no fragmentation. Delegates to the inline
+ * builder for byte layout.
+ *--------------------------------------------------------------------*/
+void midi2_proc_send_device_identity(uint32_t manufacturer_id,
+                                      uint16_t family_id, uint16_t model_id,
+                                      uint32_t version_id,
+                                      midi2_proc_write_fn write_fn, void *context) {
+  if (!write_fn) return;
+  uint32_t msg[4];
+  midi2_msg_stream_device_identity(msg, manufacturer_id, family_id,
+                                    model_id, version_id);
+  write_fn(msg, 4, context);
+}
+
+/*--------------------------------------------------------------------+
+ * SysEx8 sender (M2-104-UM §7.8).
+ *
+ * 13 data bytes per UMP (word 0 low byte carries data[0], words 1-3
+ * carry the remaining 12). stream_id rides word 0 bits [15:8]. The
+ * status nibble in bits [23:20] encodes Complete/Start/Continue/End
+ * per Table 14. Delegates to midi2_msg_sysex8_packet per packet so
+ * the status/num_bytes field stays aligned with the canonical
+ * builder.
+ *--------------------------------------------------------------------*/
+#define MIDI2_SYSEX8_BYTES_PER_UMP 13u
+
+void midi2_proc_send_sysex8(uint8_t group, uint8_t stream_id,
+                             const uint8_t *data, uint16_t length,
+                             midi2_proc_write_fn write_fn, void *context) {
+  if (!write_fn) return;
+  if (length == 0) return;
+  if (!data) return;
+
+  uint16_t offset = 0;
+  while (offset < length) {
+    uint16_t remaining = (uint16_t)(length - offset);
+    uint8_t  n = (remaining > MIDI2_SYSEX8_BYTES_PER_UMP)
+                 ? (uint8_t)MIDI2_SYSEX8_BYTES_PER_UMP
+                 : (uint8_t)remaining;
+    uint8_t is_first = (offset == 0);
+    uint8_t is_last  = (remaining <= MIDI2_SYSEX8_BYTES_PER_UMP);
+    uint8_t status = (is_first && is_last) ? MIDI2_SYSEX8_COMPLETE
+                   : is_first              ? MIDI2_SYSEX8_START
+                   : is_last               ? MIDI2_SYSEX8_END
+                                           : MIDI2_SYSEX8_CONTINUE;
+    uint32_t msg[4];
+    midi2_msg_sysex8_packet(msg, group, status, stream_id,
+                             data + offset, n);
+    write_fn(msg, 4, context);
+    offset += n;
+  }
+}

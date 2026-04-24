@@ -378,6 +378,136 @@ void test_send_fb_name_empty_noop(void) {
   PASS();
 }
 
+/* --- Endpoint Name / Product Instance ID senders (v0.3.0) --- */
+
+void test_send_endpoint_name_short(void) {
+  TEST("send endpoint_name: 2 bytes = 1 complete packet");
+  reset_state();
+  midi2_proc_send_endpoint_name("Hi", test_write_fn, NULL);
+  CHECK(write_buf_pos == 4, "1 packet = 4 words");
+  uint32_t w0 = write_buf[0];
+  CHECK(((w0 >> 28) & 0x0F) == 0x0F, "MT == Stream");
+  CHECK(((w0 >> 26) & 0x03) == 0x00, "Form == Complete");
+  CHECK(((w0 >> 16) & 0x3FF) == 0x003, "status == Endpoint Name");
+  CHECK(((w0 >> 8) & 0xFF) == 'H', "byte 0 in w0[15:8]");
+  CHECK((w0 & 0xFF) == 'i', "byte 1 in w0[7:0]");
+  PASS();
+}
+
+void test_send_endpoint_name_long(void) {
+  TEST("send endpoint_name: >14 bytes fragments Start/End");
+  reset_state();
+  midi2_proc_send_endpoint_name("gingo.p4 Endpoint Name",
+                                test_write_fn, NULL);
+  CHECK(write_buf_pos == 8, "2 packets = 8 words");
+  CHECK(((write_buf[0] >> 26) & 0x03) == 0x01, "packet 1 == Start");
+  CHECK(((write_buf[4] >> 26) & 0x03) == 0x03, "packet 2 == End");
+  CHECK(((write_buf[0] >> 16) & 0x3FF) == 0x003, "status 0x003 on p1");
+  CHECK(((write_buf[4] >> 16) & 0x3FF) == 0x003, "status 0x003 on p2");
+  PASS();
+}
+
+void test_send_endpoint_name_exact_14(void) {
+  TEST("send endpoint_name: exactly 14 bytes = 1 complete packet");
+  reset_state();
+  midi2_proc_send_endpoint_name("0123456789abcd", test_write_fn, NULL);
+  CHECK(write_buf_pos == 4, "1 packet");
+  CHECK(((write_buf[0] >> 26) & 0x03) == 0x00, "Form == Complete");
+  PASS();
+}
+
+void test_send_endpoint_name_empty_noop(void) {
+  TEST("send endpoint_name: empty sends nothing");
+  reset_state();
+  midi2_proc_send_endpoint_name("", test_write_fn, NULL);
+  CHECK(write_buf_pos == 0, "no packets");
+  PASS();
+}
+
+void test_send_product_id_short(void) {
+  TEST("send product_id: 7 bytes = 1 complete packet, status 0x004");
+  reset_state();
+  midi2_proc_send_product_id("PID-123", test_write_fn, NULL);
+  CHECK(write_buf_pos == 4, "1 packet");
+  CHECK(((write_buf[0] >> 26) & 0x03) == 0x00, "Form == Complete");
+  CHECK(((write_buf[0] >> 16) & 0x3FF) == 0x004, "status == Product Instance ID");
+  PASS();
+}
+
+/* --- Device Identity sender (v0.3.0) --- */
+
+void test_send_device_identity(void) {
+  TEST("send device_identity: single 4-word UMP with status 0x002");
+  reset_state();
+  midi2_proc_send_device_identity(0x00123456u, 0x0123, 0x04FE,
+                                    0x12345678u, test_write_fn, NULL);
+  CHECK(write_buf_pos == 4, "always 1 packet = 4 words");
+  uint32_t w0 = write_buf[0];
+  CHECK(((w0 >> 28) & 0x0F) == 0x0F, "MT == Stream");
+  CHECK(((w0 >> 16) & 0x3FF) == 0x002, "status == Device Identity");
+  CHECK((write_buf[1] & 0xFFFFFF00u) == (0x00123456u << 8),
+        "w[1] carries manufacturer << 8");
+  CHECK(write_buf[2] == (((uint32_t)0x0123 << 16) | (uint32_t)0x04FE),
+        "w[2] = family<<16 | model");
+  CHECK(write_buf[3] == 0x12345678u, "w[3] = version");
+  PASS();
+}
+
+/* --- SysEx8 sender (v0.3.0) --- */
+
+void test_send_sysex8_short(void) {
+  TEST("send sysex8: 5 bytes = 1 complete packet");
+  reset_state();
+  uint8_t data[] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE};
+  midi2_proc_send_sysex8(0, 0x01, data, 5, test_write_fn, NULL);
+  CHECK(write_buf_pos == 4, "1 packet");
+  uint32_t w0 = write_buf[0];
+  CHECK(((w0 >> 28) & 0x0F) == 0x05, "MT == SysEx8");
+  CHECK(((w0 >> 24) & 0x0F) == 0x00, "group == 0");
+  CHECK(((w0 >> 20) & 0x0F) == 0x00, "status nibble == Complete");
+  CHECK(((w0 >> 16) & 0x0F) == 6, "num_bytes == stream_id(1) + data(5)");
+  CHECK(((w0 >> 8) & 0xFF) == 0x01, "stream_id == 0x01");
+  CHECK((w0 & 0xFF) == 0xAA, "data[0] in w0[7:0]");
+  PASS();
+}
+
+void test_send_sysex8_long(void) {
+  TEST("send sysex8: 40 bytes = 4 packets (start/continue/continue/end)");
+  reset_state();
+  uint8_t data[40];
+  int i;
+  for (i = 0; i < 40; i++) data[i] = (uint8_t)i;
+  midi2_proc_send_sysex8(3, 0x02, data, 40, test_write_fn, NULL);
+  CHECK(write_buf_pos == 16, "4 packets * 4 words");
+  CHECK(((write_buf[0]  >> 20) & 0x0F) == 0x01, "p1 == Start");
+  CHECK(((write_buf[4]  >> 20) & 0x0F) == 0x02, "p2 == Continue");
+  CHECK(((write_buf[8]  >> 20) & 0x0F) == 0x02, "p3 == Continue");
+  CHECK(((write_buf[12] >> 20) & 0x0F) == 0x03, "p4 == End");
+  CHECK(((write_buf[0] >> 24) & 0x0F) == 3, "group preserved on all packets");
+  CHECK(((write_buf[12] >> 24) & 0x0F) == 3, "group preserved on last packet");
+  PASS();
+}
+
+void test_send_sysex8_exact_13(void) {
+  TEST("send sysex8: 13 bytes = 1 complete packet");
+  reset_state();
+  uint8_t data[13];
+  int i;
+  for (i = 0; i < 13; i++) data[i] = (uint8_t)(i + 1);
+  midi2_proc_send_sysex8(0, 0x00, data, 13, test_write_fn, NULL);
+  CHECK(write_buf_pos == 4, "1 packet");
+  CHECK(((write_buf[0] >> 20) & 0x0F) == 0x00, "Complete");
+  PASS();
+}
+
+void test_send_sysex8_empty_noop(void) {
+  TEST("send sysex8: zero-length sends nothing");
+  reset_state();
+  midi2_proc_send_sysex8(0, 0x00, NULL, 0, test_write_fn, NULL);
+  CHECK(write_buf_pos == 0, "no packets");
+  PASS();
+}
+
 /* --- SysEx8 reassembly --- */
 
 static uint8_t  last_sysex8_stream_id;
@@ -474,6 +604,22 @@ int main(void) {
   test_send_fb_name_long();
   test_send_fb_name_exact_13();
   test_send_fb_name_empty_noop();
+
+  printf("\n[Stream Text Notifications (v0.3.0)]\n");
+  test_send_endpoint_name_short();
+  test_send_endpoint_name_long();
+  test_send_endpoint_name_exact_14();
+  test_send_endpoint_name_empty_noop();
+  test_send_product_id_short();
+
+  printf("\n[Device Identity (v0.3.0)]\n");
+  test_send_device_identity();
+
+  printf("\n[SysEx8 Send (v0.3.0)]\n");
+  test_send_sysex8_short();
+  test_send_sysex8_long();
+  test_send_sysex8_exact_13();
+  test_send_sysex8_empty_noop();
 
   printf("\n[SysEx8 Reassembly]\n");
   test_sysex8_complete();
