@@ -136,6 +136,13 @@ typedef struct {
    * CI sub-id not handled by the convenience responder (v0.2.4+).
    * Default false to preserve v0.2.3 behavior. */
   bool               nak_on_unknown;
+
+  /* When true, the convenience responder broadcasts an Invalidate MUID
+   * frame for the old MUID whenever it regenerates because an inbound
+   * src_muid collided with ours. M2-101-UM Appendix E 2. Default: true
+   * (v0.3.0+). Implementation was already present in v0.2.4 but always
+   * on; this flag gates it. */
+  bool               auto_invalidate_on_collision;
 } midi2_ci_state;
 
 /*--------------------------------------------------------------------+
@@ -175,6 +182,11 @@ void midi2_ci_set_rng(midi2_ci_state *state,
  *  M2-101-UM Appendix E requires a device to "Be able to send a NAK message
  *  when appropriate". Default: false (v0.2.3 compatible). (v0.2.4+) */
 void midi2_ci_set_nak_on_unknown(midi2_ci_state *state, bool enabled);
+
+/** Enable/disable automatic broadcast of an Invalidate MUID frame for the
+ *  old MUID whenever the convenience responder regenerates due to an
+ *  inbound collision. Default: true (v0.3.0+). */
+void midi2_ci_set_auto_invalidate_on_collision(midi2_ci_state *state, bool enabled);
 
 /** Generate a fresh 28-bit MUID using the configured RNG, avoiding the
  *  reserved values 0x00000000 and 0x0FFFFFFF (broadcast). If no RNG is

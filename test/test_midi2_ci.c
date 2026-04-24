@@ -461,6 +461,76 @@ static void test_muid_collision_triggers_regen(void) {
   PASS();
 }
 
+/* Helper: scan captured SysEx for an Invalidate MUID frame (sub-id 0x7E)
+ * carrying the given target MUID. Returns true if found. Searches the
+ * raw SysEx bytes captured by extract_sysex7_data. */
+static bool saw_invalidate_muid_for(uint32_t target_muid) {
+  uint8_t body[128];
+  uint16_t n = extract_sysex7_data(body, sizeof body);
+  uint16_t i;
+  for (i = 0; i + 17 <= n; i++) {
+    /* CI header minimum: 0x7E, dev_id, 0x0D, sub_id, ver, src×4, dst×4 */
+    if (body[i] != 0x7E) continue;
+    if (body[i + 2] != 0x0D) continue;
+    if (body[i + 3] != 0x7E /* Invalidate MUID */) continue;
+    /* After 13-byte common header, 4-byte target MUID (7-bit packed) */
+    uint32_t t = (uint32_t)body[i + 13]
+               | ((uint32_t)body[i + 14] << 7)
+               | ((uint32_t)body[i + 15] << 14)
+               | ((uint32_t)body[i + 16] << 21);
+    if (t == target_muid) return true;
+  }
+  return false;
+}
+
+static void test_collision_broadcasts_invalidate_muid(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x00ABCDEF, NULL, 0, NULL, 0);
+  _rng_value = 0x03333333u;
+  midi2_ci_set_rng(&s, fake_rng, NULL);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  reset();
+
+  uint32_t old = s.muid;
+  uint8_t req[30] = {0};
+  req[0]=0x7E; req[1]=0x7F; req[2]=0x0D; req[3]=0x70; req[4]=0x01;
+  req[5]=old & 0x7F; req[6]=(old>>7)&0x7F; req[7]=(old>>14)&0x7F; req[8]=(old>>21)&0x7F;
+  req[9]=0x7F; req[10]=0x7F; req[11]=0x7F; req[12]=0x7F;
+
+  midi2_ci_process_sysex(&s, 0, req, 30);
+
+  TEST("collision broadcasts Invalidate MUID by default (v0.3.0)");
+  CHECK(s.muid != old, "MUID regenerated");
+  CHECK(s.auto_invalidate_on_collision == true, "flag default on");
+  CHECK(saw_invalidate_muid_for(old), "Invalidate MUID frame carries old MUID");
+  PASS();
+}
+
+static void test_collision_broadcast_can_be_disabled(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x00ABCDEF, NULL, 0, NULL, 0);
+  _rng_value = 0x04444444u;
+  midi2_ci_set_rng(&s, fake_rng, NULL);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  midi2_ci_set_auto_invalidate_on_collision(&s, false);
+  reset();
+
+  uint32_t old = s.muid;
+  uint8_t req[30] = {0};
+  req[0]=0x7E; req[1]=0x7F; req[2]=0x0D; req[3]=0x70; req[4]=0x01;
+  req[5]=old & 0x7F; req[6]=(old>>7)&0x7F; req[7]=(old>>14)&0x7F; req[8]=(old>>21)&0x7F;
+  req[9]=0x7F; req[10]=0x7F; req[11]=0x7F; req[12]=0x7F;
+
+  midi2_ci_process_sysex(&s, 0, req, 30);
+
+  TEST("collision Invalidate broadcast silenced when flag disabled");
+  CHECK(s.muid != old, "MUID still regenerates");
+  CHECK(!saw_invalidate_muid_for(old), "no Invalidate MUID frame emitted for old");
+  PASS();
+}
+
 static void test_nak_on_unknown_opt_in(void) {
   midi2_ci_state s;
   midi2_ci_init(&s, 0x12345678, NULL, 0, NULL, 0);
@@ -526,6 +596,8 @@ int main(void) {
   test_invalidate_muid_regen_with_rng();
   test_invalidate_muid_ignore_other_target();
   test_muid_collision_triggers_regen();
+  test_collision_broadcasts_invalidate_muid();
+  test_collision_broadcast_can_be_disabled();
   test_nak_on_unknown_opt_in();
 
   printf("\n=== Results: %d passed, %d failed ===\n\n", passed, failed);

@@ -47,6 +47,7 @@ void midi2_ci_init(midi2_ci_state *state, uint32_t muid_seed,
   state->profile_capacity = max_profiles;
   state->properties = properties;
   state->property_capacity = max_properties;
+  state->auto_invalidate_on_collision = true; /* v0.3.0+ default on */
 }
 
 void midi2_ci_set_identity(midi2_ci_state *state,
@@ -72,6 +73,11 @@ void midi2_ci_set_rng(midi2_ci_state *state,
 
 void midi2_ci_set_nak_on_unknown(midi2_ci_state *state, bool enabled) {
   state->nak_on_unknown = enabled;
+}
+
+void midi2_ci_set_auto_invalidate_on_collision(midi2_ci_state *state, bool enabled) {
+  if (state == NULL) return;
+  state->auto_invalidate_on_collision = enabled;
 }
 
 uint32_t midi2_ci_new_muid(midi2_ci_state *state) {
@@ -346,6 +352,7 @@ static void ci_check_muid_collision(midi2_ci_state *state, uint8_t group,
   uint32_t old = state->muid;
   midi2_ci_new_muid(state);
   if (!state->write_fn) return;
+  if (!state->auto_invalidate_on_collision) return;
   uint8_t buf[24];
   uint16_t len = midi2_ci_build_invalidate_muid(
       buf, MIDI2_CI_VERSION_1, state->muid, old);
