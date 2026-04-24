@@ -833,6 +833,143 @@ void test_set_group_mt3_sysex7(void) {
   PASS();
 }
 
+/* --- MT 0x4 -> MT 0x2 downgrade (v0.3.0) --- */
+
+void test_mt4_to_mt2_note_on_max_velocity(void) {
+  TEST("mt4_to_mt2: Note On vel 0xFFFF -> MT 0x2 vel 0x7F");
+  uint32_t in[2];
+  midi2_msg_note_on(in, 0, 0, 60, 0xFFFFu, 0);
+  uint32_t out = 0;
+  uint32_t n = midi2_msg_mt4_to_mt2(in, &out);
+  CHECK(n == 1, "one MT2 word produced");
+  CHECK(((out >> 28) & 0x0F) == 0x02, "MT=MIDI 1.0 CV");
+  CHECK(((out >> 16) & 0xF0) == 0x90, "status = Note On");
+  CHECK((out & 0x7F) == 0x7F, "velocity scaled down to 0x7F");
+  PASS();
+}
+
+void test_mt4_to_mt2_cc_max(void) {
+  TEST("mt4_to_mt2: CC value 32-bit max -> 0x7F");
+  uint32_t in[2];
+  midi2_msg_cc(in, 2, 3, 7, 0xFFFFFFFFu);
+  uint32_t out = 0;
+  CHECK(midi2_msg_mt4_to_mt2(in, &out) == 1, "one MT2 word");
+  CHECK(((out >> 24) & 0x0F) == 2, "group preserved");
+  CHECK(((out >> 16) & 0xFF) == 0xB3, "status CC ch 3");
+  CHECK(((out >> 8) & 0x7F) == 7, "CC#7");
+  CHECK((out & 0x7F) == 0x7F, "value 0x7F");
+  PASS();
+}
+
+void test_mt4_to_mt2_pitch_bend_center(void) {
+  TEST("mt4_to_mt2: PB 32-bit center -> 14-bit midpoint 0x2000");
+  uint32_t in[2];
+  midi2_msg_pitch_bend(in, 0, 0, 0x80000000u);
+  uint32_t out = 0;
+  CHECK(midi2_msg_mt4_to_mt2(in, &out) == 1, "one word");
+  uint16_t pb14 = (uint16_t)(((out >> 8) & 0x7F)
+                            | ((out & 0x7F) << 7));
+  CHECK(pb14 == 0x2000u, "center 14-bit PB");
+  PASS();
+}
+
+void test_mt4_to_mt2_drops_rpn(void) {
+  TEST("mt4_to_mt2: RPN dropped (no MIDI 1.0 single-word form)");
+  uint32_t in[2];
+  midi2_msg_rpn(in, 0, 0, 0, 0, 0x12345678u);
+  uint32_t out = 0;
+  CHECK(midi2_msg_mt4_to_mt2(in, &out) == 0, "RPN dropped");
+  PASS();
+}
+
+void test_mt4_to_mt2_program(void) {
+  TEST("mt4_to_mt2: Program 0x05 preserved, bank dropped");
+  uint32_t in[2];
+  midi2_msg_program(in, 0, 0, 0x05, false, 0, 0);
+  uint32_t out = 0;
+  CHECK(midi2_msg_mt4_to_mt2(in, &out) == 1, "one word");
+  CHECK(((out >> 16) & 0xFF) == 0xC0, "status Program ch 0");
+  CHECK(((out >> 8) & 0x7F) == 0x05, "program 0x05");
+  PASS();
+}
+
+void test_mt4_to_mt2_rejects_non_mt4(void) {
+  TEST("mt4_to_mt2: MT0 utility word dropped");
+  uint32_t in[2] = {0x00000000u, 0u};
+  uint32_t out = 0;
+  CHECK(midi2_msg_mt4_to_mt2(in, &out) == 0, "non-MT4 dropped");
+  PASS();
+}
+
+/* --- USB MIDI 1.0 cable event -> UMP (v0.3.0) --- */
+
+static uint32_t pack_cable(uint8_t b0, uint8_t b1, uint8_t b2, uint8_t b3) {
+  return  (uint32_t)b0
+       | ((uint32_t)b1 <<  8)
+       | ((uint32_t)b2 << 16)
+       | ((uint32_t)b3 << 24);
+}
+
+void test_cable_event_note_on(void) {
+  TEST("cable_event: CIN 0x9 NoteOn -> MT 0x2");
+  uint32_t packed = pack_cable(0x09, 0x90, 0x3C, 0x7F);
+  uint32_t ump = 0;
+  CHECK(midi2_msg_cable_event_to_ump(packed, 5, &ump), "converts");
+  CHECK(((ump >> 28) & 0x0F) == 0x02, "MT MIDI 1.0 CV");
+  CHECK(((ump >> 24) & 0x0F) == 5, "group 5 (caller-supplied)");
+  CHECK(((ump >> 16) & 0xFF) == 0x90, "status preserved");
+  CHECK(((ump >>  8) & 0x7F) == 0x3C, "note preserved");
+  CHECK((ump        & 0x7F) == 0x7F, "velocity preserved");
+  PASS();
+}
+
+void test_cable_event_cc(void) {
+  TEST("cable_event: CIN 0xB CC with cable 3");
+  uint32_t packed = pack_cable((3 << 4) | 0xB, 0xB0, 0x07, 0x64);
+  uint32_t ump = 0;
+  CHECK(midi2_msg_cable_event_to_ump(packed, 0, &ump), "converts");
+  CHECK(((ump >> 16) & 0xFF) == 0xB0, "status CC");
+  CHECK(((ump >>  8) & 0x7F) == 0x07, "CC#7");
+  CHECK((ump        & 0x7F) == 0x64, "value 100");
+  PASS();
+}
+
+void test_cable_event_program(void) {
+  TEST("cable_event: CIN 0xC Program 2-byte");
+  uint32_t packed = pack_cable(0x0C, 0xC0, 0x42, 0x00);
+  uint32_t ump = 0;
+  CHECK(midi2_msg_cable_event_to_ump(packed, 0, &ump), "converts");
+  CHECK(((ump >> 16) & 0xFF) == 0xC0, "program change");
+  CHECK(((ump >>  8) & 0x7F) == 0x42, "program 0x42");
+  PASS();
+}
+
+void test_cable_event_reserved_cin(void) {
+  TEST("cable_event: reserved CIN 0x0 returns false");
+  uint32_t packed = pack_cable(0x00, 0x00, 0x00, 0x00);
+  uint32_t ump = 0xDEADBEEFu;
+  CHECK(!midi2_msg_cable_event_to_ump(packed, 0, &ump),
+        "reserved CIN rejected");
+  CHECK(ump == 0xDEADBEEFu, "output untouched on failure");
+  PASS();
+}
+
+void test_cable_event_sysex_cin(void) {
+  TEST("cable_event: SysEx fragment CIN 0x4 returns false (deferred to midi2_conv)");
+  uint32_t packed = pack_cable(0x04, 0xF0, 0x7E, 0x00);
+  uint32_t ump = 0;
+  CHECK(!midi2_msg_cable_event_to_ump(packed, 0, &ump),
+        "SysEx fragment CIN deferred");
+  PASS();
+}
+
+void test_cable_event_null_safe(void) {
+  TEST("cable_event: NULL output returns false");
+  uint32_t packed = pack_cable(0x09, 0x90, 0x3C, 0x7F);
+  CHECK(!midi2_msg_cable_event_to_ump(packed, 0, NULL), "NULL rejected");
+  PASS();
+}
+
 int main(void) {
   printf("\n=== midi2_msg.h Unit Tests ===\n\n");
 
@@ -937,6 +1074,22 @@ int main(void) {
   test_set_group_mt0_unchanged();
   test_set_group_mt_stream_unchanged();
   test_set_group_mt3_sysex7();
+
+  printf("\n[MT 0x4 -> MT 0x2 Downgrade]\n");
+  test_mt4_to_mt2_note_on_max_velocity();
+  test_mt4_to_mt2_cc_max();
+  test_mt4_to_mt2_pitch_bend_center();
+  test_mt4_to_mt2_drops_rpn();
+  test_mt4_to_mt2_program();
+  test_mt4_to_mt2_rejects_non_mt4();
+
+  printf("\n[USB Cable Event -> UMP]\n");
+  test_cable_event_note_on();
+  test_cable_event_cc();
+  test_cable_event_program();
+  test_cable_event_reserved_cin();
+  test_cable_event_sysex_cin();
+  test_cable_event_null_safe();
 
   printf("\n[MT 0x2 -> MT 0x4 Translation]\n");
   test_mt2_to_mt4_note_on();

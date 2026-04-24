@@ -1011,6 +1011,150 @@ static inline bool midi2_msg_mt2_to_mt4(uint32_t mt2_word, uint32_t out[2]) {
   }
 }
 
+/*--------------------------------------------------------------------+
+ * Protocol Translation: MT 0x4 (MIDI 2.0 CV) -> MT 0x2 (MIDI 1.0 CV)
+ *
+ * Inverse of midi2_msg_mt2_to_mt4. Lossy by spec: MIDI 1.0 CV cannot
+ * carry RPN/NRPN/Rel/Per-Note in a single word (would require a 4-CC
+ * sequence). Those statuses are skipped (returns 0 words emitted).
+ * Caller detects skips by comparing emitted word count against the
+ * expected count (1 word per MT 0x4 message that is supported).
+ *
+ * Mapping per M2-115 section 4.2 / 4.3:
+ *   Note On/Off       : velocity 16-bit -> 7-bit
+ *   CC                : value    32-bit -> 7-bit
+ *   Pitch Bend        :          32-bit -> 14-bit (LSB / MSB split)
+ *   Channel Pressure  :          32-bit -> 7-bit
+ *   Poly Pressure     :          32-bit -> 7-bit
+ *   Program Change    : program byte preserved; bank dropped
+ *   Per-Note CC/PB/Mgmt, RPN/NRPN/Rel: dropped (no MIDI 1.0 form)
+ *
+ *  @return number of MT 0x2 words written (0 or 1).
+ *  (v0.3.0+) */
+static inline uint32_t midi2_msg_mt4_to_mt2(const uint32_t mt4_words[2],
+                                             uint32_t *out_word) {
+  if (out_word == NULL) return 0;
+  uint8_t mt = (uint8_t)((mt4_words[0] >> 28) & 0x0Fu);
+  if (mt != MIDI2_MT_MIDI2_CV) return 0;
+  uint8_t grp  = (uint8_t)((mt4_words[0] >> 24) & 0x0Fu);
+  uint8_t stat = (uint8_t)((mt4_words[0] >> 16) & 0xFFu);
+  uint8_t hi   = (uint8_t)(stat & 0xF0u);
+  uint8_t ch   = (uint8_t)(stat & 0x0Fu);
+
+  switch (hi) {
+    case MIDI2_STATUS_NOTE_OFF:
+    case MIDI2_STATUS_NOTE_ON: {
+      uint8_t  note  = (uint8_t)((mt4_words[0] >> 8) & 0x7Fu);
+      uint16_t vel16 = (uint16_t)((mt4_words[1] >> 16) & 0xFFFFu);
+      uint8_t  vel7  = midi2_msg_scale_down_16to7(vel16);
+      *out_word = ((uint32_t)MIDI2_MT_MIDI1_CV << 28)
+                | ((uint32_t)grp << 24)
+                | ((uint32_t)hi  << 16)
+                | ((uint32_t)ch  << 16)
+                | ((uint32_t)note << 8)
+                | (uint32_t)vel7;
+      return 1;
+    }
+    case MIDI2_STATUS_POLY_PRESSURE: {
+      uint8_t note = (uint8_t)((mt4_words[0] >> 8) & 0x7Fu);
+      uint8_t v7   = midi2_msg_scale_down_32to7(mt4_words[1]);
+      *out_word = ((uint32_t)MIDI2_MT_MIDI1_CV << 28)
+                | ((uint32_t)grp << 24)
+                | ((uint32_t)MIDI2_STATUS_POLY_PRESSURE << 16)
+                | ((uint32_t)ch << 16)
+                | ((uint32_t)note << 8)
+                | (uint32_t)v7;
+      return 1;
+    }
+    case MIDI2_STATUS_CC: {
+      uint8_t cc = (uint8_t)((mt4_words[0] >> 8) & 0x7Fu);
+      uint8_t v7 = midi2_msg_scale_down_32to7(mt4_words[1]);
+      *out_word = ((uint32_t)MIDI2_MT_MIDI1_CV << 28)
+                | ((uint32_t)grp << 24)
+                | ((uint32_t)MIDI2_STATUS_CC << 16)
+                | ((uint32_t)ch << 16)
+                | ((uint32_t)cc << 8)
+                | (uint32_t)v7;
+      return 1;
+    }
+    case MIDI2_STATUS_PROGRAM: {
+      uint8_t prog = (uint8_t)((mt4_words[1] >> 24) & 0x7Fu);
+      *out_word = ((uint32_t)MIDI2_MT_MIDI1_CV << 28)
+                | ((uint32_t)grp << 24)
+                | ((uint32_t)MIDI2_STATUS_PROGRAM << 16)
+                | ((uint32_t)ch << 16)
+                | ((uint32_t)prog << 8);
+      return 1;
+    }
+    case MIDI2_STATUS_CHAN_PRESSURE: {
+      uint8_t v7 = midi2_msg_scale_down_32to7(mt4_words[1]);
+      *out_word = ((uint32_t)MIDI2_MT_MIDI1_CV << 28)
+                | ((uint32_t)grp << 24)
+                | ((uint32_t)MIDI2_STATUS_CHAN_PRESSURE << 16)
+                | ((uint32_t)ch << 16)
+                | ((uint32_t)v7 << 8);
+      return 1;
+    }
+    case MIDI2_STATUS_PITCH_BEND: {
+      uint16_t pb14 = midi2_msg_scale_down_32to14(mt4_words[1]);
+      *out_word = ((uint32_t)MIDI2_MT_MIDI1_CV << 28)
+                | ((uint32_t)grp << 24)
+                | ((uint32_t)MIDI2_STATUS_PITCH_BEND << 16)
+                | ((uint32_t)ch << 16)
+                | ((uint32_t)(pb14 & 0x7Fu) << 8)
+                | (uint32_t)((pb14 >> 7) & 0x7Fu);
+      return 1;
+    }
+    default:
+      /* RPN/NRPN/Rel/Per-Note dropped; caller detects via count. */
+      return 0;
+  }
+}
+
+/*--------------------------------------------------------------------+
+ * USB MIDI 1.0 cable event -> UMP MT 0x2
+ *
+ * USB MIDI v1.0 class delivers Channel Voice and System Common
+ * messages as 4-byte cable events:
+ *   byte 0 = (cable_number << 4) | CIN
+ *   byte 1 = MIDI status byte
+ *   byte 2 = data 1
+ *   byte 3 = data 2
+ * Packed LSB-first into the uint32_t argument.
+ *
+ * Supported CINs: 0x2, 0x3 (System Common), 0x8-0xE (Channel Voice).
+ * Reserved CINs (0x0, 0x1) and SysEx fragments (0x4-0x7, 0xF) return
+ * false; the latter need stateful reassembly handled by midi2_conv.
+ *
+ *  @return true on success, false on unsupported CIN or NULL output.
+ *  (v0.3.0+) */
+static inline bool midi2_msg_cable_event_to_ump(uint32_t cable_event,
+                                                 uint8_t group,
+                                                 uint32_t *ump_out) {
+  if (ump_out == NULL) return false;
+  uint8_t b0     = (uint8_t)(cable_event        & 0xFFu);
+  uint8_t status = (uint8_t)((cable_event >>  8) & 0xFFu);
+  uint8_t data1  = (uint8_t)((cable_event >> 16) & 0xFFu);
+  uint8_t data2  = (uint8_t)((cable_event >> 24) & 0xFFu);
+  uint8_t cin    = (uint8_t)(b0 & 0x0Fu);
+
+  switch (cin) {
+    case 0x2: case 0x3:
+    case 0x8: case 0x9: case 0xA: case 0xB:
+    case 0xC: case 0xD: case 0xE:
+      *ump_out = ((uint32_t)MIDI2_MT_MIDI1_CV << 28)
+               | ((uint32_t)(group & 0x0Fu) << 24)
+               | ((uint32_t)status << 16)
+               | ((uint32_t)(data1 & 0x7Fu) << 8)
+               | ((uint32_t)(data2 & 0x7Fu));
+      return true;
+    default:
+      /* Reserved (0x0, 0x1) or SysEx fragment (0x4-0x7, 0xF).
+       * SysEx fragments are handled by midi2_conv (stateful). */
+      return false;
+  }
+}
+
 #ifdef __cplusplus
 }
 #endif
