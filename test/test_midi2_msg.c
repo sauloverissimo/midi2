@@ -585,6 +585,7 @@ void test_chord_name_bb_minor(void) {
   PASS();
 }
 
+
 /* --- Key Signature Full (new) --- */
 
 void test_key_sig_full(void) {
@@ -794,6 +795,44 @@ void test_mt2_to_mt4_wrong_mt(void) {
   PASS();
 }
 
+/* --- Group Re-stamp (v0.3.0) --- */
+
+void test_set_group_mt4(void) {
+  TEST("set_group: MT 0x4 rewrites group nibble");
+  uint32_t w = 0x40903C7Fu; /* MT 0x4, group 0 */
+  midi2_msg_set_group(&w, 5);
+  CHECK(((w >> 24) & 0x0F) == 5, "expected group 5");
+  CHECK(((w >> 28) & 0x0F) == 0x4, "MT preserved");
+  PASS();
+}
+
+void test_set_group_mt0_unchanged(void) {
+  TEST("set_group: MT 0x0 utility word unchanged");
+  uint32_t w = 0x00112233u;
+  midi2_msg_set_group(&w, 7);
+  CHECK(w == 0x00112233u, "utility word must not be touched");
+  PASS();
+}
+
+void test_set_group_mt_stream_unchanged(void) {
+  TEST("set_group: MT 0xF stream word unchanged");
+  uint32_t w = 0xF0010000u;
+  uint32_t before = w;
+  midi2_msg_set_group(&w, 3);
+  CHECK(w == before, "stream word must not be touched");
+  PASS();
+}
+
+void test_set_group_mt3_sysex7(void) {
+  TEST("set_group: MT 0x3 SysEx7 rewrites group nibble");
+  uint32_t w = 0x30123456u; /* MT 0x3 group 0 */
+  midi2_msg_set_group(&w, 0xF);
+  CHECK(((w >> 24) & 0x0F) == 0xF, "expected group 0xF");
+  CHECK(((w >> 28) & 0x0F) == 0x3, "MT preserved");
+  CHECK((w & 0x00FFFFFFu) == 0x00123456u, "lower 24 bits preserved");
+  PASS();
+}
+
 int main(void) {
   printf("\n=== midi2_msg.h Unit Tests ===\n\n");
 
@@ -892,6 +931,12 @@ int main(void) {
   test_stream_endpoint_name();
   test_stream_product_id();
   test_stream_fb_name();
+
+  printf("\n[Group Re-stamp]\n");
+  test_set_group_mt4();
+  test_set_group_mt0_unchanged();
+  test_set_group_mt_stream_unchanged();
+  test_set_group_mt3_sysex7();
 
   printf("\n[MT 0x2 -> MT 0x4 Translation]\n");
   test_mt2_to_mt4_note_on();

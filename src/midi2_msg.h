@@ -174,6 +174,23 @@ static inline uint16_t midi2_msg_get_velocity(const uint32_t *w) { return (uint1
 /** @brief Extract full word 1 (32-bit data payload). */
 static inline uint32_t midi2_msg_get_data(const uint32_t *w)     { return w[1]; }
 
+/** @brief Rewrite the Group field of a UMP word in-place.
+ *
+ *  Only MT 0x2 (MIDI 1.0 CV), 0x3 (SysEx7), 0x4 (MIDI 2.0 CV) and
+ *  0x5 (Data128/SysEx8) carry a Group field in word 0 bits [27:24].
+ *  Utility, System Real-Time, Flex Data and UMP Stream words have
+ *  no Group field and are left untouched.
+ *
+ *  Useful for routing pipelines that need to re-stamp the group of
+ *  forwarded messages without rebuilding the word from scratch.
+ *  (v0.3.0+) */
+static inline void midi2_msg_set_group(uint32_t *word0, uint8_t group) {
+  uint8_t mt = (uint8_t)((*word0 >> 28) & 0x0Fu);
+  if (mt >= 0x2u && mt <= 0x5u) {
+    *word0 = (*word0 & 0xF0FFFFFFu) | ((uint32_t)(group & 0x0Fu) << 24);
+  }
+}
+
 /*--------------------------------------------------------------------+
  * Value Scaling (MIDI 2.0 spec section 4.2.1)
  *
