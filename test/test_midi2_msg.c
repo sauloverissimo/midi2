@@ -206,6 +206,84 @@ void test_system_spp(void) {
   PASS();
 }
 
+/* --- System Real-Time + System Common named wrappers (v0.3.0) --- */
+
+void test_system_wrapper_tune_request(void) {
+  TEST("system_tune_request: status 0xF6, group preserved");
+  uint32_t w = midi2_msg_system_tune_request(2);
+  CHECK(((w >> 28) & 0x0F) == 0x01, "MT=System");
+  CHECK(((w >> 24) & 0x0F) == 2, "group");
+  CHECK(((w >> 16) & 0xFF) == 0xF6, "status=Tune Request");
+  PASS();
+}
+
+void test_system_wrapper_timing_clock(void) {
+  TEST("system_timing_clock: status 0xF8");
+  uint32_t w = midi2_msg_system_timing_clock(0);
+  CHECK(((w >> 16) & 0xFF) == 0xF8, "status=Timing Clock");
+  PASS();
+}
+
+void test_system_wrapper_start(void) {
+  TEST("system_start: status 0xFA");
+  uint32_t w = midi2_msg_system_start(0);
+  CHECK(((w >> 16) & 0xFF) == 0xFA, "status=Start");
+  PASS();
+}
+
+void test_system_wrapper_continue(void) {
+  TEST("system_continue: status 0xFB");
+  uint32_t w = midi2_msg_system_continue(0);
+  CHECK(((w >> 16) & 0xFF) == 0xFB, "status=Continue");
+  PASS();
+}
+
+void test_system_wrapper_stop(void) {
+  TEST("system_stop: status 0xFC");
+  uint32_t w = midi2_msg_system_stop(0);
+  CHECK(((w >> 16) & 0xFF) == 0xFC, "status=Stop");
+  PASS();
+}
+
+void test_system_wrapper_active_sensing(void) {
+  TEST("system_active_sensing: status 0xFE");
+  uint32_t w = midi2_msg_system_active_sensing(0);
+  CHECK(((w >> 16) & 0xFF) == 0xFE, "status=Active Sensing");
+  PASS();
+}
+
+void test_system_wrapper_reset(void) {
+  TEST("system_reset: status 0xFF");
+  uint32_t w = midi2_msg_system_reset(0);
+  CHECK(((w >> 16) & 0xFF) == 0xFF, "status=System Reset");
+  PASS();
+}
+
+void test_system_wrapper_mtc(void) {
+  TEST("system_mtc: status 0xF1, time_code masked to 7 bits");
+  uint32_t w = midi2_msg_system_mtc(0, 0x42);
+  CHECK(((w >> 16) & 0xFF) == 0xF1, "status=MTC QF");
+  CHECK(((w >> 8) & 0x7F) == 0x42, "time code value");
+  PASS();
+}
+
+void test_system_wrapper_song_select(void) {
+  TEST("system_song_select: status 0xF3, song masked to 7 bits");
+  uint32_t w = midi2_msg_system_song_select(0, 5);
+  CHECK(((w >> 16) & 0xFF) == 0xF3, "status=Song Select");
+  CHECK(((w >> 8) & 0x7F) == 5, "song number");
+  PASS();
+}
+
+void test_system_wrapper_song_position(void) {
+  TEST("system_song_position: status 0xF2, 14-bit split LSB/MSB");
+  uint32_t w = midi2_msg_system_song_position(0, 0x2040);
+  CHECK(((w >> 16) & 0xFF) == 0xF2, "status=SPP");
+  CHECK(((w >> 8) & 0x7F) == 0x40, "LSB (low 7 bits of 0x2040)");
+  CHECK((w & 0x7F) == 0x40, "MSB (high 7 bits of 0x2040 = 0x40)");
+  PASS();
+}
+
 /* --- Flex Data --- */
 
 void test_tempo(void) {
@@ -1000,6 +1078,18 @@ int main(void) {
   printf("\n[System Messages]\n");
   test_system_timing_clock();
   test_system_spp();
+
+  printf("\n[System Wrappers (named, v0.3.0)]\n");
+  test_system_wrapper_tune_request();
+  test_system_wrapper_timing_clock();
+  test_system_wrapper_start();
+  test_system_wrapper_continue();
+  test_system_wrapper_stop();
+  test_system_wrapper_active_sensing();
+  test_system_wrapper_reset();
+  test_system_wrapper_mtc();
+  test_system_wrapper_song_select();
+  test_system_wrapper_song_position();
 
   printf("\n[Flex Data]\n");
   test_tempo();

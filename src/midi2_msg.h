@@ -397,6 +397,67 @@ static inline uint32_t midi2_msg_system_3byte(uint8_t group, uint8_t status,
 }
 
 /*--------------------------------------------------------------------+
+ * System Real-Time + System Common named wrappers (M2-104-UM section 4.3,
+ * v0.3.0+). Each calls the corresponding generic builder above with the
+ * canonical status byte. Useful for pattern-matching senders and for
+ * call sites that prefer the named shortcut over the magic-number form.
+ * All inline; zero ROM cost when not called.
+ *--------------------------------------------------------------------*/
+
+/** @brief Tune Request (status 0xF6, 1-byte System Common). */
+static inline uint32_t midi2_msg_system_tune_request(uint8_t group) {
+  return midi2_msg_system(group, 0xF6);
+}
+
+/** @brief Timing Clock (status 0xF8, 1-byte System Real-Time). */
+static inline uint32_t midi2_msg_system_timing_clock(uint8_t group) {
+  return midi2_msg_system(group, 0xF8);
+}
+
+/** @brief Start (status 0xFA, 1-byte System Real-Time, sequencer start). */
+static inline uint32_t midi2_msg_system_start(uint8_t group) {
+  return midi2_msg_system(group, 0xFA);
+}
+
+/** @brief Continue (status 0xFB, 1-byte System Real-Time). */
+static inline uint32_t midi2_msg_system_continue(uint8_t group) {
+  return midi2_msg_system(group, 0xFB);
+}
+
+/** @brief Stop (status 0xFC, 1-byte System Real-Time). */
+static inline uint32_t midi2_msg_system_stop(uint8_t group) {
+  return midi2_msg_system(group, 0xFC);
+}
+
+/** @brief Active Sensing (status 0xFE, 1-byte System Real-Time). */
+static inline uint32_t midi2_msg_system_active_sensing(uint8_t group) {
+  return midi2_msg_system(group, 0xFE);
+}
+
+/** @brief System Reset (status 0xFF, 1-byte System Real-Time). */
+static inline uint32_t midi2_msg_system_reset(uint8_t group) {
+  return midi2_msg_system(group, 0xFF);
+}
+
+/** @brief MIDI Time Code Quarter Frame (status 0xF1, 2-byte System Common). */
+static inline uint32_t midi2_msg_system_mtc(uint8_t group, uint8_t time_code) {
+  return midi2_msg_system_2byte(group, 0xF1, time_code & 0x7F);
+}
+
+/** @brief Song Select (status 0xF3, 2-byte System Common). */
+static inline uint32_t midi2_msg_system_song_select(uint8_t group, uint8_t song) {
+  return midi2_msg_system_2byte(group, 0xF3, song & 0x7F);
+}
+
+/** @brief Song Position Pointer (status 0xF2, 3-byte System Common).
+ *  @param position 14-bit position; LSB stored at data1, MSB at data2. */
+static inline uint32_t midi2_msg_system_song_position(uint8_t group, uint16_t position) {
+  return midi2_msg_system_3byte(group, 0xF2,
+                                 (uint8_t)(position & 0x7F),
+                                 (uint8_t)((position >> 7) & 0x7F));
+}
+
+/*--------------------------------------------------------------------+
  * Flex Data (MT 0xD, 4 words)
  *
  * Word 0: [MT:4][group:4][format:2][address:2][channel:4][statusBank:8][status:8]
