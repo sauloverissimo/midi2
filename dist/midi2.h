@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-/* Auto-generated from midi2 v0.2.4 -- 2026-04-21
+/* Auto-generated from midi2 v0.3.0 -- 2026-04-25
  * https://github.com/sauloverissimo/midi2
  *
  * Portable MIDI 2.0 library (C99, zero dependencies)
@@ -56,7 +56,7 @@ extern "C" {
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
- * Version: 0.2.4
+ * Version: 0.3.0
  */
 
 
@@ -192,6 +192,23 @@ static inline uint8_t  midi2_msg_get_note(const uint32_t *w)     { return (uint8
 static inline uint16_t midi2_msg_get_velocity(const uint32_t *w) { return (uint16_t)(w[1] >> 16); }
 /** @brief Extract full word 1 (32-bit data payload). */
 static inline uint32_t midi2_msg_get_data(const uint32_t *w)     { return w[1]; }
+
+/** @brief Rewrite the Group field of a UMP word in-place.
+ *
+ *  Only MT 0x2 (MIDI 1.0 CV), 0x3 (SysEx7), 0x4 (MIDI 2.0 CV) and
+ *  0x5 (Data128/SysEx8) carry a Group field in word 0 bits [27:24].
+ *  Utility, System Real-Time, Flex Data and UMP Stream words have
+ *  no Group field and are left untouched.
+ *
+ *  Useful for routing pipelines that need to re-stamp the group of
+ *  forwarded messages without rebuilding the word from scratch.
+ *  (v0.3.0+) */
+static inline void midi2_msg_set_group(uint32_t *word0, uint8_t group) {
+  uint8_t mt = (uint8_t)((*word0 >> 28) & 0x0Fu);
+  if (mt >= 0x2u && mt <= 0x5u) {
+    *word0 = (*word0 & 0xF0FFFFFFu) | ((uint32_t)(group & 0x0Fu) << 24);
+  }
+}
 
 /*--------------------------------------------------------------------+
  * Value Scaling (MIDI 2.0 spec section 4.2.1)
@@ -396,6 +413,67 @@ static inline uint32_t midi2_msg_system_2byte(uint8_t group, uint8_t status, uin
 static inline uint32_t midi2_msg_system_3byte(uint8_t group, uint8_t status,
                                                 uint8_t data1, uint8_t data2) {
   return midi2_msg_system(group, status) | ((uint32_t)data1 << 8) | (uint32_t)data2;
+}
+
+/*--------------------------------------------------------------------+
+ * System Real-Time + System Common named wrappers (M2-104-UM section 4.3,
+ * v0.3.0+). Each calls the corresponding generic builder above with the
+ * canonical status byte. Useful for pattern-matching senders and for
+ * call sites that prefer the named shortcut over the magic-number form.
+ * All inline; zero ROM cost when not called.
+ *--------------------------------------------------------------------*/
+
+/** @brief Tune Request (status 0xF6, 1-byte System Common). */
+static inline uint32_t midi2_msg_system_tune_request(uint8_t group) {
+  return midi2_msg_system(group, 0xF6);
+}
+
+/** @brief Timing Clock (status 0xF8, 1-byte System Real-Time). */
+static inline uint32_t midi2_msg_system_timing_clock(uint8_t group) {
+  return midi2_msg_system(group, 0xF8);
+}
+
+/** @brief Start (status 0xFA, 1-byte System Real-Time, sequencer start). */
+static inline uint32_t midi2_msg_system_start(uint8_t group) {
+  return midi2_msg_system(group, 0xFA);
+}
+
+/** @brief Continue (status 0xFB, 1-byte System Real-Time). */
+static inline uint32_t midi2_msg_system_continue(uint8_t group) {
+  return midi2_msg_system(group, 0xFB);
+}
+
+/** @brief Stop (status 0xFC, 1-byte System Real-Time). */
+static inline uint32_t midi2_msg_system_stop(uint8_t group) {
+  return midi2_msg_system(group, 0xFC);
+}
+
+/** @brief Active Sensing (status 0xFE, 1-byte System Real-Time). */
+static inline uint32_t midi2_msg_system_active_sensing(uint8_t group) {
+  return midi2_msg_system(group, 0xFE);
+}
+
+/** @brief System Reset (status 0xFF, 1-byte System Real-Time). */
+static inline uint32_t midi2_msg_system_reset(uint8_t group) {
+  return midi2_msg_system(group, 0xFF);
+}
+
+/** @brief MIDI Time Code Quarter Frame (status 0xF1, 2-byte System Common). */
+static inline uint32_t midi2_msg_system_mtc(uint8_t group, uint8_t time_code) {
+  return midi2_msg_system_2byte(group, 0xF1, time_code & 0x7F);
+}
+
+/** @brief Song Select (status 0xF3, 2-byte System Common). */
+static inline uint32_t midi2_msg_system_song_select(uint8_t group, uint8_t song) {
+  return midi2_msg_system_2byte(group, 0xF3, song & 0x7F);
+}
+
+/** @brief Song Position Pointer (status 0xF2, 3-byte System Common).
+ *  @param position 14-bit position; LSB stored at data1, MSB at data2. */
+static inline uint32_t midi2_msg_system_song_position(uint8_t group, uint16_t position) {
+  return midi2_msg_system_3byte(group, 0xF2,
+                                 (uint8_t)(position & 0x7F),
+                                 (uint8_t)((position >> 7) & 0x7F));
 }
 
 /*--------------------------------------------------------------------+
@@ -1013,6 +1091,150 @@ static inline bool midi2_msg_mt2_to_mt4(uint32_t mt2_word, uint32_t out[2]) {
   }
 }
 
+/*--------------------------------------------------------------------+
+ * Protocol Translation: MT 0x4 (MIDI 2.0 CV) -> MT 0x2 (MIDI 1.0 CV)
+ *
+ * Inverse of midi2_msg_mt2_to_mt4. Lossy by spec: MIDI 1.0 CV cannot
+ * carry RPN/NRPN/Rel/Per-Note in a single word (would require a 4-CC
+ * sequence). Those statuses are skipped (returns 0 words emitted).
+ * Caller detects skips by comparing emitted word count against the
+ * expected count (1 word per MT 0x4 message that is supported).
+ *
+ * Mapping per M2-115 section 4.2 / 4.3:
+ *   Note On/Off       : velocity 16-bit -> 7-bit
+ *   CC                : value    32-bit -> 7-bit
+ *   Pitch Bend        :          32-bit -> 14-bit (LSB / MSB split)
+ *   Channel Pressure  :          32-bit -> 7-bit
+ *   Poly Pressure     :          32-bit -> 7-bit
+ *   Program Change    : program byte preserved; bank dropped
+ *   Per-Note CC/PB/Mgmt, RPN/NRPN/Rel: dropped (no MIDI 1.0 form)
+ *
+ *  @return number of MT 0x2 words written (0 or 1).
+ *  (v0.3.0+) */
+static inline uint32_t midi2_msg_mt4_to_mt2(const uint32_t mt4_words[2],
+                                             uint32_t *out_word) {
+  if (out_word == NULL) return 0;
+  uint8_t mt = (uint8_t)((mt4_words[0] >> 28) & 0x0Fu);
+  if (mt != MIDI2_MT_MIDI2_CV) return 0;
+  uint8_t grp  = (uint8_t)((mt4_words[0] >> 24) & 0x0Fu);
+  uint8_t stat = (uint8_t)((mt4_words[0] >> 16) & 0xFFu);
+  uint8_t hi   = (uint8_t)(stat & 0xF0u);
+  uint8_t ch   = (uint8_t)(stat & 0x0Fu);
+
+  switch (hi) {
+    case MIDI2_STATUS_NOTE_OFF:
+    case MIDI2_STATUS_NOTE_ON: {
+      uint8_t  note  = (uint8_t)((mt4_words[0] >> 8) & 0x7Fu);
+      uint16_t vel16 = (uint16_t)((mt4_words[1] >> 16) & 0xFFFFu);
+      uint8_t  vel7  = midi2_msg_scale_down_16to7(vel16);
+      *out_word = ((uint32_t)MIDI2_MT_MIDI1_CV << 28)
+                | ((uint32_t)grp << 24)
+                | ((uint32_t)hi  << 16)
+                | ((uint32_t)ch  << 16)
+                | ((uint32_t)note << 8)
+                | (uint32_t)vel7;
+      return 1;
+    }
+    case MIDI2_STATUS_POLY_PRESSURE: {
+      uint8_t note = (uint8_t)((mt4_words[0] >> 8) & 0x7Fu);
+      uint8_t v7   = midi2_msg_scale_down_32to7(mt4_words[1]);
+      *out_word = ((uint32_t)MIDI2_MT_MIDI1_CV << 28)
+                | ((uint32_t)grp << 24)
+                | ((uint32_t)MIDI2_STATUS_POLY_PRESSURE << 16)
+                | ((uint32_t)ch << 16)
+                | ((uint32_t)note << 8)
+                | (uint32_t)v7;
+      return 1;
+    }
+    case MIDI2_STATUS_CC: {
+      uint8_t cc = (uint8_t)((mt4_words[0] >> 8) & 0x7Fu);
+      uint8_t v7 = midi2_msg_scale_down_32to7(mt4_words[1]);
+      *out_word = ((uint32_t)MIDI2_MT_MIDI1_CV << 28)
+                | ((uint32_t)grp << 24)
+                | ((uint32_t)MIDI2_STATUS_CC << 16)
+                | ((uint32_t)ch << 16)
+                | ((uint32_t)cc << 8)
+                | (uint32_t)v7;
+      return 1;
+    }
+    case MIDI2_STATUS_PROGRAM: {
+      uint8_t prog = (uint8_t)((mt4_words[1] >> 24) & 0x7Fu);
+      *out_word = ((uint32_t)MIDI2_MT_MIDI1_CV << 28)
+                | ((uint32_t)grp << 24)
+                | ((uint32_t)MIDI2_STATUS_PROGRAM << 16)
+                | ((uint32_t)ch << 16)
+                | ((uint32_t)prog << 8);
+      return 1;
+    }
+    case MIDI2_STATUS_CHAN_PRESSURE: {
+      uint8_t v7 = midi2_msg_scale_down_32to7(mt4_words[1]);
+      *out_word = ((uint32_t)MIDI2_MT_MIDI1_CV << 28)
+                | ((uint32_t)grp << 24)
+                | ((uint32_t)MIDI2_STATUS_CHAN_PRESSURE << 16)
+                | ((uint32_t)ch << 16)
+                | ((uint32_t)v7 << 8);
+      return 1;
+    }
+    case MIDI2_STATUS_PITCH_BEND: {
+      uint16_t pb14 = midi2_msg_scale_down_32to14(mt4_words[1]);
+      *out_word = ((uint32_t)MIDI2_MT_MIDI1_CV << 28)
+                | ((uint32_t)grp << 24)
+                | ((uint32_t)MIDI2_STATUS_PITCH_BEND << 16)
+                | ((uint32_t)ch << 16)
+                | ((uint32_t)(pb14 & 0x7Fu) << 8)
+                | (uint32_t)((pb14 >> 7) & 0x7Fu);
+      return 1;
+    }
+    default:
+      /* RPN/NRPN/Rel/Per-Note dropped; caller detects via count. */
+      return 0;
+  }
+}
+
+/*--------------------------------------------------------------------+
+ * USB MIDI 1.0 cable event -> UMP MT 0x2
+ *
+ * USB MIDI v1.0 class delivers Channel Voice and System Common
+ * messages as 4-byte cable events:
+ *   byte 0 = (cable_number << 4) | CIN
+ *   byte 1 = MIDI status byte
+ *   byte 2 = data 1
+ *   byte 3 = data 2
+ * Packed LSB-first into the uint32_t argument.
+ *
+ * Supported CINs: 0x2, 0x3 (System Common), 0x8-0xE (Channel Voice).
+ * Reserved CINs (0x0, 0x1) and SysEx fragments (0x4-0x7, 0xF) return
+ * false; the latter need stateful reassembly handled by midi2_conv.
+ *
+ *  @return true on success, false on unsupported CIN or NULL output.
+ *  (v0.3.0+) */
+static inline bool midi2_msg_cable_event_to_ump(uint32_t cable_event,
+                                                 uint8_t group,
+                                                 uint32_t *ump_out) {
+  if (ump_out == NULL) return false;
+  uint8_t b0     = (uint8_t)(cable_event        & 0xFFu);
+  uint8_t status = (uint8_t)((cable_event >>  8) & 0xFFu);
+  uint8_t data1  = (uint8_t)((cable_event >> 16) & 0xFFu);
+  uint8_t data2  = (uint8_t)((cable_event >> 24) & 0xFFu);
+  uint8_t cin    = (uint8_t)(b0 & 0x0Fu);
+
+  switch (cin) {
+    case 0x2: case 0x3:
+    case 0x8: case 0x9: case 0xA: case 0xB:
+    case 0xC: case 0xD: case 0xE:
+      *ump_out = ((uint32_t)MIDI2_MT_MIDI1_CV << 28)
+               | ((uint32_t)(group & 0x0Fu) << 24)
+               | ((uint32_t)status << 16)
+               | ((uint32_t)(data1 & 0x7Fu) << 8)
+               | ((uint32_t)(data2 & 0x7Fu));
+      return true;
+    default:
+      /* Reserved (0x0, 0x1) or SysEx fragment (0x4-0x7, 0xF).
+       * SysEx fragments are handled by midi2_conv (stateful). */
+      return false;
+  }
+}
+
 /* == midi2_ci_msg ======================================================== */
 
 
@@ -1023,7 +1245,7 @@ static inline bool midi2_msg_mt2_to_mt4(uint32_t mt2_word, uint32_t out[2]) {
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI-CI (M2-101-UM v1.2, Jun 2023)
- * Version: 0.2.4
+ * Version: 0.3.0
  */
 
 
@@ -1815,7 +2037,7 @@ static inline uint16_t midi2_ci_build_pi_midi_report_end(
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
- * Version: 0.2.4
+ * Version: 0.3.0
  */
 
 
@@ -2083,7 +2305,7 @@ void midi2_dispatch_feed(const uint32_t *words, uint8_t word_count, void *contex
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
- * Version: 0.2.4
+ * Version: 0.3.0
  */
 
 
@@ -2180,6 +2402,39 @@ void midi2_proc_send_sysex7(uint8_t group, const uint8_t *data, uint16_t length,
 void midi2_proc_send_fb_name(uint8_t fb_idx, const char *name,
                                midi2_proc_write_fn write_fn, void *context);
 
+/* M2-104-UM §7.1.7 Endpoint Name Notification sender.
+ * UMP Stream MT 0xF, status 0x003. Fragments UTF-8 name across
+ * Complete / Start / Continue / End 4-word packets (14 name bytes
+ * per UMP). Empty name sends nothing. (v0.3.0+) */
+void midi2_proc_send_endpoint_name(const char *name,
+                                    midi2_proc_write_fn write_fn, void *context);
+
+/* M2-104-UM §7.1.8 Product Instance ID Notification sender.
+ * UMP Stream MT 0xF, status 0x004. Fragmentation identical to
+ * Endpoint Name (14 bytes per UMP). Empty id sends nothing.
+ * (v0.3.0+) */
+void midi2_proc_send_product_id(const char *id,
+                                 midi2_proc_write_fn write_fn, void *context);
+
+/* M2-104-UM §7.1.6 Device Identity Notification sender.
+ * UMP Stream MT 0xF, status 0x002. Always emits a single 4-word UMP
+ * (no fragmentation). Kept for callsite symmetry with the other
+ * Stream senders. manufacturer_id uses lower 24 bits only.
+ * (v0.3.0+) */
+void midi2_proc_send_device_identity(uint32_t manufacturer_id,
+                                      uint16_t family_id, uint16_t model_id,
+                                      uint32_t version_id,
+                                      midi2_proc_write_fn write_fn, void *context);
+
+/* M2-104-UM §7.8 SysEx8 sender. MT 0x5. Fragments raw 8-bit data
+ * into 4-word packets (13 data bytes per UMP; stream_id rides in
+ * word 0 bits [15:8]). status nibble encodes Complete / Start /
+ * Continue / End per M2-104-UM Table 14. Zero-length sends nothing.
+ * (v0.3.0+) */
+void midi2_proc_send_sysex8(uint8_t group, uint8_t stream_id,
+                             const uint8_t *data, uint16_t length,
+                             midi2_proc_write_fn write_fn, void *context);
+
 /* == midi2_conv ========================================================== */
 
 
@@ -2190,7 +2445,7 @@ void midi2_proc_send_fb_name(uint8_t fb_idx, const char *name,
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
- * Version: 0.2.4
+ * Version: 0.3.0
  */
 
 
@@ -2262,7 +2517,7 @@ bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte);
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI-CI (M2-101-UM v1.2, Jun 2023)
- * Version: 0.2.4
+ * Version: 0.3.0
  */
 
 
@@ -2486,7 +2741,7 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI-CI (M2-101-UM v1.2, Jun 2023)
- * Version: 0.2.4
+ * Version: 0.3.0
  */
 
 
@@ -2524,7 +2779,21 @@ typedef struct {
   const char         *static_value;  /**< used if getter is NULL */
   midi2_ci_pe_getter  getter;
   midi2_ci_pe_setter  setter;
+  bool                subscribable;  /**< v0.3.0+: eligible for PE Subscribe */
 } midi2_ci_property;
+
+/*--------------------------------------------------------------------+
+ * Subscriber registry entry (caller-provided array, v0.3.0+)
+ *
+ * name_copy holds up to 36 chars per M2-105 PE resource name limit
+ * plus NUL terminator, so the responder keeps a stable reference even
+ * if the app frees the resource name string passed to subscribe_add.
+ *--------------------------------------------------------------------*/
+typedef struct {
+  uint32_t caller_muid;
+  char     name_copy[37];
+  uint8_t  in_use;  /**< 0 = free slot; non-zero = active */
+} midi2_ci_subscriber;
 
 /*--------------------------------------------------------------------+
  * State struct (user-allocated)
@@ -2584,6 +2853,19 @@ typedef struct {
    * CI sub-id not handled by the convenience responder (v0.2.4+).
    * Default false to preserve v0.2.3 behavior. */
   bool               nak_on_unknown;
+
+  /* When true, the convenience responder broadcasts an Invalidate MUID
+   * frame for the old MUID whenever it regenerates because an inbound
+   * src_muid collided with ours. M2-101-UM Appendix E 2. Default: true
+   * (v0.3.0+). Implementation was already present in v0.2.4 but always
+   * on; this flag gates it. */
+  bool               auto_invalidate_on_collision;
+
+  /* Subscribers: caller-provided storage (v0.3.0+). NULL when the state
+   * was built with the legacy midi2_ci_init (no subscribe/notify). */
+  midi2_ci_subscriber *subscribers;
+  uint8_t              subscriber_capacity;
+  uint8_t              subscriber_count;
 } midi2_ci_state;
 
 /*--------------------------------------------------------------------+
@@ -2591,6 +2873,8 @@ typedef struct {
  *--------------------------------------------------------------------*/
 
 /** Initialize state with caller-provided storage.
+ *  Delegates to midi2_ci_init_ex(..., NULL, 0), so the subscriber
+ *  registry is absent and subscribe/notify APIs return ERR_FULL.
  *  @param state         State struct (caller-allocated)
  *  @param muid_seed     Random or unique value for MUID generation (28-bit)
  *  @param profiles      Caller's profile array, or NULL if no profiles needed
@@ -2600,6 +2884,15 @@ typedef struct {
 void midi2_ci_init(midi2_ci_state *state, uint32_t muid_seed,
                      uint8_t (*profiles)[5], uint8_t max_profiles,
                      midi2_ci_property *properties, uint8_t max_properties);
+
+/** Extended initializer that also wires a subscriber-registry array
+ *  for PE Subscribe / Notify. Pass NULL / 0 for the subscribers
+ *  argument to match midi2_ci_init semantics.
+ *  (v0.3.0+) */
+void midi2_ci_init_ex(midi2_ci_state *state, uint32_t muid_seed,
+                       uint8_t (*profiles)[5], uint8_t max_profiles,
+                       midi2_ci_property *properties, uint8_t max_properties,
+                       midi2_ci_subscriber *subscribers, uint8_t max_subscribers);
 
 /** Configure device identity */
 void midi2_ci_set_identity(midi2_ci_state *state,
@@ -2624,6 +2917,11 @@ void midi2_ci_set_rng(midi2_ci_state *state,
  *  when appropriate". Default: false (v0.2.3 compatible). (v0.2.4+) */
 void midi2_ci_set_nak_on_unknown(midi2_ci_state *state, bool enabled);
 
+/** Enable/disable automatic broadcast of an Invalidate MUID frame for the
+ *  old MUID whenever the convenience responder regenerates due to an
+ *  inbound collision. Default: true (v0.3.0+). */
+void midi2_ci_set_auto_invalidate_on_collision(midi2_ci_state *state, bool enabled);
+
 /** Generate a fresh 28-bit MUID using the configured RNG, avoiding the
  *  reserved values 0x00000000 and 0x0FFFFFFF (broadcast). If no RNG is
  *  set, falls back to perturbing the current MUID. Returns the new MUID
@@ -2645,6 +2943,52 @@ int midi2_ci_add_property_dynamic(midi2_ci_state *state,
                                      const char *name,
                                      midi2_ci_pe_getter getter,
                                      midi2_ci_pe_setter setter);
+
+/** Remove a property by name. Remaining properties are shifted left to
+ *  preserve contiguous storage. Returns MIDI2_CI_OK or
+ *  MIDI2_CI_ERR_NOT_FOUND. Symmetric with midi2_ci_remove_profile.
+ *  (v0.3.0+) */
+int midi2_ci_remove_property(midi2_ci_state *state, const char *name);
+
+/** Clear all registered profiles (count-only reset; storage contents are
+ *  left intact for caller inspection or reuse). (v0.3.0+) */
+void midi2_ci_reset_profiles(midi2_ci_state *state);
+
+/** Clear all registered properties (count-only reset; storage contents
+ *  are left intact for caller inspection or reuse). (v0.3.0+) */
+void midi2_ci_reset_properties(midi2_ci_state *state);
+
+/** Toggle the subscribable flag on a registered property at runtime.
+ *  Returns MIDI2_CI_OK or MIDI2_CI_ERR_NOT_FOUND. (v0.3.0+) */
+int midi2_ci_pe_set_subscribable(midi2_ci_state *state,
+                                  const char *name, bool subscribable);
+
+/** Register a subscriber (caller_muid) for the named PE resource. The
+ *  property must be registered and marked subscribable. Duplicate
+ *  (muid, name) pairs are idempotent and return OK.
+ *  @return MIDI2_CI_OK, MIDI2_CI_ERR_NOT_FOUND (property unknown or
+ *          not subscribable), or MIDI2_CI_ERR_FULL (no subscriber
+ *          capacity, including the case of midi2_ci_init without a
+ *          subscribers array). (v0.3.0+) */
+int midi2_ci_subscribe_add(midi2_ci_state *state, uint32_t caller_muid,
+                            const char *resource_name);
+
+/** Remove a subscriber from the named resource.
+ *  @return MIDI2_CI_OK or MIDI2_CI_ERR_NOT_FOUND. (v0.3.0+) */
+int midi2_ci_subscribe_remove(midi2_ci_state *state, uint32_t caller_muid,
+                               const char *resource_name);
+
+/** Fan out a PE Notify frame to every subscriber of the named resource.
+ *  Returns MIDI2_CI_OK even when the subscriber list is empty, or
+ *  MIDI2_CI_ERR_NOT_FOUND when the property is unknown. Emission uses
+ *  the state's write_fn (same path as Discovery / PE Reply).
+ *  (v0.3.0+) */
+int midi2_ci_notify_property_changed(midi2_ci_state *state,
+                                      const char *resource_name);
+
+/** Return the current number of active subscribers across all
+ *  resources. (v0.3.0+) */
+uint8_t midi2_ci_get_subscriber_count(const midi2_ci_state *state);
 
 /** Process incoming SysEx that might be MIDI-CI.
  *  Returns true if the message was handled (CI), false if not.
@@ -2675,7 +3019,7 @@ bool midi2_ci_process_sysex(midi2_ci_state *state,
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
- * Version: 0.2.4
+ * Version: 0.3.0
  */
 
 
@@ -3248,7 +3592,7 @@ void midi2_dispatch_feed(const uint32_t *words, uint8_t word_count, void *contex
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
- * Version: 0.2.4
+ * Version: 0.3.0
  */
 
 
@@ -3531,6 +3875,114 @@ void midi2_proc_send_fb_name(uint8_t fb_idx, const char *name,
   }
 }
 
+/*--------------------------------------------------------------------+
+ * UMP Stream text senders: Endpoint Name (status 0x003),
+ * Product Instance ID (status 0x004). M2-104-UM §7.1.7 / §7.1.8.
+ *
+ * 14 payload bytes per UMP (bytes 0-1 live in word 0 bits [15:0],
+ * bytes 2-13 in words 1-3). Fragments into Complete / Start /
+ * Continue / End packets. Reuses midi2_msg_stream_endpoint_name /
+ * midi2_msg_stream_product_id inline builders so the word layout
+ * stays canonical.
+ *--------------------------------------------------------------------*/
+#define MIDI2_STREAM_TEXT_BYTES_PER_UMP 14u
+#define MIDI2_STREAM_TEXT_MAX_BYTES     98u /* 7 UMPs cap per spec */
+
+typedef void (*stream_text_builder_fn)(uint32_t *w, uint8_t format,
+                                       const uint8_t *data, uint8_t len);
+
+static void stream_text_emit(stream_text_builder_fn builder,
+                              const char *text,
+                              midi2_proc_write_fn write_fn, void *context) {
+  if (!write_fn || !text) return;
+  uint16_t total = 0;
+  while (text[total] && total < MIDI2_STREAM_TEXT_MAX_BYTES) total++;
+  if (total == 0) return;
+
+  uint16_t offset = 0;
+  while (offset < total) {
+    uint16_t remaining = (uint16_t)(total - offset);
+    uint8_t  n = (remaining > MIDI2_STREAM_TEXT_BYTES_PER_UMP)
+                 ? (uint8_t)MIDI2_STREAM_TEXT_BYTES_PER_UMP
+                 : (uint8_t)remaining;
+    uint8_t is_first = (offset == 0);
+    uint8_t is_last  = (remaining <= MIDI2_STREAM_TEXT_BYTES_PER_UMP);
+    uint8_t form = (is_first && is_last) ? 0u   /* Complete */
+                 : is_first              ? 1u   /* Start */
+                 : is_last               ? 3u   /* End */
+                                         : 2u;  /* Continue */
+    uint32_t msg[4];
+    builder(msg, form, (const uint8_t *)(text + offset), n);
+    write_fn(msg, 4, context);
+    offset += n;
+  }
+}
+
+void midi2_proc_send_endpoint_name(const char *name,
+                                    midi2_proc_write_fn write_fn, void *context) {
+  stream_text_emit(midi2_msg_stream_endpoint_name, name, write_fn, context);
+}
+
+void midi2_proc_send_product_id(const char *id,
+                                 midi2_proc_write_fn write_fn, void *context) {
+  stream_text_emit(midi2_msg_stream_product_id, id, write_fn, context);
+}
+
+/*--------------------------------------------------------------------+
+ * Device Identity Notification sender (M2-104-UM §7.1.6).
+ * Single 4-word UMP, no fragmentation. Delegates to the inline
+ * builder for byte layout.
+ *--------------------------------------------------------------------*/
+void midi2_proc_send_device_identity(uint32_t manufacturer_id,
+                                      uint16_t family_id, uint16_t model_id,
+                                      uint32_t version_id,
+                                      midi2_proc_write_fn write_fn, void *context) {
+  if (!write_fn) return;
+  uint32_t msg[4];
+  midi2_msg_stream_device_identity(msg, manufacturer_id, family_id,
+                                    model_id, version_id);
+  write_fn(msg, 4, context);
+}
+
+/*--------------------------------------------------------------------+
+ * SysEx8 sender (M2-104-UM §7.8).
+ *
+ * 13 data bytes per UMP (word 0 low byte carries data[0], words 1-3
+ * carry the remaining 12). stream_id rides word 0 bits [15:8]. The
+ * status nibble in bits [23:20] encodes Complete/Start/Continue/End
+ * per Table 14. Delegates to midi2_msg_sysex8_packet per packet so
+ * the status/num_bytes field stays aligned with the canonical
+ * builder.
+ *--------------------------------------------------------------------*/
+#define MIDI2_SYSEX8_BYTES_PER_UMP 13u
+
+void midi2_proc_send_sysex8(uint8_t group, uint8_t stream_id,
+                             const uint8_t *data, uint16_t length,
+                             midi2_proc_write_fn write_fn, void *context) {
+  if (!write_fn) return;
+  if (length == 0) return;
+  if (!data) return;
+
+  uint16_t offset = 0;
+  while (offset < length) {
+    uint16_t remaining = (uint16_t)(length - offset);
+    uint8_t  n = (remaining > MIDI2_SYSEX8_BYTES_PER_UMP)
+                 ? (uint8_t)MIDI2_SYSEX8_BYTES_PER_UMP
+                 : (uint8_t)remaining;
+    uint8_t is_first = (offset == 0);
+    uint8_t is_last  = (remaining <= MIDI2_SYSEX8_BYTES_PER_UMP);
+    uint8_t status = (is_first && is_last) ? MIDI2_SYSEX8_COMPLETE
+                   : is_first              ? MIDI2_SYSEX8_START
+                   : is_last               ? MIDI2_SYSEX8_END
+                                           : MIDI2_SYSEX8_CONTINUE;
+    uint32_t msg[4];
+    midi2_msg_sysex8_packet(msg, group, status, stream_id,
+                             data + offset, n);
+    write_fn(msg, 4, context);
+    offset += n;
+  }
+}
+
 /* == midi2_conv (impl) =================================================== */
 
 
@@ -3541,7 +3993,7 @@ void midi2_proc_send_fb_name(uint8_t fb_idx, const char *name,
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
- * Version: 0.2.4
+ * Version: 0.3.0
  */
 
 
@@ -3727,7 +4179,7 @@ bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte) {
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI-CI (M2-101-UM v1.2, Jun 2023)
- * Version: 0.2.4
+ * Version: 0.3.0
  */
 
 
@@ -4072,22 +4524,41 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI-CI (M2-101-UM v1.2, Jun 2023)
- * Version: 0.2.4
+ * Version: 0.3.0
  */
 
 
 /*--------------------------------------------------------------------+
  * Init
  *--------------------------------------------------------------------*/
-void midi2_ci_init(midi2_ci_state *state, uint32_t muid_seed,
-                     uint8_t (*profiles)[5], uint8_t max_profiles,
-                     midi2_ci_property *properties, uint8_t max_properties) {
+void midi2_ci_init_ex(midi2_ci_state *state, uint32_t muid_seed,
+                       uint8_t (*profiles)[5], uint8_t max_profiles,
+                       midi2_ci_property *properties, uint8_t max_properties,
+                       midi2_ci_subscriber *subscribers, uint8_t max_subscribers) {
   memset(state, 0, sizeof(midi2_ci_state));
   state->muid = muid_seed & 0x0FFFFFFF;
   state->profiles = profiles;
   state->profile_capacity = max_profiles;
   state->properties = properties;
   state->property_capacity = max_properties;
+  state->subscribers = subscribers;
+  state->subscriber_capacity = max_subscribers;
+  /* Clear caller-provided subscriber slots so the `in_use` sentinel starts
+   * zero. That field is a midi2 implementation detail, not part of the
+   * caller contract, so init owns it. */
+  if (subscribers != NULL && max_subscribers > 0) {
+    memset(subscribers, 0, sizeof(midi2_ci_subscriber) * max_subscribers);
+  }
+  state->auto_invalidate_on_collision = true; /* v0.3.0+ default on */
+}
+
+void midi2_ci_init(midi2_ci_state *state, uint32_t muid_seed,
+                     uint8_t (*profiles)[5], uint8_t max_profiles,
+                     midi2_ci_property *properties, uint8_t max_properties) {
+  midi2_ci_init_ex(state, muid_seed,
+                    profiles, max_profiles,
+                    properties, max_properties,
+                    NULL, 0);
 }
 
 void midi2_ci_set_identity(midi2_ci_state *state,
@@ -4113,6 +4584,11 @@ void midi2_ci_set_rng(midi2_ci_state *state,
 
 void midi2_ci_set_nak_on_unknown(midi2_ci_state *state, bool enabled) {
   state->nak_on_unknown = enabled;
+}
+
+void midi2_ci_set_auto_invalidate_on_collision(midi2_ci_state *state, bool enabled) {
+  if (state == NULL) return;
+  state->auto_invalidate_on_collision = enabled;
 }
 
 uint32_t midi2_ci_new_muid(midi2_ci_state *state) {
@@ -4170,6 +4646,7 @@ int midi2_ci_add_property_static(midi2_ci_state *state,
   state->properties[state->property_count].static_value = value;
   state->properties[state->property_count].getter = NULL;
   state->properties[state->property_count].setter = NULL;
+  state->properties[state->property_count].subscribable = false; /* v0.3.0+ */
   state->property_count++;
   return MIDI2_CI_OK;
 }
@@ -4184,8 +4661,118 @@ int midi2_ci_add_property_dynamic(midi2_ci_state *state,
   state->properties[state->property_count].static_value = NULL;
   state->properties[state->property_count].getter = getter;
   state->properties[state->property_count].setter = setter;
+  state->properties[state->property_count].subscribable = false; /* v0.3.0+ */
   state->property_count++;
   return MIDI2_CI_OK;
+}
+
+int midi2_ci_remove_property(midi2_ci_state *state, const char *name) {
+  uint8_t i;
+  if (state == NULL || name == NULL) return MIDI2_CI_ERR_NOT_FOUND;
+  for (i = 0; i < state->property_count; i++) {
+    if (state->properties[i].name != NULL
+        && strcmp(state->properties[i].name, name) == 0) {
+      uint8_t j;
+      for (j = i; j + 1 < state->property_count; j++) {
+        state->properties[j] = state->properties[j + 1];
+      }
+      state->property_count--;
+      return MIDI2_CI_OK;
+    }
+  }
+  return MIDI2_CI_ERR_NOT_FOUND;
+}
+
+void midi2_ci_reset_profiles(midi2_ci_state *state) {
+  if (state == NULL) return;
+  state->profile_count = 0;
+}
+
+void midi2_ci_reset_properties(midi2_ci_state *state) {
+  if (state == NULL) return;
+  state->property_count = 0;
+}
+
+/*--------------------------------------------------------------------+
+ * Subscribe / Notify (v0.3.0)
+ *
+ * Registry is caller-provided (state->subscribers). Each slot carries
+ * a stable 36-char copy of the resource name so the responder does
+ * not depend on app-owned string lifetimes.
+ *--------------------------------------------------------------------*/
+static int find_property_idx(const midi2_ci_state *state, const char *name) {
+  uint8_t i;
+  if (state == NULL || name == NULL) return -1;
+  for (i = 0; i < state->property_count; i++) {
+    if (state->properties[i].name != NULL
+        && strcmp(state->properties[i].name, name) == 0) {
+      return (int)i;
+    }
+  }
+  return -1;
+}
+
+static int find_subscriber_idx(const midi2_ci_state *state, uint32_t muid,
+                                const char *name) {
+  uint8_t i;
+  if (state == NULL || state->subscribers == NULL || name == NULL) return -1;
+  for (i = 0; i < state->subscriber_capacity; i++) {
+    if (!state->subscribers[i].in_use) continue;
+    if (state->subscribers[i].caller_muid != muid) continue;
+    if (strncmp(state->subscribers[i].name_copy, name, 36) != 0) continue;
+    return (int)i;
+  }
+  return -1;
+}
+
+int midi2_ci_pe_set_subscribable(midi2_ci_state *state, const char *name,
+                                  bool subscribable) {
+  int idx = find_property_idx(state, name);
+  if (idx < 0) return MIDI2_CI_ERR_NOT_FOUND;
+  state->properties[idx].subscribable = subscribable;
+  return MIDI2_CI_OK;
+}
+
+int midi2_ci_subscribe_add(midi2_ci_state *state, uint32_t caller_muid,
+                            const char *resource_name) {
+  uint8_t i;
+  int pi;
+  size_t n;
+  if (state == NULL || resource_name == NULL) return MIDI2_CI_ERR_NOT_FOUND;
+  if (state->subscribers == NULL) return MIDI2_CI_ERR_FULL;
+  pi = find_property_idx(state, resource_name);
+  if (pi < 0) return MIDI2_CI_ERR_NOT_FOUND;
+  if (!state->properties[pi].subscribable) return MIDI2_CI_ERR_NOT_FOUND;
+  if (find_subscriber_idx(state, caller_muid, resource_name) >= 0) {
+    return MIDI2_CI_OK; /* idempotent duplicate */
+  }
+  for (i = 0; i < state->subscriber_capacity; i++) {
+    if (state->subscribers[i].in_use) continue;
+    state->subscribers[i].caller_muid = caller_muid;
+    n = strlen(resource_name);
+    if (n > 36) n = 36;
+    memcpy(state->subscribers[i].name_copy, resource_name, n);
+    state->subscribers[i].name_copy[n] = '\0';
+    state->subscribers[i].in_use = 1;
+    state->subscriber_count++;
+    return MIDI2_CI_OK;
+  }
+  return MIDI2_CI_ERR_FULL;
+}
+
+int midi2_ci_subscribe_remove(midi2_ci_state *state, uint32_t caller_muid,
+                               const char *resource_name) {
+  int idx = find_subscriber_idx(state, caller_muid, resource_name);
+  if (idx < 0) return MIDI2_CI_ERR_NOT_FOUND;
+  state->subscribers[idx].in_use = 0;
+  state->subscribers[idx].caller_muid = 0;
+  state->subscribers[idx].name_copy[0] = '\0';
+  state->subscriber_count--;
+  return MIDI2_CI_OK;
+}
+
+uint8_t midi2_ci_get_subscriber_count(const midi2_ci_state *state) {
+  return (state == NULL) ? 0u : state->subscriber_count;
 }
 
 /*--------------------------------------------------------------------+
@@ -4196,6 +4783,62 @@ static void ci_send(midi2_ci_state *state, uint8_t group,
   if (state->write_fn) {
     midi2_proc_send_sysex7(group, data, length, state->write_fn, state->write_context);
   }
+}
+
+/*--------------------------------------------------------------------+
+ * PE Notify fan-out (v0.3.0)
+ *
+ * Walks the subscriber registry and, for every slot matching the
+ * resource name, emits a PE Notify frame carrying a minimal JSON
+ * header `{"resource":"<name>"}`. The actual property value is not
+ * embedded; consumers issue a PE Get to fetch the new value. Matches
+ * the common M2-103 pattern for PE where Notify signals invalidation.
+ *--------------------------------------------------------------------*/
+int midi2_ci_notify_property_changed(midi2_ci_state *state,
+                                      const char *resource_name) {
+  /* JSON header template `{"resource":"<name>"}`. <name> is bounded by
+   * MIDI2_CI_RESOURCE_NAME_MAX (36 per M2-105) and stored in the
+   * subscriber's name_copy slot, so the worst-case header is
+   * 13 (prefix) + 36 (name) + 2 (suffix) = 51 bytes. Buffer of 64 is
+   * comfortable. No <stdio.h> dependency. */
+  static const char HDR_PREFIX[] = "{\"resource\":\"";
+  static const char HDR_SUFFIX[] = "\"}";
+  uint8_t i;
+  int pi;
+  if (state == NULL || resource_name == NULL) return MIDI2_CI_ERR_NOT_FOUND;
+  pi = find_property_idx(state, resource_name);
+  if (pi < 0) return MIDI2_CI_ERR_NOT_FOUND;
+  if (state->write_fn == NULL || state->subscribers == NULL) return MIDI2_CI_OK;
+
+  for (i = 0; i < state->subscriber_capacity; i++) {
+    if (!state->subscribers[i].in_use) continue;
+    if (strncmp(state->subscribers[i].name_copy, resource_name, 36) != 0) continue;
+
+    uint8_t frame[128];
+    uint8_t hdr[64];
+    uint16_t hdr_n = 0;
+    size_t name_len = strlen(state->subscribers[i].name_copy);
+    if (name_len > 36u) name_len = 36u;
+
+    memcpy(hdr + hdr_n, HDR_PREFIX, sizeof HDR_PREFIX - 1u);
+    hdr_n = (uint16_t)(hdr_n + (sizeof HDR_PREFIX - 1u));
+    memcpy(hdr + hdr_n, state->subscribers[i].name_copy, name_len);
+    hdr_n = (uint16_t)(hdr_n + name_len);
+    memcpy(hdr + hdr_n, HDR_SUFFIX, sizeof HDR_SUFFIX - 1u);
+    hdr_n = (uint16_t)(hdr_n + (sizeof HDR_SUFFIX - 1u));
+
+    uint16_t frame_n = midi2_ci_build_pe_notify(
+        frame, MIDI2_CI_VERSION_1,
+        state->muid,
+        state->subscribers[i].caller_muid,
+        0 /* request_id */,
+        hdr, hdr_n,
+        1, 1,
+        NULL, 0);
+    if (frame_n == 0) continue;
+    ci_send(state, 0 /* group */, frame, frame_n);
+  }
+  return MIDI2_CI_OK;
 }
 
 /*--------------------------------------------------------------------+
@@ -4360,6 +5003,7 @@ static void ci_check_muid_collision(midi2_ci_state *state, uint8_t group,
   uint32_t old = state->muid;
   midi2_ci_new_muid(state);
   if (!state->write_fn) return;
+  if (!state->auto_invalidate_on_collision) return;
   uint8_t buf[24];
   uint16_t len = midi2_ci_build_invalidate_muid(
       buf, MIDI2_CI_VERSION_1, state->muid, old);

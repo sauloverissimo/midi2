@@ -1,5 +1,112 @@
 # Changelog
 
+## [0.3.0] - 2026-04-24
+
+Property Exchange Subscribe/Notify state machine, UMP Stream and
+SysEx8 fragmenters, registry symmetry, MT 0x4 to MT 0x2 downgrade,
+and USB MIDI 1.0 cable-event helper. First release since v0.2.4
+with a breaking struct change (semver minor bump justified); callers
+using designated-initialiser style compile unchanged. Stays embedded
+contract: only `<stdint.h>`, `<stdbool.h>`, `<string.h>` (no `<stdio.h>`,
+no `snprintf`, no float formatter dragged in).
+
+### Added
+
+- **Subscribe / Notify state machine** (`midi2_ci_subscribe_add`,
+  `_subscribe_remove`, `_notify_property_changed`,
+  `_pe_set_subscribable`, `_get_subscriber_count`) per M2-101-UM
+  sections 8.11 to 8.13. A caller-provided subscriber registry
+  arrives via the new `midi2_ci_init_ex(...)`; legacy
+  `midi2_ci_init()` stays source-compatible and delegates with a
+  NULL subscriber array. Notify header is built with `memcpy` of a
+  fixed JSON template, no `snprintf`.
+- **`midi2_ci_remove_property`** and **`midi2_ci_reset_profiles` /
+  `_reset_properties`**: symmetric registry helpers.
+- **`midi2_ci_set_auto_invalidate_on_collision(state, enabled)`**
+  (default on). Exposes the Invalidate MUID broadcast that the
+  collision detector in v0.2.4 already emitted; apps can now opt
+  out per M2-101-UM section 5.9 if they prefer manual control.
+- **UMP Stream and SysEx8 fragmenters in `midi2_proc`**:
+  `midi2_proc_send_endpoint_name` (status 0x003),
+  `midi2_proc_send_product_id` (status 0x004),
+  `midi2_proc_send_device_identity` (status 0x002, single UMP), and
+  `midi2_proc_send_sysex8` (MT 0x5, 13 bytes per UMP). All delegate
+  to the canonical single-packet builders in `midi2_msg.h`.
+- **`midi2_msg_mt4_to_mt2`** inline helper: inverse of the existing
+  `midi2_msg_mt2_to_mt4`. Bit-scales MIDI 2.0 Channel Voice down to
+  MIDI 1.0 per M2-115. Lossy by spec: RPN / NRPN / per-note are
+  dropped (no MIDI 1.0 single-word form). Returns 0 or 1; caller
+  detects drops by counting.
+- **`midi2_msg_cable_event_to_ump`** inline helper: USB MIDI v1.0
+  4-byte cable event to UMP MT 0x2. Channel Voice (CIN 0x8-0xE) and
+  System Common (CIN 0x2-0x3) handled. SysEx fragment CINs (0x4-0x7,
+  0xF) and reserved CINs return false; SysEx fragments belong in
+  `midi2_conv` (stateful).
+- **`midi2_msg_set_group`** inline helper: rewrites word 0 Group
+  nibble on MT 0x2 to 0x5, leaves Utility / System / Flex Data /
+  Stream alone.
+- **MT 0x1 System message wrappers** (10 inline helpers): named
+  shortcuts wrapping `midi2_msg_system{,_2byte,_3byte}` with the
+  canonical status byte for each MIDI 1.0 System Common and System
+  Real-Time message per M2-104-UM section 4.3.
+  - `midi2_msg_system_tune_request(group)` (0xF6)
+  - `midi2_msg_system_timing_clock(group)` (0xF8)
+  - `midi2_msg_system_start(group)` (0xFA)
+  - `midi2_msg_system_continue(group)` (0xFB)
+  - `midi2_msg_system_stop(group)` (0xFC)
+  - `midi2_msg_system_active_sensing(group)` (0xFE)
+  - `midi2_msg_system_reset(group)` (0xFF)
+  - `midi2_msg_system_mtc(group, time_code)` (0xF1, 1 data byte)
+  - `midi2_msg_system_song_select(group, song)` (0xF3, 1 data byte)
+  - `midi2_msg_system_song_position(group, position)` (0xF2, 14-bit
+    split as LSB/MSB)
+
+  Pure DX, zero ROM cost (header inline). Removes the cargo cult of
+  memorising magic status bytes (0xF1..0xFF) at the call site.
+
+### Changed
+
+- **Breaking:** `midi2_ci_property` gains a trailing `subscribable`
+  bool. Designated-initialiser call sites compile unchanged;
+  positional inits must append `false`.
+- `midi2_ci_state` gains subscriber / auto_invalidate_on_collision
+  fields. Documented as opaque, so this is non-breaking.
+- `midi2_ci_add_property_static` / `_add_property_dynamic` now reset
+  the new `subscribable` field so reused caller-provided slots start
+  clean.
+
+### Migration
+
+Two paths for the breaking `midi2_ci_property` change:
+
+```c
+/* Before (positional init): */
+midi2_ci_property props[] = {
+  { "DeviceName", "MySynth", NULL, NULL }
+};
+
+/* After (either form works): */
+midi2_ci_property props[] = {
+  { "DeviceName", "MySynth", NULL, NULL, false }   /* explicit */
+};
+midi2_ci_property props[] = {
+  { .name = "DeviceName", .static_value = "MySynth" }  /* designated */
+};
+```
+
+Existing `midi2_ci_init` users see zero behaviour change; the
+subscriber registry stays NULL. Opt in via `midi2_ci_init_ex`.
+
+### Test suite
+
+Full suite: **321 test functions across 8 suites**, all green.
+Baseline v0.2.4 was 266 functions across 8 suites; this release
+adds 55 net new test functions across the existing suites covering
+the new public surface (Subscribe/Notify, fragmenters, MT4 to MT2
+downgrade, USB cable event helper, registry symmetry, System
+message wrappers). gcc -std=c99 -Wall -Wextra -Wpedantic clean,
+ASan and UBSan clean.
+
 ## [0.2.4] - 2026-04-21
 
 Convenience responder completeness. Every spec-required behavior from

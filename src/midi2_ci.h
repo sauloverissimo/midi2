@@ -29,7 +29,7 @@
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI-CI (M2-101-UM v1.2, Jun 2023)
- * Version: 0.2.4
+ * Version: 0.3.0
  */
 
 #ifndef MIDI2_CI_H

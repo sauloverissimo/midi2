@@ -309,6 +309,73 @@ void test_header_only_inline(void) {
   PASS();
 }
 
+/* ---- v0.3.0 surface smoke tests ---- */
+
+void test_v030_msg_set_group(void) {
+  TEST("amalgam v0.3.0: midi2_msg_set_group rewrites MT4 group");
+  uint32_t w[2];
+  midi2_msg_note_on(w, 0, 0, 60, 0xFFFF, 0);
+  midi2_msg_set_group(&w[0], 7);
+  CHECK(((w[0] >> 24) & 0x0F) == 7, "group rewritten");
+  PASS();
+}
+
+void test_v030_msg_cable_event(void) {
+  TEST("amalgam v0.3.0: midi2_msg_cable_event_to_ump");
+  uint32_t packed = (uint32_t)0x09 | (0x90u << 8) | (0x3Cu << 16) | (0x7Fu << 24);
+  uint32_t ump = 0;
+  CHECK(midi2_msg_cable_event_to_ump(packed, 5, &ump), "converts");
+  CHECK(((ump >> 28) & 0x0F) == 0x02, "MT2");
+  CHECK(((ump >> 24) & 0x0F) == 5, "group preserved");
+  PASS();
+}
+
+void test_v030_msg_mt4_to_mt2(void) {
+  TEST("amalgam v0.3.0: midi2_msg_mt4_to_mt2 downgrades Note On");
+  uint32_t in[2];
+  midi2_msg_note_on(in, 0, 0, 60, 0xFFFFu, 0);
+  uint32_t out = 0;
+  CHECK(midi2_msg_mt4_to_mt2(in, &out) == 1, "1 word");
+  CHECK(((out >> 28) & 0x0F) == 0x02, "MT MIDI 1.0 CV");
+  CHECK((out & 0x7F) == 0x7F, "velocity scaled to 0x7F");
+  PASS();
+}
+
+/* Capture first word of a UMP emission; matches midi2_proc_write_fn. */
+static uint32_t v030_first_word;
+static int      v030_emit_count;
+static uint32_t v030_capture(const uint32_t *w, uint32_t n, void *ctx) {
+  (void)ctx;
+  if (n > 0 && v030_emit_count == 0) v030_first_word = w[0];
+  v030_emit_count++;
+  return n;
+}
+
+void test_v030_proc_send_endpoint_name(void) {
+  TEST("amalgam v0.3.0: midi2_proc_send_endpoint_name emits Stream MT F");
+  v030_first_word = 0;
+  v030_emit_count = 0;
+  midi2_proc_send_endpoint_name("Hi", v030_capture, NULL);
+  CHECK(v030_emit_count == 1, "1 UMP packet");
+  CHECK(((v030_first_word >> 28) & 0x0F) == 0x0F, "MT=Stream");
+  CHECK(((v030_first_word >> 16) & 0x3FF) == 0x003, "status=Endpoint Name");
+  PASS();
+}
+
+void test_v030_ci_subscribe_add(void) {
+  TEST("amalgam v0.3.0: midi2_ci subscribe_add / notify API linked");
+  midi2_ci_state s;
+  midi2_ci_property props[1];
+  midi2_ci_subscriber subs[2];
+  memset(props, 0, sizeof(props));
+  midi2_ci_init_ex(&s, 0xABCD, NULL, 0, props, 1, subs, 2);
+  midi2_ci_add_property_static(&s, "X", "v");
+  CHECK(midi2_ci_pe_set_subscribable(&s, "X", true) == MIDI2_CI_OK, "flag");
+  CHECK(midi2_ci_subscribe_add(&s, 0x100, "X") == MIDI2_CI_OK, "add");
+  CHECK(midi2_ci_get_subscriber_count(&s) == 1, "count 1");
+  PASS();
+}
+
 /* ---- main ---- */
 
 int main(void) {
@@ -349,6 +416,13 @@ int main(void) {
 
   printf("\n[amalgam]\n");
   test_header_only_inline();
+
+  printf("\n[v0.3.0 surface]\n");
+  test_v030_msg_set_group();
+  test_v030_msg_cable_event();
+  test_v030_msg_mt4_to_mt2();
+  test_v030_proc_send_endpoint_name();
+  test_v030_ci_subscribe_add();
 
   printf("\n=== Results: %d passed, %d failed ===\n\n", passed, failed);
   return failed > 0 ? 1 : 0;

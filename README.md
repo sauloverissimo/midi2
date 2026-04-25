@@ -1,7 +1,7 @@
 # 🎹 midi2
 
 [![CI](https://github.com/sauloverissimo/midi2/actions/workflows/ci.yml/badge.svg)](https://github.com/sauloverissimo/midi2/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-266%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-321%20passing-brightgreen.svg)]()
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![C99](https://img.shields.io/badge/standard-C99-blue.svg)]()
 [![Zero Alloc](https://img.shields.io/badge/allocation-zero-orange.svg)]()
@@ -72,13 +72,13 @@ When you need finer control, include individual modules instead:
 
 | Module | Files | State | What it does |
 |--------|-------|-------|-------------|
-| **midi2_msg** | `.h` | Stateless | UMP construction, parsing, value scaling. All message types. |
+| **midi2_msg** | `.h` | Stateless | UMP construction, parsing, value scaling. All message types. MT 0x2 / MT 0x4 protocol translation (both directions). USB MIDI 1.0 cable event to UMP. |
 | **midi2_dispatch** | `.h` + `.c` | Caller-allocated | Typed UMP dispatch with 42 granular callbacks. Optional MT 0x2->0x4 upscale. |
-| **midi2_proc** | `.h` + `.c` | Caller-allocated | Group filtering, SysEx7/8 reassembly, group remap. |
+| **midi2_proc** | `.h` + `.c` | Caller-allocated | Group filtering, SysEx7/8 reassembly, group remap, UMP Stream and SysEx8 fragmenting senders. |
 | **midi2_conv** | `.h` + `.c` | Caller-allocated | MIDI 1.0 byte stream to UMP (Running Status, streaming SysEx, MT 0x2->0x4 translation). |
 | **midi2_ci_msg** | `.h` | Stateless | MIDI-CI message construction and parsing. All 31 messages. |
 | **midi2_ci_dispatch** | `.h` + `.c` | Caller-allocated | Typed CI dispatch with 33 granular callbacks. |
-| **midi2_ci** | `.h` + `.c` | Caller-allocated | Convenience CI responder: Discovery, Profiles, PE, Process Inquiry, automatic MUID collision detection, Invalidate MUID, optional NAK-on-unknown. Appendix E complete. |
+| **midi2_ci** | `.h` + `.c` | Caller-allocated | Convenience CI responder: Discovery, Profiles, PE (including Subscribe/Notify since v0.3.0), Process Inquiry, automatic MUID collision detection, Invalidate MUID, optional NAK-on-unknown. Appendix E complete. |
 
 Use only what you need. `midi2_msg` alone is a header include with zero overhead. See [Integration](#integration) for setup details.
 
@@ -132,13 +132,13 @@ make test          # gcc by default
 make CC=clang test # or clang
 ```
 
-266 tests across 8 test suites (7 modules + amalgamated), zero warnings with `-Wall -Wextra -Wpedantic`.
+321 tests across 8 test suites (7 modules + amalgamated), zero warnings with `-Wall -Wextra -Wpedantic`.
 
 CI runs 11 jobs on every push:
 
 | Target | Type | What it verifies |
 |--------|------|-----------------|
-| gcc (Linux x64) | Compile + run | Primary compiler, all 266 tests |
+| gcc (Linux x64) | Compile + run | Primary compiler, all 321 tests |
 | clang (Linux x64) | Compile + run | Catches different warnings |
 | Apple clang (macOS) | Compile + run | macOS / Darwin compatibility |
 | MSVC (Windows) | Compile + run | Microsoft compiler, C11 mode |
