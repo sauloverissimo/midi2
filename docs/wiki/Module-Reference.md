@@ -253,7 +253,7 @@ dp.on_note_on = my_handler;  /* receives both MT 0x2 and MT 0x4 messages */
 
 **Type**: Header-only, stateless. No compilation needed.
 
-Construction and parsing for all 33 MIDI-CI messages per M2-101-UM v1.2.
+Construction and parsing for all 32 MIDI-CI messages per M2-101-UM v1.2.
 
 ### Categories
 
@@ -281,7 +281,7 @@ send_sysex(group, buf, len);
 
 **Type**: Compiled. Links with: `midi2_ci_msg.h`.
 
-33 callbacks for typed CI message dispatch. Parses reassembled SysEx and delivers pre-parsed fields.
+33 callbacks for typed CI message dispatch (32 messages plus an `on_unknown` fallback). Parses reassembled SysEx and delivers pre-parsed fields.
 
 ```c
 midi2_ci_dispatch ci_dp;

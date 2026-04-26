@@ -51,6 +51,23 @@ Word: [MT:4][group:4][status:8][data1:8][data2:8]
 | 0xFE | Active Sensing |
 | 0xFF | System Reset |
 
+### v0.3.0+ named wrappers
+
+Convenience wrappers map common System statuses to nominal names:
+
+| Status | Nominal wrapper |
+|--------|----------------|
+| 0xF1 | `midi2_msg_mtc(group, frame, value)` |
+| 0xF2 | `midi2_msg_song_position(group, position)` |
+| 0xF3 | `midi2_msg_song_select(group, song)` |
+| 0xF6 | `midi2_msg_tune_request(group)` |
+| 0xF8 | `midi2_msg_timing_clock(group)` |
+| 0xFA | `midi2_msg_start(group)` |
+| 0xFB | `midi2_msg_continue(group)` |
+| 0xFC | `midi2_msg_stop(group)` |
+| 0xFE | `midi2_msg_active_sensing(group)` |
+| 0xFF | `midi2_msg_reset(group)` |
+
 ## MT 0x2: MIDI 1.0 Channel Voice (1 word)
 
 ```

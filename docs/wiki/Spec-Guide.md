@@ -13,7 +13,7 @@ These 4 documents plus the overview define the foundation of MIDI 2.0. A device 
 | Document | Title | Version | Published | midi2 Coverage |
 |----------|-------|---------|-----------|----------------|
 | **M2-100-U** | MIDI 2.0 Specification Overview | v1.1 | June 2023 | Reference only (defines minimum requirements) |
-| **M2-101-UM** | MIDI Capability Inquiry (MIDI-CI) | v1.2 | June 2023 | **100%** -- all 33 messages, 4 categories |
+| **M2-101-UM** | MIDI Capability Inquiry (MIDI-CI) | v1.2 | June 2023 | **100%** -- all 32 messages, 4 categories |
 | **M2-102-U** | Common Rules for MIDI-CI Profiles | v1.1 | June 2023 | Partial -- CI Profile messages covered; behavior rules are platform-level |
 | **M2-103-UM** | Common Rules for MIDI-CI Property Exchange | v1.2 | June 2023 | Partial -- CI PE messages covered; JSON schema interpretation is platform-level |
 | **M2-104-UM** | UMP Format and MIDI 2.0 Protocol | v1.1.2 | Oct 2023 | **100%** -- all message types MT 0x0 through MT 0xF |
@@ -30,7 +30,7 @@ A device can implement both paths.
 
 ### M2-101-UM: MIDI-CI Specification
 
-Defines the bidirectional negotiation protocol. 33 message types in 4 categories:
+Defines the bidirectional negotiation protocol. 32 message types in 4 categories:
 
 | Category | Sub-ID Range | Messages | Purpose |
 |----------|-------------|----------|---------|

@@ -99,7 +99,7 @@ The amalgam (`dist/midi2.h` + `dist/midi2.c`) is the recommended path. For finer
 | `midi2_dispatch` | `.h` `.c` | Caller-allocated | Typed UMP dispatch (49 callbacks). Optional MT 0x2 to MT 0x4 upscale. |
 | `midi2_proc` | `.h` `.c` | Caller-allocated | Group filtering and remap, SysEx7/8 reassembly, UMP Stream and SysEx8 fragmenting senders. |
 | `midi2_conv` | `.h` `.c` | Caller-allocated | MIDI 1.0 byte stream to UMP (Running Status, streaming SysEx, MT 0x2 to MT 0x4 translation). |
-| `midi2_ci_msg` | `.h` | Stateless | MIDI-CI message construction and parsing. All 33 messages. |
+| `midi2_ci_msg` | `.h` | Stateless | MIDI-CI message construction and parsing. All 32 messages. |
 | `midi2_ci_dispatch` | `.h` `.c` | Caller-allocated | Typed CI dispatch (33 callbacks). |
 | `midi2_ci` | `.h` `.c` | Caller-allocated | Convenience CI responder: Discovery, Profiles, PE (Subscribe/Notify), Process Inquiry, MUID collision detection, optional NAK-on-unknown. Appendix E complete. |
 
