@@ -22,7 +22,7 @@ Key architectural choices made during midi2 development and their rationale.
 
 ## 4. Granular dispatch callbacks (not structs)
 
-**Decision**: 42 individual UMP callbacks (`on_note_on`, `on_cc`, etc.) instead of 8 struct-based callbacks.
+**Decision**: 49 individual UMP callbacks (`on_note_on`, `on_cc`, etc.) instead of 8 struct-based callbacks.
 
 **Why**: Analyzed against AM_MIDI2.0Lib (granular), ni-midi2 (views), cmidi2 (none), and Teensy (granular). Granular callbacks are semantically correct (each callback has named parameters matching the spec), auto-documented, and what the MIDI 2.0 ecosystem expects. See `decisoes.md` #10 for full analysis.
 
@@ -54,7 +54,7 @@ Key architectural choices made during midi2 development and their rationale.
 
 **Decision**: Cover 100% of UMP and CI message types first, then validate progressively on real hardware.
 
-**Why**: A partial API that gets published and later extended causes breaking changes for early adopters. By stabilizing the full API surface first, hardware validation focuses on integration quality rather than API design. The library has 266 host-side tests covering all message types; hardware validation confirms real-world interoperability.
+**Why**: A partial API that gets published and later extended causes breaking changes for early adopters. By stabilizing the full API surface first, hardware validation focuses on integration quality rather than API design. The library has 321 host-side tests covering all message types; hardware validation confirms real-world interoperability.
 
 ## 10. Progressive hardware validation
 

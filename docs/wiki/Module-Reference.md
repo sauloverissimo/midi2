@@ -5,7 +5,7 @@
 | Module | Type | Files | Purpose |
 |--------|------|-------|---------|
 | midi2_msg | Header-only | `.h` | UMP construction, parsing, value scaling |
-| midi2_dispatch | Compiled | `.h` + `.c` | 42 typed UMP callbacks |
+| midi2_dispatch | Compiled | `.h` + `.c` | 49 typed UMP callbacks |
 | midi2_proc | Compiled | `.h` + `.c` | SysEx reassembly, group filter, remap |
 | midi2_conv | Compiled | `.h` + `.c` | MIDI 1.0 byte stream to UMP |
 | midi2_ci_msg | Header-only | `.h` | CI message construction, parsing |
@@ -45,6 +45,17 @@ midi2_msg_asn_per_note_ctrl(w, group, channel, note, index, value);
 midi2_msg_system(group, status);
 midi2_msg_system_2byte(group, status, data1);
 midi2_msg_system_3byte(group, status, data1, data2);
+/* v0.3.0+ named wrappers */
+midi2_msg_tune_request(group);
+midi2_msg_timing_clock(group);
+midi2_msg_start(group);
+midi2_msg_continue(group);
+midi2_msg_stop(group);
+midi2_msg_active_sensing(group);
+midi2_msg_reset(group);
+midi2_msg_mtc(group, frame, value);
+midi2_msg_song_select(group, song);
+midi2_msg_song_position(group, position);
 
 /* Utility (MT 0x0) */
 midi2_msg_jr_clock(group, timestamp);
@@ -85,6 +96,11 @@ midi2_msg_mds_payload(w, group, mds_id, data, len);
 
 /* MIDI 1.0 within UMP (MT 0x2) */
 midi2_msg_from_midi1(group, status, data1, data2);
+
+/* v0.3.0+ helpers */
+midi2_msg_set_group(w, group);                    /* rewrite group field */
+midi2_msg_mt4_to_mt2(mt4, mt2_out);               /* downgrade MT 0x4 -> MT 0x2 */
+midi2_msg_cable_event_to_ump(cable, status, data1, data2, w);  /* USB MIDI 1.0 cable event -> UMP */
 ```
 
 ### UMP Parsing
@@ -119,7 +135,7 @@ All scaling is round-trip safe: `scale_down(scale_up(x)) == x`.
 
 **Type**: Compiled (`.h` + `.c`). Links with: `midi2_msg.h`.
 
-42 granular callbacks, one per UMP message type. Feed signature is compatible with `midi2_proc` `on_ump` callback for zero-cost chaining.
+49 granular callbacks, one per UMP message type. Feed signature is compatible with `midi2_proc` `on_ump` callback for zero-cost chaining.
 
 ### Callbacks by Message Type
 
@@ -155,6 +171,8 @@ All scaling is round-trip safe: `scale_down(scale_up(x)) == x`.
 - **SysEx8 reassembly**: multi-packet SysEx8 -> single callback with complete data
 - **SysEx7 fragmented send**: split large SysEx into 6-byte UMP packets
 - **Function Block Name send** (v0.2.4+): UMP Stream fragmentation (MT 0xF status 0x12) per M2-104-UM §7.1.9
+- **Endpoint Name / Product Instance ID / Device Identity senders** (v0.3.0+): Stream MT 0xF fragmentation per M2-104-UM §7.1.6, §7.1.7, §7.1.8
+- **SysEx8 fragmented send** (v0.3.0+): MT 0x5 fragmentation with stream_id per M2-104-UM §7.8
 
 ### Usage
 
@@ -175,6 +193,10 @@ midi2_proc_feed(&proc, words, word_count);
 /* Out-going helpers (no state required) */
 midi2_proc_send_sysex7(group, bytes, len, write_fn, ctx);
 midi2_proc_send_fb_name(fb_idx, "My Function Block", write_fn, ctx);
+midi2_proc_send_endpoint_name("My Endpoint", write_fn, ctx);                    /* v0.3.0 */
+midi2_proc_send_product_id("ACME-CTRL-001", write_fn, ctx);                     /* v0.3.0 */
+midi2_proc_send_device_identity(mfr, family, model, version, write_fn, ctx);    /* v0.3.0 */
+midi2_proc_send_sysex8(group, stream_id, data, len, write_fn, ctx);             /* v0.3.0 */
 ```
 
 ---
@@ -197,7 +219,7 @@ while (serial_available()) {
 }
 ```
 
-### Protocol translation (MT 0x2 -> MT 0x4)
+### Protocol translation (MT 0x2 <-> MT 0x4)
 
 `midi2_msg_mt2_to_mt4()` translates a 1-word MT 0x2 message to a 2-word MT 0x4 message with proper value scaling per M2-104-UM v1.1.2 Section 7. Stateless, defined in `midi2_msg.h`.
 
@@ -205,6 +227,15 @@ while (serial_available()) {
 uint32_t mt2 = midi2_msg_from_midi1(0, 0x90, 60, 100);  /* MT 0x2 Note On */
 uint32_t mt4[2];
 midi2_msg_mt2_to_mt4(mt2, mt4);  /* MT 0x4 with 16-bit velocity */
+```
+
+The reverse exists in v0.3.0+: `midi2_msg_mt4_to_mt2()` downgrades a 2-word MT 0x4 to a 1-word MT 0x2 with `scale_down_16to7` on velocity.
+
+```c
+uint32_t mt4_msg[2];
+midi2_msg_note_on(mt4_msg, 0, 0, 60, 0xC000, 0);
+uint32_t mt2_msg;
+midi2_msg_mt4_to_mt2(mt4_msg, &mt2_msg);  /* 7-bit velocity */
 ```
 
 The `midi2_dispatch` supports automatic upscaling via the `upscale_mt2` flag:
@@ -222,7 +253,7 @@ dp.on_note_on = my_handler;  /* receives both MT 0x2 and MT 0x4 messages */
 
 **Type**: Header-only, stateless. No compilation needed.
 
-Construction and parsing for all 31 MIDI-CI messages per M2-101-UM v1.2.
+Construction and parsing for all 33 MIDI-CI messages per M2-101-UM v1.2.
 
 ### Categories
 
@@ -277,9 +308,16 @@ installed and `nak_on_unknown` is enabled:
 - Profile Inquiry Reply
 - PE Capability Reply + PE Get/Set
 - Process Inquiry Capability Reply
-- Invalidate MUID → regenerate state->muid via installed RNG
-- MUID collision detection → regenerate and broadcast Invalidate
+- Invalidate MUID -> regenerate state->muid via installed RNG
+- MUID collision detection -> regenerate and broadcast Invalidate
 - NAK (Sub-ID#2 0x7F, status NOT_SUPPORTED) for unsupported sub-ids
+
+**v0.3.0** adds a Subscribe/Notify state machine for property change tracking:
+
+- `midi2_ci_subscribe_add(&ci, peer_muid, resource)` registers a subscriber
+- Property changes call `midi2_ci_notify(&ci, resource, body, len)` to broadcast PE Notify
+- `midi2_ci_init_ex()` extends `midi2_ci_init` with subscriber storage
+- `auto_invalidate_on_collision` flag automates MUID collision broadcast
 
 ```c
 static uint32_t platform_rng(void *ctx) { (void)ctx; return esp_random(); }

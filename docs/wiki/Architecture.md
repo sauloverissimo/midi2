@@ -33,7 +33,7 @@ Seven modules, each with a clear responsibility:
 ```
 midi2_msg.h              Stateless: construct, parse, scale UMP words
   |
-  +-- midi2_dispatch     Typed dispatch: 42 callbacks for UMP messages
+  +-- midi2_dispatch     Typed dispatch: 49 callbacks for UMP messages
   +-- midi2_proc         Pipeline: group filter, SysEx reassembly, remap
   +-- midi2_conv         Conversion: MIDI 1.0 byte stream -> UMP
   +-- midi2_ci_msg       Stateless: construct, parse CI SysEx payloads
@@ -127,7 +127,7 @@ Total overhead for a full stack (all modules): ~470 bytes + user-chosen buffers.
 
 Every push triggers 11 parallel CI jobs verifying portability and correctness:
 
-**Desktop (compile + run 266 tests):**
+**Desktop (compile + run 321 tests):**
 - gcc (Linux x64) -- primary compiler
 - clang (Linux x64) -- catches different warning classes
 - Apple clang (macOS) -- Darwin compatibility

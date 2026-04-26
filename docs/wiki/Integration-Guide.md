@@ -62,7 +62,7 @@ midi2/
   src/      Multi-module sources (development, PlatformIO)
   dist/     Amalgamated midi2.h + midi2.c (vendoring)
   tools/    amalgamate.sh (generates dist/ from src/)
-  test/     266 tests across 8 test suites
+  test/     321 tests across 8 test suites
 ```
 
 ## Which Modules to Include
