@@ -21,7 +21,7 @@ The library implements 100% of the UMP format (M2-104-UM v1.1.2) and 100% of MID
 
 midi2 is the C99 core. Higher-level wrappers vendor it and add language-specific ergonomics for each platform target.
 
-Many paths are possible: **C++ for Embedded Systems** (in development), platform-specific bindings, **Python**, **Rust**, **JavaScript**, **MicroPython** wrappers.
+Many paths are possible: **C++ for Embedded Systems** (in development), platform-specific bindings (e.g. **Teensy**, **Daisy**), and language bindings such as **Python**, **Rust**, **JavaScript**, **MicroPython**.
 
 ## Contents
 
