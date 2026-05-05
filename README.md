@@ -2,6 +2,8 @@
 
 ## 🎹 The MIDI 2.0 core for platforms
 
+![midi2](logo_midi2.png)
+
 *C99, portable, zero-allocation, MIT.* From 8-bit MCUs to 64-bit hosts.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
