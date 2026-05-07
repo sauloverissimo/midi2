@@ -160,7 +160,27 @@ make CC=clang test
 
 ## Integration
 
-midi2 is designed to be vendored. Three shapes cover every use case; the build system is irrelevant.
+midi2 ships in four shapes. Pick the one that matches your build flow.
+
+### Arduino IDE / arduino-cli
+
+Install via Library Manager (search `midi2`, click Install) or manually drop the repo into `~/Arduino/libraries/midi2/`. The `library.properties` declares the library; Arduino IDE compiles the modular `src/*.c` files automatically. Sketches use the umbrella header:
+
+```cpp
+#include <midi2.h>
+```
+
+Two example sketches under `examples/` (`BasicUsage`, `CIDiscovery`) appear in the IDE's File > Examples menu after install. Validated on Arduino UNO (AVR) and Teensy 4.1.
+
+### PlatformIO
+
+`platformio.ini`:
+
+```ini
+lib_deps = sauloverissimo/midi2 @ ^0.3.0
+```
+
+Library Manager pulls the same `src/` modular layout via `library.json` (`srcDir = src`).
 
 ### Single-header (stb-style)
 
