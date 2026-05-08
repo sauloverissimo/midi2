@@ -45,7 +45,7 @@ test/test_midi2_ci_dispatch: test/test_midi2_ci_dispatch.c src/midi2_ci_dispatch
 	$(CC) $(CFLAGS) -o $@ test/test_midi2_ci_dispatch.c src/midi2_ci_dispatch.c
 
 test/test_midi2_amalgam: test/test_midi2_amalgam.c dist/midi2.h
-	$(CC) $(CFLAGS) -Idist -o $@ $<
+	$(CC) -std=c99 -Wall -Wextra -Wpedantic -Idist -o $@ $<
 
 clean:
 	rm -f $(TESTS)
