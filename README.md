@@ -2,13 +2,14 @@
 
 ## 🎹 The MIDI 2.0 core for platforms
 
-![midi2](logo_midi2.png)
+![midi2](https://raw.githubusercontent.com/sauloverissimo/midi2/main/logo_midi2.png)
 
 *C99, portable, zero-allocation, MIT.* From 8-bit MCUs to 64-bit hosts.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![C99](https://img.shields.io/badge/standard-C99-blue.svg)]()
 [![Zero Alloc](https://img.shields.io/badge/allocation-zero-orange.svg)]()
+[![ESP Component Registry](https://components.espressif.com/components/sauloverissimo/midi2/badge.svg)](https://components.espressif.com/components/sauloverissimo/midi2)
 [![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-pink.svg)](https://github.com/sponsors/sauloverissimo)
 
 ---
@@ -219,7 +220,7 @@ midi2_msg.h          Always needed. Header-only.
 
 midi2: infrastructure layer 2 of a 4-layer MIDI 2.0 stack:
 
-![midi2](architecture.png)
+![midi2](https://raw.githubusercontent.com/sauloverissimo/midi2/main/architecture.png)
 
 What each layer owns:
 
