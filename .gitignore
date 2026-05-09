@@ -12,6 +12,11 @@ test/test_midi2_conv
 test/test_midi2_dispatch
 test/test_midi2_ci_msg
 test/test_midi2_ci_dispatch
+test/test_midi2_amalgam
+
+# CMake build dirs
+build/
+build-*/
 
 # docs
 docs/case-study-midi1-to-ump.md
