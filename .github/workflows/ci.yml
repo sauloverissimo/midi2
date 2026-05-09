@@ -184,8 +184,12 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v5
+      # CMAKE_BUILD_TYPE is needed by single-config generators (Make,
+      # Ninja on Linux/macOS) so the exported midi2-config-<cfg>.cmake
+      # carries IMPORTED_LOCATION_<CONFIG>. Multi-config generators
+      # (Visual Studio) ignore CMAKE_BUILD_TYPE and respect --config.
       - name: Configure
-        run: cmake -S . -B build-cmake
+        run: cmake -S . -B build-cmake -DCMAKE_BUILD_TYPE=Release
       - name: Build
         run: cmake --build build-cmake --parallel --config Release
       - name: Install
@@ -194,6 +198,7 @@ jobs:
         run: >
           cmake -S tests/cmake-consumer -B build-consumer
           -DCMAKE_PREFIX_PATH=${{ runner.temp }}/midi2-install
+          -DCMAKE_BUILD_TYPE=Release
       - name: Build downstream consumer
         run: cmake --build build-consumer --parallel --config Release
       - name: Run downstream consumer (Unix)
