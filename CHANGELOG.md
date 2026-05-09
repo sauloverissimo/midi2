@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.3.4]
+
+Fix the ESP-IDF Component Manager path. v0.3.3 routed
+`idf_component_register` at `dist/midi2.c`, but the Component Manager
+filters `dist/` out of the dependency tarball as a build-output
+convention, so consumers saw `Include directory ... is not a
+directory` at configure time.
+
+### Fixed
+
+- **ESP-IDF gate** in `CMakeLists.txt` now consumes the modular
+  `src/midi2_proc.c`, `src/midi2_dispatch.c`, `src/midi2_conv.c`,
+  `src/midi2_ci.c`, `src/midi2_ci_dispatch.c` (the source set that
+  the Component Manager actually delivers). The header-only modules
+  (`midi2_msg.h`, `midi2.h`, `midi2_ci_msg.h`) need no entry. Native
+  CMake and PlatformIO consumers, which still build the amalgamated
+  `dist/midi2.c`, are unaffected.
+
+### Changed
+
+- `idf_component.yml` example snippet pinned to `v0.3.4` (literal
+  git tag, not a semver constraint, since `version:` for git
+  dependencies is a git ref).
+
 ## [0.3.3]
 
 ESP-IDF Component Manager support. midi2 can now be pulled into an

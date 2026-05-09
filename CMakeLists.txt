@@ -31,15 +31,26 @@ cmake_minimum_required(VERSION 3.14)
 # route to idf_component_register and skip the rest, leaving the
 # native CMake build (project / install / export) untouched for every
 # other consumer.
+#
+# The Component Manager fetches the dependency as a tarball that does
+# NOT include dist/ (filtered as a build-output convention), so the
+# ESP-IDF gate consumes the modular src/midi2_*.c sources directly.
+# midi2_msg.h, midi2.h and midi2_ci_msg.h are header-only and need no
+# entry in SRCS.
 if(ESP_PLATFORM)
     idf_component_register(
-        SRCS        dist/midi2.c
-        INCLUDE_DIRS dist
+        SRCS
+            src/midi2_proc.c
+            src/midi2_dispatch.c
+            src/midi2_conv.c
+            src/midi2_ci.c
+            src/midi2_ci_dispatch.c
+        INCLUDE_DIRS src
     )
     return()
 endif()
 
-project(midi2 VERSION 0.3.3 LANGUAGES C)
+project(midi2 VERSION 0.3.4 LANGUAGES C)
 
 # GNUInstallDirs has to come before target_include_directories so that
 # $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}> evaluates to the real

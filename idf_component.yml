@@ -7,7 +7,7 @@
 ##   dependencies:
 ##     midi2:
 ##       git: https://github.com/sauloverissimo/midi2.git
-##       version: ">=0.3.3"
+##       version: "v0.3.4"
 ##
 ## The Component Manager clones midi2 into managed_components/, and
 ## ESP-IDF picks it up as a component because the top-level CMakeLists
@@ -15,7 +15,7 @@
 ## the file.
 
 description: "Portable MIDI 2.0 UMP library, C99 with zero dependencies and zero allocation."
-version: "0.3.3"
+version: "0.3.4"
 url: "https://github.com/sauloverissimo/midi2"
 documentation: "https://github.com/sauloverissimo/midi2#readme"
 issues: "https://github.com/sauloverissimo/midi2/issues"
