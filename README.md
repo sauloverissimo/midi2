@@ -21,7 +21,9 @@ The library implements 100% of the UMP format (M2-104-UM v1.1.2) and 100% of MID
 
 ## Wrappers
 
-midi2 is the C99 core. Higher-level wrappers vendor it and add language-specific ergonomics for each platform target.
+midi2 is the C99 core. Higher-level wrappers depend on it and add language-specific ergonomics for each platform target.
+
+The first published wrapper is [**midi2cpp**](https://github.com/sauloverissimo/midi2cpp): a C++17 Arduino-friendly wrapper with `m2device`, `m2host`, `m2bridge` and `m2ci` classes, distributed through the Arduino Library Manager, the PlatformIO Registry and the [ESP Component Registry](https://components.espressif.com/components/sauloverissimo/midi2cpp). It ships **20 platform recipes** under [`midi2cpp/examples/`](https://github.com/sauloverissimo/midi2cpp/tree/main/examples), one per role (device, host, bridge), covering RP2040, RP2350, ESP32-S3, ESP32-P4, ESP32-C6, nRF52840 and SAMD21 boards via Pico SDK / TinyUSB native CMake / ESP-IDF / PlatformIO build paths.
 
 ## Contents
 
