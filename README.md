@@ -23,8 +23,6 @@ The library implements 100% of the UMP format (M2-104-UM v1.1.2) and 100% of MID
 
 midi2 is the C99 core. Higher-level wrappers vendor it and add language-specific ergonomics for each platform target.
 
-Many paths are possible: **C++ for Embedded Systems** (in development), platform-specific bindings (e.g. **Teensy**, **Daisy**), and language bindings such as **Python**, **Rust**, **JavaScript**, **MicroPython**.
-
 ## Contents
 
 - [midi2](#midi2)
@@ -177,7 +175,7 @@ Two example sketches under `examples/` (`BasicUsage`, `CIDiscovery`) appear in t
 `platformio.ini`:
 
 ```ini
-lib_deps = sauloverissimo/midi2 @ ^0.3.0
+lib_deps = sauloverissimo/midi2 @ ^0.3.1
 ```
 
 Library Manager pulls the same `src/` modular layout via `library.json` (`srcDir = src`).
@@ -217,14 +215,9 @@ midi2_msg.h          Always needed. Header-only.
 
 ## Architecture
 
-midi2 is layer 2 in a 4-layer MIDI 2.0 stack:
+midi2: infrastructure layer 2 of a 4-layer MIDI 2.0 stack:
 
-```
-Layer 1: Transport     TinyUSB / native USB / BLE / network / serial / PIO-USB
-Layer 2: midi2         the core, portable C99 infrastructure
-Layer 3: Platform      Arduino, ESP-IDF, Zephyr wrappers
-Layer 4: Application   user sketch, synth, controller, bridge
-```
+![midi2](architecture.png)
 
 What each layer owns:
 
