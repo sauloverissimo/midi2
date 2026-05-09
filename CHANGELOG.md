@@ -1,5 +1,67 @@
 # Changelog
 
+## [0.3.2] - 2026-05-09
+
+CMake target + downstream package consumption. midi2 now ships an
+official CMake build alongside the existing Makefile, so consumers can
+pick the idiom that fits: `find_package(midi2 0.3.2 CONFIG)` for system
+installs / vcpkg / conan, `FetchContent_MakeAvailable` on the GitHub
+repo, or `add_subdirectory` of a vendored copy.
+
+### Added
+
+- **`CMakeLists.txt`** at repo root: builds `dist/midi2.c` into
+  `libmidi2.a`, exposes the `midi2::midi2` alias target, declares
+  `c_std_99` as a public compile feature, mirrors the Makefile's
+  `-Wall -Wextra -Wpedantic` warnings on GCC/Clang/AppleClang.
+- **install + export ruleset**: `install(EXPORT midi2-targets ...)`
+  generates `midi2-config.cmake` and `midi2-config-version.cmake`
+  (SameMajorVersion compatibility) so downstream
+  `find_package(midi2 0.3.2 CONFIG)` succeeds. Install rules are gated
+  by `PROJECT_IS_TOP_LEVEL` so subprojects pulling midi2 via
+  FetchContent do not pollute their parent's install set.
+- **`tests/cmake-consumer/`**: real downstream smoke
+  (`CMakeLists.txt` + `main.c`) that the CI compiles, links against
+  the imported `midi2::midi2` target, and runs.
+- **CI `cmake-build` matrix** on `ubuntu-latest`, `macos-latest`,
+  `windows-latest`. Configure -> build -> install -> downstream
+  `find_package(midi2)` consumer compiled and run.
+- **CI `cmake-fetchcontent`**: synthetic parent project pulls midi2
+  via `FetchContent_Declare` and links `midi2::midi2` without an
+  install step.
+- **CI `cmake-build-sanitizers`**: ASan + UBSan parity for the
+  amalgam build path.
+- `architecture.png` referenced by the README.
+
+### Fixed
+
+- Makefile amalgam test isolated from `-I src` so the new
+  `src/midi2.h` umbrella (added in v0.3.1) does not shadow
+  `dist/midi2.h`. Without this fix the amalgam test compiled but
+  failed to link.
+
+## [0.3.1] - 2026-05-07
+
+Arduino library compliance and Library Manager registration. No
+runtime changes; same UMP and MIDI-CI surface as v0.3.0.
+
+### Added
+
+- **`library.properties`** for the Arduino Library Manager.
+- **`src/midi2.h` umbrella** so Arduino IDE sketches can
+  `#include <midi2.h>` and pick up every modular module in `src/`.
+- **`examples/BasicUsage/BasicUsage.ino`** and
+  **`examples/CIDiscovery/CIDiscovery.ino`**: two reference sketches
+  the Arduino IDE surfaces under File > Examples after install.
+- README install sections for Arduino IDE / arduino-cli and
+  PlatformIO.
+
+### Registered
+
+- midi2 published on the Arduino Library Manager via PR
+  `arduino/library-registry#8284` (merged 2026-05-07). Available in
+  the Library Manager: search `midi2`.
+
 ## [0.3.0] - 2026-04-24
 
 Property Exchange Subscribe/Notify state machine, UMP Stream and
