@@ -24,7 +24,22 @@
 #   target_link_libraries(my_target PRIVATE midi2::midi2)
 
 cmake_minimum_required(VERSION 3.14)
-project(midi2 VERSION 0.3.2 LANGUAGES C)
+
+# ESP-IDF Component Manager path. When IDF resolves this directory as
+# a component (clone under managed_components/midi2 + idf_component.yml
+# at the root), it sets ESP_PLATFORM before processing this file. We
+# route to idf_component_register and skip the rest, leaving the
+# native CMake build (project / install / export) untouched for every
+# other consumer.
+if(ESP_PLATFORM)
+    idf_component_register(
+        SRCS        dist/midi2.c
+        INCLUDE_DIRS dist
+    )
+    return()
+endif()
+
+project(midi2 VERSION 0.3.3 LANGUAGES C)
 
 # GNUInstallDirs has to come before target_include_directories so that
 # $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}> evaluates to the real

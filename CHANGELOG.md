@@ -1,6 +1,36 @@
 # Changelog
 
-## [0.3.2] - 2026-05-09
+## [0.3.3]
+
+ESP-IDF Component Manager support. midi2 can now be pulled into an
+ESP-IDF project tree directly via the Component Manager:
+
+```yaml
+# main/idf_component.yml
+dependencies:
+  midi2:
+    git: https://github.com/sauloverissimo/midi2.git
+    version: ">=0.3.3"
+```
+
+The Component Manager clones midi2 under `managed_components/`,
+ESP-IDF picks the directory up as a regular component (the top-level
+`CMakeLists.txt` detects `ESP_PLATFORM` and routes to
+`idf_component_register`). Native CMake consumers (Pico SDK, vcpkg,
+FetchContent, system installs, etc.) are unaffected: the `if
+(ESP_PLATFORM) ... return()` guard sits before `project()` so every
+non-IDF path runs unchanged.
+
+### Added
+
+- **`idf_component.yml`** at the repo root with the component
+  manifest (description, version, license, maintainers, tags).
+- **ESP-IDF gate** at the top of `CMakeLists.txt` that calls
+  `idf_component_register(SRCS dist/midi2.c INCLUDE_DIRS dist)`
+  when `ESP_PLATFORM` is defined and returns before the native CMake
+  build runs.
+
+## [0.3.2]
 
 CMake target + downstream package consumption. midi2 now ships an
 official CMake build alongside the existing Makefile, so consumers can
@@ -40,7 +70,7 @@ repo, or `add_subdirectory` of a vendored copy.
   `dist/midi2.h`. Without this fix the amalgam test compiled but
   failed to link.
 
-## [0.3.1] - 2026-05-07
+## [0.3.1]
 
 Arduino library compliance and Library Manager registration. No
 runtime changes; same UMP and MIDI-CI surface as v0.3.0.
@@ -62,7 +92,7 @@ runtime changes; same UMP and MIDI-CI surface as v0.3.0.
   `arduino/library-registry#8284` (merged 2026-05-07). Available in
   the Library Manager: search `midi2`.
 
-## [0.3.0] - 2026-04-24
+## [0.3.0]
 
 Property Exchange Subscribe/Notify state machine, UMP Stream and
 SysEx8 fragmenters, registry symmetry, MT 0x4 to MT 0x2 downgrade,
@@ -169,7 +199,7 @@ downgrade, USB cable event helper, registry symmetry, System
 message wrappers). gcc -std=c99 -Wall -Wextra -Wpedantic clean,
 ASan and UBSan clean.
 
-## [0.2.4] - 2026-04-21
+## [0.2.4]
 
 Convenience responder completeness. Every spec-required behavior from
 M2-101-UM Appendix E is now handled inside `midi2_ci_process_sysex()`.
@@ -218,7 +248,7 @@ zero breaking change**: new state fields zero-initialise via
   only exposed two of the three categories it could service. Closes
   an Initiator-side negotiation gap.
 
-## [0.2.3] - 2026-04-06
+## [0.2.3]
 
 ### Added
 
@@ -234,7 +264,7 @@ zero breaking change**: new state fields zero-initialise via
 - Source headers carry spec references (M2-101-UM, M2-104-UM) and
   metadata across every module for traceability.
 
-## [0.2.2] - 2026-04-03
+## [0.2.2]
 
 ### Added
 - **midi2.h**: Single-header amalgamation of all 7 modules (stb-style). One file,
@@ -265,7 +295,7 @@ zero breaking change**: new state fields zero-initialise via
 - Documentation updated: single-header integration as recommended path, examples
   use `#include "midi2.h"`, hardware validation with real board names and transports.
 
-## [0.2.0] - 2026-03-30
+## [0.2.0]
 
 ### Added
 - **midi2_dispatch**: New module with 42 granular callbacks for typed UMP message dispatch.
@@ -299,7 +329,7 @@ zero breaking change**: new state fields zero-initialise via
 - SysEx7/SysEx8 dispatch delivers status values matching the MIDI2_SYSEX7_*/MIDI2_SYSEX8_*
   enum values (0x00/0x10/0x20/0x30) instead of raw nibbles.
 
-## [0.1.0] - 2026-03-28
+## [0.1.0]
 
 Initial release.
 
