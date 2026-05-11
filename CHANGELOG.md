@@ -2,11 +2,8 @@
 
 ## [0.4.0]
 
-Spec-completeness pass covering UMP Stream + the highest-impact gaps in
-the Channel Voice (MT 0x4), Utility (MT 0x0), and Flex Data (MT 0xD)
-message types against M2-104-UM v1.1.2. Eight builders, two dispatch
-trampolines, and one callback typedef shift. Pre-1.0 minor bump per
-SemVer to signal the breaking surface.
+Breaking signature changes across UMP Stream, Channel Voice,
+Utility, and Flex Data builders.
 
 ### Breaking — UMP Stream (MT 0xF)
 

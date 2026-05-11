@@ -41,6 +41,9 @@ The first published wrapper is [**midi2cpp**](https://github.com/sauloverissimo/
   - [Continuous integration](#continuous-integration)
   - [Build and test locally](#build-and-test-locally)
   - [Integration](#integration)
+    - [Arduino IDE / arduino-cli](#arduino-ide--arduino-cli)
+    - [PlatformIO](#platformio)
+    - [ESP-IDF (Component Manager)](#esp-idf-component-manager)
     - [Single-header (stb-style)](#single-header-stb-style)
     - [Manual vendor (amalgam pair)](#manual-vendor-amalgam-pair)
     - [Module by module](#module-by-module)
@@ -67,7 +70,9 @@ The first published wrapper is [**midi2cpp**](https://github.com/sauloverissimo/
 #include "midi2.h"
 
 uint32_t w[2];
-midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0);
+midi2_msg_note_on(w, /*group*/ 0, /*channel*/ 0,
+                  /*note*/ 60, /*velocity*/ 0xC000,
+                  /*attr_type*/ 0, /*attr_data*/ 0);
 
 uint8_t  note = midi2_msg_get_note(w);
 uint16_t vel  = midi2_msg_get_velocity(w);
@@ -136,7 +141,7 @@ if (rc == MIDI2_CI_ERR_FULL) {
 
 ## Continuous integration
 
-321 tests across 8 suites compile clean with `-Wall -Wextra -Wpedantic`. CI runs 11 jobs on every push:
+328 assertions across 8 suites compile clean with `-Wall -Wextra -Wpedantic`. CI runs 11 jobs on every push:
 
 | Target | Type |
 |--------|------|
@@ -178,10 +183,22 @@ Two example sketches under `examples/` (`BasicUsage`, `CIDiscovery`) appear in t
 `platformio.ini`:
 
 ```ini
-lib_deps = sauloverissimo/midi2 @ ^0.3.1
+lib_deps = sauloverissimo/midi2 @ ^0.4.0
 ```
 
 Library Manager pulls the same `src/` modular layout via `library.json` (`srcDir = src`).
+
+### ESP-IDF (Component Manager)
+
+Published on the [ESP Component Registry](https://components.espressif.com/components/sauloverissimo/midi2). Add to your project's `main/idf_component.yml`:
+
+```yaml
+dependencies:
+  idf: ">=5.0"
+  sauloverissimo/midi2: ">=0.4.0"
+```
+
+`idf.py reconfigure` drops the component into `managed_components/midi2/`. The `if(ESP_PLATFORM)` gate in `CMakeLists.txt` routes ESP-IDF builds to `idf_component_register` with the modular `src/midi2_*.c` set, so the same source serves IDF, Arduino, PlatformIO, and native CMake without forks.
 
 ### Single-header (stb-style)
 
