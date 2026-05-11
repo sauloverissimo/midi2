@@ -2,14 +2,13 @@
 
 ## [0.4.0]
 
-Spec-completeness pass on the four UMP Stream message builders that
-were emitting hardcoded zeros where M2-104-UM defines real fields. Hosts
-(Windows MIDI Services, macOS Audio MIDI Setup) read those fields, so
-the gap was visible end-to-end on the wire. Breaking API change across
-two builders + one callback typedef + one trampoline. Pre-1.0 minor
-bump per SemVer.
+Spec-completeness pass covering UMP Stream + the highest-impact gaps in
+the Channel Voice (MT 0x4), Utility (MT 0x0), and Flex Data (MT 0xD)
+message types against M2-104-UM v1.1.2. Eight builders, two dispatch
+trampolines, and one callback typedef shift. Pre-1.0 minor bump per
+SemVer to signal the breaking surface.
 
-### Breaking
+### Breaking — UMP Stream (MT 0xF)
 
 - **`midi2_msg_stream_config_request(w, protocol)` →
   `midi2_msg_stream_config_request(w, protocol, rx_jr_enable, tx_jr_enable)`**.
@@ -45,6 +44,54 @@ bump per SemVer.
 - **`midi2_dispatch.c on_fb_info` trampoline** decodes `ui_hint` from
   bits [5:4] and forwards it through the callback.
 
+### Breaking — Utility (MT 0x0)
+
+- **`midi2_msg_jr_clock(group, timestamp)` →
+  `midi2_msg_jr_clock(timestamp)`** and **`midi2_msg_jr_timestamp(group,
+  timestamp)` → `midi2_msg_jr_timestamp(timestamp)`**. Per M2-104-UM
+  v1.1.2 section 1.4 the former Group field on Utility messages is now
+  Reserved (must be zero). Removing the parameter prevents silently
+  writing a non-zero Group on the wire from existing recipes.
+
+- **New: `midi2_msg_noop(void)`** builder for the NOOP Utility message
+  (status 0x0, all-zero payload). Trivial, but completes coverage of
+  the five Utility statuses.
+
+- **`midi2_dp_jr_clock_cb` and `midi2_dp_jr_timestamp_cb` typedefs**
+  drop the leading `uint8_t group` parameter. Symmetric with the
+  builder change: the wire bits are reserved, the dispatcher no
+  longer parses them, and the callbacks no longer surface them.
+  Callers that wired `on_jr_clock` / `on_jr_timestamp` directly must
+  update the handler signature to `(uint16_t timestamp, void *ctx)`.
+
+### Breaking — MIDI 2.0 Channel Voice (MT 0x4)
+
+- **`midi2_msg_note_on(w, group, channel, note, velocity, attribute)` →
+  `midi2_msg_note_on(w, group, channel, note, velocity, attr_type,
+  attr_data)`** (and same for `midi2_msg_note_off`). The old single
+  `uint16_t attribute` parameter folded the 8-bit `Attribute Type` and
+  16-bit `Attribute Data` into a 16-bit slot, truncating Pitch7_9 and
+  other 16-bit-wide attribute payloads to 8 bits. The dispatcher
+  callback already exposed them as `(uint8_t attr_type, uint16_t
+  attr_data)`, so the builder now matches.
+
+- **`midi2_msg_program(...)` Bank Valid bit relocates** from bit 31 of
+  word 1 (where it was overwriting byte 5's reserved MSB) to bit 0 of
+  word 0's byte 4 (the spec's "option flags" lane per M2-104-UM section
+  7.4.9). API signature unchanged; on-the-wire bit position fixed. The
+  dispatch parser was updated symmetrically. Cross-checked against
+  AM_MIDI2.0Lib `mt4ProgramChange`.
+
+### Breaking — Flex Data (MT 0xD)
+
+- **`midi2_msg_time_sig(w, group, numerator, denominator)` →
+  `midi2_msg_time_sig(w, group, numerator, denominator,
+  num_32nd_notes)`**. Per M2-104-UM section 7.5.4 the Set Time
+  Signature message carries three numeric fields, not two: numerator,
+  denominator (negative power of 2), and the SMF-compat "Number of 1/32
+  Notes per 24 MIDI Clocks". The builder was emitting only the first
+  two and leaving byte 3 of word 1 at zero. Default value per SMF1: 8.
+
 ### Tests
 
 - `test_stream_config_request_jr_bits` — asserts JR bits in Stream
@@ -58,10 +105,17 @@ bump per SemVer.
 - `test_dp_config_request_jr_bits`, `test_dp_config_notify_jr_bits`
   — round-trip builder→dispatcher preserves both JR flags.
 - `test_dp_fb_info` — re-asserts the round-trip with `ui_hint=0x03`.
+- `test_jr_clock` / `test_jr_timestamp` — asserts the Group field is
+  reserved/zero per the Groupless rule.
+- `test_noop` — covers the new builder.
+- `test_program_change_bank` / `_no_bank` — assert that the Bank Valid
+  bit lives in byte 4 option flags and byte 5 MSB stays reserved.
+- `test_dp_note_on` adds `attr_type` / `attr_data` assertions to lock
+  in 16-bit attribute_data round-tripping.
+- `test_time_sig` asserts the `num_32nd_notes` SMF-compat byte.
 
-Total: 327 assertions across the 8 host test binaries, ASan + UBSan
-clean. No surface other than these three builders + the FB Info
-dispatch shifted.
+Total: 328 assertions across the 8 host test binaries, ASan + UBSan
+clean.
 
 ### Migration
 
@@ -79,8 +133,27 @@ Recipes whose device actively emits JR Timestamps (typical when
 `enableJRHeartbeat()` is on) should pass `tx_jr_enable=true`. Recipes
 with a known FB role should declare `ui_hint` (`0x02` for senders,
 `0x03` for bidirectional devices, `0x01` for pure listeners). Recipes
-that previously passed `sysex8=true` now pass
-`max_sysex8_streams=1`.
+that previously passed `sysex8=true` now pass `max_sysex8_streams=1`.
+
+For Utility / Channel Voice / Flex Data callers:
+
+```c
+/* old */ midi2_msg_jr_clock(group, ts);        /* new */ midi2_msg_jr_clock(ts);
+/* old */ midi2_msg_jr_timestamp(group, ts);    /* new */ midi2_msg_jr_timestamp(ts);
+/* old */ midi2_msg_note_on(w, g, ch, n, v,     /* new */ midi2_msg_note_on(w, g, ch, n, v,
+                            (type<<8)|data8);                            type, data16);
+/* old */ midi2_msg_time_sig(w, g, num, denom); /* new */ midi2_msg_time_sig(w, g, num, denom, 8);
+```
+
+Program Change keeps the same C signature; only the on-the-wire bit
+moves. No recipe code change required there.
+
+The repo's own consumer tests, AVR heredoc, and `examples/` C +
+Arduino sketches were updated in the same release so `find_package`
+consumers, the AVR cross-compile job, and the on-tree learning
+material all build out of the box on v0.4.0. Recipes outside this
+repo (midi2cpp, libDaisy fork, Teensy core fork) follow in their
+own bumps.
 
 ## [0.3.4]
 

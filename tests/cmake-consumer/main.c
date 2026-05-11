@@ -13,7 +13,8 @@
 int main(void) {
     uint32_t w[2];
     midi2_msg_note_on(w, /*group*/ 0, /*channel*/ 0,
-                      /*note*/ 60, /*velocity16*/ 0xC000, /*attr*/ 0);
+                      /*note*/ 60, /*velocity16*/ 0xC000,
+                      /*attr_type*/ 0, /*attr_data*/ 0);
 
     if ((w[0] & 0xF0000000u) != 0x40000000u) {
         fprintf(stderr, "midi2_consumer: MT bits wrong (0x%08X)\n", w[0]);

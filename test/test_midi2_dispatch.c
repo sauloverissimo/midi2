@@ -78,8 +78,8 @@ static void reset_ctx(void) { memset(&ctx, 0, sizeof(ctx)); }
 
 /* Utility */
 static void cb_noop(void *c) { (void)c; ctx.called = 1; }
-static void cb_jr_clock(uint8_t g, uint16_t ts, void *c) { (void)c; ctx.called = 1; ctx.group = g; ctx.timestamp = ts; }
-static void cb_jr_timestamp(uint8_t g, uint16_t ts, void *c) { (void)c; ctx.called = 1; ctx.group = g; ctx.timestamp = ts; }
+static void cb_jr_clock(uint16_t ts, void *c) { (void)c; ctx.called = 1; ctx.timestamp = ts; }
+static void cb_jr_timestamp(uint16_t ts, void *c) { (void)c; ctx.called = 1; ctx.timestamp = ts; }
 static void cb_dctpq(uint16_t tpq, void *c) { (void)c; ctx.called = 1; ctx.dctpq = tpq; }
 static void cb_dc(uint32_t ticks, void *c) { (void)c; ctx.called = 1; ctx.dc_ticks = ticks; }
 
@@ -317,13 +317,12 @@ static midi2_dispatch make_dp(void) {
  * Tests: Utility (MT 0x0)
  *--------------------------------------------------------------------*/
 void test_dp_jr_clock(void) {
-  TEST("dispatch: JR Clock group=1 ts=5000");
+  TEST("dispatch: JR Clock ts=5000 (Groupless callback per v1.1.2)");
   midi2_dispatch dp = make_dp();
   reset_ctx();
-  uint32_t w = midi2_msg_jr_clock(1, 5000);
+  uint32_t w = midi2_msg_jr_clock(5000);
   midi2_dispatch_feed(&w, 1, &dp);
   CHECK(ctx.called, "callback fired");
-  CHECK(ctx.group == 1, "group");
   CHECK(ctx.timestamp == 5000, "timestamp");
   PASS();
 }
@@ -401,13 +400,15 @@ void test_dp_note_on(void) {
   midi2_dispatch dp = make_dp();
   reset_ctx();
   uint32_t w[2];
-  midi2_msg_note_on(w, 2, 9, 36, 0xC000, (3 << 8) | 0x34);
+  midi2_msg_note_on(w, 2, 9, 36, 0xC000, /*attr_type*/ 3, /*attr_data*/ 0x1234);
   midi2_dispatch_feed(w, 2, &dp);
   CHECK(ctx.called, "callback fired");
   CHECK(ctx.group == 2, "group");
   CHECK(ctx.channel == 9, "channel");
   CHECK(ctx.note == 36, "note");
   CHECK(ctx.velocity == 0xC000, "velocity");
+  CHECK(ctx.attr_type == 3, "attr_type=3 (Pitch7_9)");
+  CHECK(ctx.attr_data == 0x1234, "attr_data round-trips full 16 bits");
   PASS();
 }
 
@@ -582,7 +583,7 @@ void test_dp_time_sig(void) {
   midi2_dispatch dp = make_dp();
   reset_ctx();
   uint32_t w[4];
-  midi2_msg_time_sig(w, 0, 6, 3);
+  midi2_msg_time_sig(w, 0, 6, 3, 8);
   midi2_dispatch_feed(w, 4, &dp);
   CHECK(ctx.called, "callback fired");
   CHECK(ctx.num == 6, "numerator");
@@ -788,13 +789,12 @@ void test_dp_noop(void) {
 }
 
 void test_dp_jr_timestamp(void) {
-  TEST("dispatch: JR Timestamp group=3 ts=0xFFFF");
+  TEST("dispatch: JR Timestamp ts=0xFFFF (Groupless callback per v1.1.2)");
   midi2_dispatch dp = make_dp();
   reset_ctx();
-  uint32_t w = midi2_msg_jr_timestamp(3, 0xFFFF);
+  uint32_t w = midi2_msg_jr_timestamp(0xFFFF);
   midi2_dispatch_feed(&w, 1, &dp);
   CHECK(ctx.called, "callback fired");
-  CHECK(ctx.group == 3, "group");
   CHECK(ctx.timestamp == 0xFFFF, "timestamp");
   PASS();
 }
@@ -869,7 +869,7 @@ void test_dp_note_off(void) {
   midi2_dispatch dp = make_dp();
   reset_ctx();
   uint32_t w[2];
-  midi2_msg_note_off(w, 0, 0, 60, 0x8000, 0);
+  midi2_msg_note_off(w, 0, 0, 60, 0x8000, 0, 0);
   midi2_dispatch_feed(w, 2, &dp);
   CHECK(ctx.called, "callback fired");
   CHECK(ctx.note == 60, "note");
@@ -1107,7 +1107,7 @@ void test_dp_null_callback(void) {
   midi2_dispatch dp;
   midi2_dispatch_init(&dp); /* all NULL */
   uint32_t w[4];
-  midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0);
+  midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0, 0);
   midi2_dispatch_feed(w, 2, &dp); /* should not crash */
   midi2_msg_tempo(w, 0, 5000000);
   midi2_dispatch_feed(w, 4, &dp); /* should not crash */
@@ -1141,7 +1141,7 @@ void test_dp_proc_compat(void) {
    * midi2_dispatch_feed is: void (const uint32_t*, uint8_t, void*)
    * Should be assignable. Test by calling directly. */
   uint32_t w[2];
-  midi2_msg_note_on(w, 0, 0, 60, 0xFFFF, 0);
+  midi2_msg_note_on(w, 0, 0, 60, 0xFFFF, 0, 0);
   midi2_dispatch_feed(w, 2, &dp);
   CHECK(ctx.called, "dispatched via feed");
   CHECK(ctx.note == 60, "note=60");

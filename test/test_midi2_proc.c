@@ -93,7 +93,7 @@ void test_feed_note_on_delivered(void) {
   reset_state();
 
   uint32_t w[2];
-  midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0);
+  midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0, 0);
   midi2_proc_feed(&s, w, 2);
 
   CHECK(ump_cb_count == 1, "callback called once");
@@ -111,7 +111,7 @@ void test_feed_group_filtered(void) {
   reset_state();
 
   uint32_t w[2];
-  midi2_msg_note_on(w, 1, 0, 60, 0xC000, 0);  /* group 1 */
+  midi2_msg_note_on(w, 1, 0, 60, 0xC000, 0, 0);  /* group 1 */
   midi2_proc_feed(&s, w, 2);
 
   CHECK(ump_cb_count == 0, "callback NOT called");
@@ -127,7 +127,7 @@ void test_feed_group_0_passes(void) {
   reset_state();
 
   uint32_t w[2];
-  midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0);  /* group 0 */
+  midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0, 0);  /* group 0 */
   midi2_proc_feed(&s, w, 2);
 
   CHECK(ump_cb_count == 1, "callback called");
@@ -248,7 +248,7 @@ void test_remap_identity(void) {
   midi2_proc_init(&s, proc_sysex_buf, sizeof(proc_sysex_buf), proc_sysex8_buf, sizeof(proc_sysex8_buf));
 
   uint32_t w[2];
-  midi2_msg_note_on(w, 3, 0, 60, 0xC000, 0);
+  midi2_msg_note_on(w, 3, 0, 60, 0xC000, 0, 0);
   midi2_proc_remap_group(&s, w);
   CHECK(midi2_msg_get_group(w) == 3, "group unchanged");
   PASS();
@@ -261,7 +261,7 @@ void test_remap_changes_group(void) {
   s.group_map[0] = 5;
 
   uint32_t w[2];
-  midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0);
+  midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0, 0);
   midi2_proc_remap_group(&s, w);
   CHECK(midi2_msg_get_group(w) == 5, "group remapped to 5");
   PASS();

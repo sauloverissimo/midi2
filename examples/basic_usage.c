@@ -71,7 +71,7 @@ int main(void) {
 
   uint32_t w[4];
 
-  midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0);
+  midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0, 0);
   printf("Note On C4:  %08X %08X\n", (unsigned)w[0], (unsigned)w[1]);
 
   midi2_msg_cc(w, 0, 0, 74, 0x80000000);
@@ -103,13 +103,13 @@ int main(void) {
   dp.on_tempo = on_tempo;
 
   /* Feed messages directly to dispatch */
-  midi2_msg_note_on(w, 0, 0, 60, 0xFFFF, 0);
+  midi2_msg_note_on(w, 0, 0, 60, 0xFFFF, 0, 0);
   midi2_dispatch_feed(w, 2, &dp);
 
   midi2_msg_cc(w, 0, 0, 1, 0x40000000);
   midi2_dispatch_feed(w, 2, &dp);
 
-  midi2_msg_note_off(w, 0, 0, 60, 0, 0);
+  midi2_msg_note_off(w, 0, 0, 60, 0, 0, 0);
   midi2_dispatch_feed(w, 2, &dp);
 
   midi2_msg_tempo(w, 0, 50000000);
@@ -130,7 +130,7 @@ int main(void) {
   proc.on_sysex7 = on_sysex_complete;
 
   /* Feed through proc (applies group filtering, SysEx reassembly) */
-  midi2_msg_note_on(w, 0, 5, 36, 0x8000, 0);
+  midi2_msg_note_on(w, 0, 5, 36, 0x8000, 0, 0);
   midi2_proc_feed(&proc, w, 2);
 
   /* --- 5. MIDI-CI auto-response --- */

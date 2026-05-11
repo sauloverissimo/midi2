@@ -83,7 +83,7 @@ void test_word_count(void) {
 void test_note_on(void) {
   TEST("Note On: group=0, ch=0, note=60, vel=0xC000");
   uint32_t w[2];
-  midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0);
+  midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0, 0);
   CHECK(midi2_msg_get_mt(w) == 0x04, "MT");
   CHECK(midi2_msg_get_group(w) == 0, "group");
   CHECK((midi2_msg_get_status(w) & 0xF0) == 0x90, "status");
@@ -96,7 +96,7 @@ void test_note_on(void) {
 void test_note_on_group_channel(void) {
   TEST("Note On: group=3, ch=9, note=36, vel=0xFFFF");
   uint32_t w[2];
-  midi2_msg_note_on(w, 3, 9, 36, 0xFFFF, 0);
+  midi2_msg_note_on(w, 3, 9, 36, 0xFFFF, 0, 0);
   CHECK(midi2_msg_get_group(w) == 3, "group");
   CHECK(midi2_msg_get_channel(w) == 9, "channel");
   CHECK(midi2_msg_get_note(w) == 36, "note");
@@ -107,7 +107,7 @@ void test_note_on_group_channel(void) {
 void test_note_off(void) {
   TEST("Note Off: group=0, ch=0, note=60");
   uint32_t w[2];
-  midi2_msg_note_off(w, 0, 0, 60, 0, 0);
+  midi2_msg_note_off(w, 0, 0, 60, 0, 0, 0);
   CHECK((midi2_msg_get_status(w) & 0xF0) == 0x80, "status");
   CHECK(midi2_msg_get_note(w) == 60, "note");
   PASS();
@@ -125,11 +125,13 @@ void test_cc(void) {
 }
 
 void test_program_change_bank(void) {
-  TEST("Program Change: prog=5, bank=1/2");
+  TEST("Program Change: prog=5, bank=1/2, bank_valid in byte 4 LSB");
   uint32_t w[2];
   midi2_msg_program(w, 0, 0, 5, true, 1, 2);
   CHECK((midi2_msg_get_status(w) & 0xF0) == 0xC0, "status");
-  CHECK(w[1] & (1u << 31), "bank valid");
+  /* bank_valid (B) is byte 4 option flags bit 0, NOT byte 5 MSB. */
+  CHECK((w[0] & 0x01) != 0, "bank valid bit set in byte 4 option flags");
+  CHECK((w[1] & (1u << 31)) == 0, "byte 5 MSB is reserved (zero), not bank_valid");
   CHECK(((w[1] >> 24) & 0x7F) == 5, "program");
   CHECK(((w[1] >> 8) & 0x7F) == 1, "bankMSB");
   CHECK((w[1] & 0x7F) == 2, "bankLSB");
@@ -137,10 +139,11 @@ void test_program_change_bank(void) {
 }
 
 void test_program_change_no_bank(void) {
-  TEST("Program Change: prog=10, no bank");
+  TEST("Program Change: prog=10, no bank, byte 4 LSB clear");
   uint32_t w[2];
   midi2_msg_program(w, 0, 0, 10, false, 0, 0);
-  CHECK(!(w[1] & (1u << 31)), "bank valid off");
+  CHECK((w[0] & 0x01) == 0, "bank valid bit clear in byte 4");
+  CHECK((w[1] & (1u << 31)) == 0, "byte 5 MSB reserved/zero");
   CHECK(((w[1] >> 24) & 0x7F) == 10, "program");
   PASS();
 }
@@ -297,11 +300,12 @@ void test_tempo(void) {
 }
 
 void test_time_sig(void) {
-  TEST("Flex: Time Signature 6/8");
+  TEST("Flex: Time Signature 6/8 with 8 thirty-seconds per 24 MIDI clocks");
   uint32_t w[4];
-  midi2_msg_time_sig(w, 0, 6, 3);
+  midi2_msg_time_sig(w, 0, 6, 3, 8);
   CHECK(((w[1] >> 24) & 0xFF) == 6, "numerator");
   CHECK(((w[1] >> 16) & 0xFF) == 3, "denominator");
+  CHECK(((w[1] >> 8) & 0xFF) == 8, "num_32nd_notes (SMF compat field)");
   PASS();
 }
 
@@ -356,21 +360,31 @@ void test_sysex7_6bytes(void) {
 /* --- JR Timestamps --- */
 
 void test_jr_clock(void) {
-  TEST("JR Clock: group=0, timestamp=1000");
-  uint32_t w = midi2_msg_jr_clock(0, 1000);
+  TEST("JR Clock: Groupless, timestamp=1000");
+  uint32_t w = midi2_msg_jr_clock(1000);
   CHECK(((w >> 28) & 0x0F) == 0x00, "MT=Utility");
-  CHECK(((w >> 24) & 0x0F) == 0, "group=0");
+  CHECK(((w >> 24) & 0x0F) == 0, "group field reserved/zero (spec v1.1.2 Groupless)");
   CHECK(((w >> 20) & 0x0F) == 0x01, "status=JR Clock");
   CHECK((w & 0xFFFF) == 1000, "timestamp=1000");
   PASS();
 }
 
 void test_jr_timestamp(void) {
-  TEST("JR Timestamp: group=2, timestamp=0xFFFF");
-  uint32_t w = midi2_msg_jr_timestamp(2, 0xFFFF);
-  CHECK(((w >> 24) & 0x0F) == 2, "group=2");
+  TEST("JR Timestamp: Groupless, timestamp=0xFFFF");
+  uint32_t w = midi2_msg_jr_timestamp(0xFFFF);
+  CHECK(((w >> 24) & 0x0F) == 0, "group field reserved/zero (spec v1.1.2 Groupless)");
   CHECK(((w >> 20) & 0x0F) == 0x02, "status=JR Timestamp");
   CHECK((w & 0xFFFF) == 0xFFFF, "timestamp=max");
+  PASS();
+}
+
+void test_noop(void) {
+  TEST("NOOP: all-zero payload, status 0x0");
+  uint32_t w = midi2_msg_noop();
+  CHECK(((w >> 28) & 0x0F) == 0x00, "MT=Utility");
+  CHECK(((w >> 24) & 0x0F) == 0, "group field reserved/zero");
+  CHECK(((w >> 20) & 0x0F) == 0x00, "status=NOOP (0x0)");
+  CHECK((w & 0x000FFFFF) == 0, "data 20 bits all zero");
   PASS();
 }
 
@@ -921,7 +935,7 @@ void test_mt2_to_mt4_roundtrip(void) {
 void test_mt2_to_mt4_wrong_mt(void) {
   TEST("mt2->mt4: wrong MT returns false");
   uint32_t w[2];
-  midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0); /* MT 0x4 */
+  midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0, 0); /* MT 0x4 */
   uint32_t out[2];
   CHECK(!midi2_msg_mt2_to_mt4(w[0], out), "MT 0x4 rejected");
   CHECK(!midi2_msg_mt2_to_mt4(0, out), "zero rejected");
@@ -971,7 +985,7 @@ void test_set_group_mt3_sysex7(void) {
 void test_mt4_to_mt2_note_on_max_velocity(void) {
   TEST("mt4_to_mt2: Note On vel 0xFFFF -> MT 0x2 vel 0x7F");
   uint32_t in[2];
-  midi2_msg_note_on(in, 0, 0, 60, 0xFFFFu, 0);
+  midi2_msg_note_on(in, 0, 0, 60, 0xFFFFu, 0, 0);
   uint32_t out = 0;
   uint32_t n = midi2_msg_mt4_to_mt2(in, &out);
   CHECK(n == 1, "one MT2 word produced");
@@ -1159,6 +1173,7 @@ int main(void) {
   printf("\n[JR Timestamps]\n");
   test_jr_clock();
   test_jr_timestamp();
+  test_noop();
 
   printf("\n[Stream Messages]\n");
   test_stream_endpoint_discovery();

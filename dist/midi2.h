@@ -265,20 +265,23 @@ static inline uint32_t midi2_msg_build_cv2_w0(uint8_t group, uint8_t status,
  * @param channel   MIDI channel (0-15).
  * @param note      Note number (0-127).
  * @param velocity  16-bit velocity (0x0000-0xFFFF). Use midi2_msg_scale_up_7to16() for legacy values.
- * @param attribute Note attribute (0 = none, or type<<8 | value). */
+ * @param attr_type Attribute type byte (0=none, 0x01=Manufacturer, 0x02=Profile, 0x03=Pitch7_9).
+ * @param attr_data Attribute data (16 bits). Layout depends on attr_type. */
 static inline void midi2_msg_note_on(uint32_t *w, uint8_t group, uint8_t channel,
-                                      uint8_t note, uint16_t velocity, uint16_t attribute) {
-  uint8_t attr_type = (attribute != 0) ? (uint8_t)(attribute >> 8) : 0;
-  w[0] = midi2_msg_build_cv2_w0(group, MIDI2_STATUS_NOTE_ON, channel, note & 0x7F, attr_type);
-  w[1] = ((uint32_t)velocity << 16) | (attribute & 0xFFFF);
+                                      uint8_t note, uint16_t velocity,
+                                      uint8_t attr_type, uint16_t attr_data) {
+  w[0] = midi2_msg_build_cv2_w0(group, MIDI2_STATUS_NOTE_ON, channel,
+                                 note & 0x7F, attr_type);
+  w[1] = ((uint32_t)velocity << 16) | (uint32_t)attr_data;
 }
 
 /** @brief Build a MIDI 2.0 Note Off message (MT 0x4, 2 words). See midi2_msg_note_on() for params. */
 static inline void midi2_msg_note_off(uint32_t *w, uint8_t group, uint8_t channel,
-                                       uint8_t note, uint16_t velocity, uint16_t attribute) {
-  uint8_t attr_type = (attribute != 0) ? (uint8_t)(attribute >> 8) : 0;
-  w[0] = midi2_msg_build_cv2_w0(group, MIDI2_STATUS_NOTE_OFF, channel, note & 0x7F, attr_type);
-  w[1] = ((uint32_t)velocity << 16) | (attribute & 0xFFFF);
+                                       uint8_t note, uint16_t velocity,
+                                       uint8_t attr_type, uint16_t attr_data) {
+  w[0] = midi2_msg_build_cv2_w0(group, MIDI2_STATUS_NOTE_OFF, channel,
+                                 note & 0x7F, attr_type);
+  w[1] = ((uint32_t)velocity << 16) | (uint32_t)attr_data;
 }
 
 /** @brief Build a MIDI 2.0 Control Change (MT 0x4). @param value 32-bit CC value. */
@@ -288,13 +291,26 @@ static inline void midi2_msg_cc(uint32_t *w, uint8_t group, uint8_t channel,
   w[1] = value;
 }
 
-/** @brief Build a MIDI 2.0 Program Change (MT 0x4). @param bank_valid true to include bank select. */
+/** @brief Build a MIDI 2.0 Program Change (MT 0x4, 2 words) per M2-104-UM section 7.4.9.
+ *  @param bank_valid Bank Valid (B) bit goes in the byte 4 option flags (LSB).
+ *
+ *  Wire layout per Table 30:
+ *    byte 3 = reserved (0)
+ *    byte 4 = option flags: bit 0 = Bank Valid (B), other bits reserved (0)
+ *    byte 5 = rppppppp (r reserved, p = program 0..127)
+ *    byte 6 = reserved
+ *    byte 7 = rBBBBBBB (bank MSB 0..127)
+ *    byte 8 = rbbbbbbb (bank LSB 0..127)
+ *
+ *  Spec note: if bank_valid is false the sender shall fill bank MSB and bank
+ *  LSB with zero. */
 static inline void midi2_msg_program(uint32_t *w, uint8_t group, uint8_t channel,
                                       uint8_t program, bool bank_valid,
                                       uint8_t bank_msb, uint8_t bank_lsb) {
-  w[0] = midi2_msg_build_cv2_w0(group, MIDI2_STATUS_PROGRAM, channel, 0, 0);
-  w[1] = (bank_valid ? (UINT32_C(1) << 31) : 0)
-       | ((uint32_t)(program & 0x7F) << 24)
+  uint8_t option_flags = bank_valid ? 0x01 : 0x00;
+  w[0] = midi2_msg_build_cv2_w0(group, MIDI2_STATUS_PROGRAM, channel,
+                                 /*byte 3*/ 0, /*byte 4 option flags*/ option_flags);
+  w[1] = ((uint32_t)(program & 0x7F) << 24)
        | (bank_valid ? (((uint32_t)(bank_msb & 0x7F) << 8) | (bank_lsb & 0x7F)) : 0);
 }
 
@@ -509,12 +525,23 @@ static inline void midi2_msg_tempo(uint32_t *w, uint8_t group, uint32_t ten_ns_p
   w[1] = ten_ns_per_qn;
 }
 
-/* Time Signature: word1 = [numerator:8][denominator:8][0:16] */
+/** @brief Build a Set Time Signature message (MT 0xD, status 0x01)
+ *         per M2-104-UM section 7.5.4.
+ *  @param numerator       1..255 (256 is encoded as wrap).
+ *  @param denominator     Negative power of 2 (2 = quarter note, 3 = eighth, ...).
+ *                         0 indicates a non-standard denominator.
+ *  @param num_32nd_notes  Number of 1/32 notes in 24 MIDI Clocks (SMF compat).
+ *                         Default per SMF 1: 8 (= 8 thirty-seconds per quarter).
+ *
+ *  Wire layout word 1: [numerator:8][denominator:8][num_32nd_notes:8][reserved:8] */
 static inline void midi2_msg_time_sig(uint32_t *w, uint8_t group,
-                                        uint8_t numerator, uint8_t denominator) {
+                                        uint8_t numerator, uint8_t denominator,
+                                        uint8_t num_32nd_notes) {
   memset(w, 0, 16);
   w[0] = midi2_msg_build_flex_w0(group, MIDI2_FLEX_TIME_SIG);
-  w[1] = ((uint32_t)numerator << 24) | ((uint32_t)denominator << 16);
+  w[1] = ((uint32_t)numerator << 24)
+       | ((uint32_t)denominator << 16)
+       | ((uint32_t)num_32nd_notes << 8);
 }
 
 /* Key Signature: word1 = [sharpsFlats:4][tonicNote:4][keyType:2][0:22]
@@ -653,11 +680,18 @@ static inline void midi2_msg_sysex7_packet(uint32_t *w, uint8_t group,
 }
 
 /*--------------------------------------------------------------------+
- * Utility Messages -- JR Timestamps (MT 0x0, 1 word)
+ * Utility Messages (MT 0x0, 1 word) per M2-104-UM section 7.2
  *
- * Word: [MT:4][group:4][status:4][0:4][timestamp:16]
- * JR Clock status = 0x0010, JR Timestamp status = 0x0020
- * Timestamp unit: 1/31250 of a second (~32us)
+ * Word: [MT:4][reserved:4][status:4][reserved:4][timestamp:16]
+ *
+ * Utility messages are Groupless in spec v1.1.2 — the former Group
+ * field (bits [27:24]) is now Reserved and shall be zero.
+ *
+ * NOOP        status = 0x0, timestamp = 0
+ * JR Clock    status = 0x1, timestamp = sender clock time (1/31250 s)
+ * JR Timestmp status = 0x2, timestamp = sender clock timestamp
+ * DCTPQ       status = 0x3, timestamp = ticks per quarter note (1..65535)
+ * Delta Clkst status = 0x4, ticks = 20 bits at the LSB end
  *--------------------------------------------------------------------*/
 enum {
   MIDI2_UTILITY_NOOP         = 0x00,
@@ -667,16 +701,23 @@ enum {
   MIDI2_UTILITY_DC           = 0x04,  /* Delta Clockstamp (ticks since last event) */
 };
 
-static inline uint32_t midi2_msg_jr_clock(uint8_t group, uint16_t timestamp) {
+/** @brief Build a NOOP Utility message (status 0x0, all-zero payload). */
+static inline uint32_t midi2_msg_noop(void) {
+  return ((uint32_t)MIDI2_MT_UTILITY << 28);
+}
+
+/** @brief Build a JR Clock message (Sender's current clock time).
+ *  @param timestamp 16-bit time in 1/31250 of a second ticks (~32 us). */
+static inline uint32_t midi2_msg_jr_clock(uint16_t timestamp) {
   return ((uint32_t)MIDI2_MT_UTILITY << 28)
-       | ((uint32_t)(group & 0x0F) << 24)
        | ((uint32_t)MIDI2_UTILITY_JR_CLOCK << 20)
        | (uint32_t)timestamp;
 }
 
-static inline uint32_t midi2_msg_jr_timestamp(uint8_t group, uint16_t timestamp) {
+/** @brief Build a JR Timestamp message (time tag for the following message).
+ *  @param timestamp 16-bit time in 1/31250 of a second ticks (~32 us). */
+static inline uint32_t midi2_msg_jr_timestamp(uint16_t timestamp) {
   return ((uint32_t)MIDI2_MT_UTILITY << 28)
-       | ((uint32_t)(group & 0x0F) << 24)
        | ((uint32_t)MIDI2_UTILITY_JR_TIMESTAMP << 20)
        | (uint32_t)timestamp;
 }
@@ -1065,16 +1106,16 @@ static inline bool midi2_msg_mt2_to_mt4(uint32_t mt2_word, uint32_t out[2]) {
       if (data2 == 0) {
         /* velocity 0 means Note Off per MIDI 1.0 convention */
         midi2_msg_note_off(out, group, channel, data1,
-                           midi2_msg_scale_up_7to16(64), 0);
+                           midi2_msg_scale_up_7to16(64), 0, 0);
       } else {
         midi2_msg_note_on(out, group, channel, data1,
-                          midi2_msg_scale_up_7to16(data2), 0);
+                          midi2_msg_scale_up_7to16(data2), 0, 0);
       }
       return true;
 
     case 0x80: /* Note Off */
       midi2_msg_note_off(out, group, channel, data1,
-                         midi2_msg_scale_up_7to16(data2), 0);
+                         midi2_msg_scale_up_7to16(data2), 0, 0);
       return true;
 
     case 0xB0: /* Control Change */
@@ -2084,8 +2125,11 @@ static inline uint16_t midi2_ci_build_pi_midi_report_end(
  * MT 0x0: Utility
  *--------------------------------------------------------------------*/
 typedef void (*midi2_dp_noop_cb)(void *context);
-typedef void (*midi2_dp_jr_clock_cb)(uint8_t group, uint16_t timestamp, void *context);
-typedef void (*midi2_dp_jr_timestamp_cb)(uint8_t group, uint16_t timestamp, void *context);
+/* JR Clock and JR Timestamp messages are Groupless per M2-104-UM v1.1.2
+ * (section 1.4). The former Group field on the wire is now Reserved; the
+ * callbacks accordingly receive only the timestamp. */
+typedef void (*midi2_dp_jr_clock_cb)(uint16_t timestamp, void *context);
+typedef void (*midi2_dp_jr_timestamp_cb)(uint16_t timestamp, void *context);
 typedef void (*midi2_dp_dctpq_cb)(uint16_t tpq, void *context);
 typedef void (*midi2_dp_dc_cb)(uint32_t ticks, void *context);
 
@@ -3053,7 +3097,9 @@ void midi2_dispatch_init(midi2_dispatch *dp) {
  * Internal: dispatch MT 0x0 Utility (1 word)
  *--------------------------------------------------------------------*/
 static void dispatch_utility(midi2_dispatch *dp, uint32_t w) {
-  uint8_t group  = (uint8_t)((w >> 24) & 0x0F);
+  /* MT 0x0 is Groupless per M2-104-UM v1.1.2 section 1.4: bits [27:24]
+   * are Reserved on every Utility message. The dispatcher does not read
+   * them and the JR callbacks do not surface them. */
   uint8_t status = (uint8_t)((w >> 20) & 0x0F);
 
   switch (status) {
@@ -3061,10 +3107,10 @@ static void dispatch_utility(midi2_dispatch *dp, uint32_t w) {
       if (dp->on_noop) dp->on_noop(dp->context);
       break;
     case MIDI2_UTILITY_JR_CLOCK:
-      if (dp->on_jr_clock) dp->on_jr_clock(group, (uint16_t)(w & 0xFFFF), dp->context);
+      if (dp->on_jr_clock) dp->on_jr_clock((uint16_t)(w & 0xFFFF), dp->context);
       break;
     case MIDI2_UTILITY_JR_TIMESTAMP:
-      if (dp->on_jr_timestamp) dp->on_jr_timestamp(group, (uint16_t)(w & 0xFFFF), dp->context);
+      if (dp->on_jr_timestamp) dp->on_jr_timestamp((uint16_t)(w & 0xFFFF), dp->context);
       break;
     case MIDI2_UTILITY_DCTPQ:
       if (dp->on_dctpq) dp->on_dctpq((uint16_t)(w & 0xFFFF), dp->context);
@@ -3190,8 +3236,10 @@ static void dispatch_cv2(midi2_dispatch *dp, const uint32_t *w) {
 
     case MIDI2_STATUS_PROGRAM: {
       if (dp->on_program) {
+        /* Bank Valid (B) bit lives in byte 4 option flags (LSB) per
+         * M2-104-UM section 7.4.9, not in byte 5 MSB. */
+        bool bank_valid  = (w[0] & UINT32_C(0x01)) != 0;
         uint8_t program  = (uint8_t)((w[1] >> 24) & 0x7F);
-        bool bank_valid  = (w[1] & (UINT32_C(1) << 31)) != 0;
         uint8_t bank_msb = (uint8_t)((w[1] >> 8) & 0x7F);
         uint8_t bank_lsb = (uint8_t)(w[1] & 0x7F);
         dp->on_program(group, channel, program, bank_valid, bank_msb, bank_lsb, dp->context);

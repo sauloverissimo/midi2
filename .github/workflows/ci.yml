@@ -140,7 +140,7 @@ jobs:
           #include "midi2_ci_msg.h"
           uint32_t test(void) {
             uint32_t w[2];
-            midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0);
+            midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0, 0);
             return w[0];
           }
           AVRTEST

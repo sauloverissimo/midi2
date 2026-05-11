@@ -64,7 +64,8 @@ void setup() {
     uint32_t w[4];
 
     midi2_msg_note_on(w, /*group*/ 0, /*channel*/ 0,
-                      /*note*/ 60, /*velocity16*/ 0xC000, /*attrType*/ 0);
+                      /*note*/ 60, /*velocity16*/ 0xC000,
+                      /*attr_type*/ 0, /*attr_data*/ 0);
     Serial.print("Note On C4 vel=0xC000 -> 0x");
     Serial.print(w[0], HEX);
     Serial.print(" 0x");
@@ -94,7 +95,7 @@ void setup() {
     dp.on_tempo   = on_tempo;
 
     // Build and feed messages back into the dispatch to trigger callbacks.
-    midi2_msg_note_on(w, 0, 0, 60, 0xFFFF, 0);
+    midi2_msg_note_on(w, 0, 0, 60, 0xFFFF, 0, 0);
     midi2_dispatch_feed(w, 2, &dp);
 
     midi2_msg_cc(w, 0, 0, 1, 0x40000000);
@@ -115,7 +116,7 @@ void setup() {
     proc.context  = &dp;
 
     // Same NoteOn fed through proc (which would also reassemble SysEx).
-    midi2_msg_note_on(w, 0, 5, 36, 0x8000, 0);
+    midi2_msg_note_on(w, 0, 5, 36, 0x8000, 0, 0);
     midi2_proc_feed(&proc, w, 2);
 
     Serial.println("Setup complete. Loop will print received tempo.");

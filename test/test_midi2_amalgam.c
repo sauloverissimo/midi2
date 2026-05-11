@@ -24,7 +24,7 @@ static int failed = 0;
 void test_msg_note_on(void) {
   TEST("msg: note_on builds correct UMP words");
   uint32_t w[2];
-  midi2_msg_note_on(w, 0, 0, 60, 0xFFFF, 0);
+  midi2_msg_note_on(w, 0, 0, 60, 0xFFFF, 0, 0);
   CHECK(w[0] == 0x40903C00, "w0 mismatch");
   CHECK(w[1] == 0xFFFF0000, "w1 mismatch");
   PASS();
@@ -33,7 +33,7 @@ void test_msg_note_on(void) {
 void test_msg_note_off(void) {
   TEST("msg: note_off builds correct UMP words");
   uint32_t w[2];
-  midi2_msg_note_off(w, 0, 0, 60, 0x8000, 0);
+  midi2_msg_note_off(w, 0, 0, 60, 0x8000, 0, 0);
   CHECK(w[0] == 0x40803C00, "w0 mismatch");
   CHECK(w[1] == 0x80000000, "w1 mismatch");
   PASS();
@@ -136,7 +136,7 @@ void test_dispatch_note_on(void) {
   midi2_dispatch_init(&dp);
   dp.on_note_on = on_note_on;
   uint32_t w[2];
-  midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0);
+  midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0, 0);
   midi2_dispatch_feed(w, 2, &dp);
   CHECK(dp_note == 60, "note mismatch");
   CHECK(dp_vel == 0xC000, "velocity mismatch");
@@ -171,7 +171,7 @@ void test_dispatch_null_safe(void) {
   midi2_dispatch dp;
   midi2_dispatch_init(&dp);
   uint32_t w[2];
-  midi2_msg_note_on(w, 0, 0, 60, 0xFFFF, 0);
+  midi2_msg_note_on(w, 0, 0, 60, 0xFFFF, 0, 0);
   midi2_dispatch_feed(w, 2, &dp);
   PASS();
 }
@@ -195,7 +195,7 @@ void test_proc_passthrough(void) {
   ps.group_mask = 0xFFFF;
   ps.on_ump = proc_cb;
   uint32_t w[2];
-  midi2_msg_note_on(w, 0, 0, 60, 0xFFFF, 0);
+  midi2_msg_note_on(w, 0, 0, 60, 0xFFFF, 0, 0);
   midi2_proc_feed(&ps, w, 2);
   CHECK(proc_wc == 2, "word count mismatch");
   CHECK(proc_last[0] == w[0], "w0 mismatch");
@@ -211,7 +211,7 @@ void test_proc_group_filter(void) {
   ps.on_ump = proc_cb;
   proc_wc = 0;
   uint32_t w[2];
-  midi2_msg_note_on(w, 0, 0, 60, 0xFFFF, 0);  /* group 0 */
+  midi2_msg_note_on(w, 0, 0, 60, 0xFFFF, 0, 0);  /* group 0 */
   midi2_proc_feed(&ps, w, 2);
   CHECK(proc_wc == 0, "should have been filtered");
   PASS();
@@ -304,7 +304,7 @@ void test_header_only_inline(void) {
   /* This TU has IMPLEMENTATION, but the point is midi2_msg_* are
      static inline and would compile in any TU regardless. */
   uint32_t w[2];
-  midi2_msg_note_on(w, 15, 15, 127, 0xFFFF, 0);
+  midi2_msg_note_on(w, 15, 15, 127, 0xFFFF, 0, 0);
   CHECK(((w[0] >> 24) & 0x0F) == 15, "group should be 15");
   PASS();
 }
@@ -314,7 +314,7 @@ void test_header_only_inline(void) {
 void test_v030_msg_set_group(void) {
   TEST("amalgam v0.3.0: midi2_msg_set_group rewrites MT4 group");
   uint32_t w[2];
-  midi2_msg_note_on(w, 0, 0, 60, 0xFFFF, 0);
+  midi2_msg_note_on(w, 0, 0, 60, 0xFFFF, 0, 0);
   midi2_msg_set_group(&w[0], 7);
   CHECK(((w[0] >> 24) & 0x0F) == 7, "group rewritten");
   PASS();
@@ -333,7 +333,7 @@ void test_v030_msg_cable_event(void) {
 void test_v030_msg_mt4_to_mt2(void) {
   TEST("amalgam v0.3.0: midi2_msg_mt4_to_mt2 downgrades Note On");
   uint32_t in[2];
-  midi2_msg_note_on(in, 0, 0, 60, 0xFFFFu, 0);
+  midi2_msg_note_on(in, 0, 0, 60, 0xFFFFu, 0, 0);
   uint32_t out = 0;
   CHECK(midi2_msg_mt4_to_mt2(in, &out) == 1, "1 word");
   CHECK(((out >> 28) & 0x0F) == 0x02, "MT MIDI 1.0 CV");

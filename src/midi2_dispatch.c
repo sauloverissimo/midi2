@@ -46,7 +46,9 @@ void midi2_dispatch_init(midi2_dispatch *dp) {
  * Internal: dispatch MT 0x0 Utility (1 word)
  *--------------------------------------------------------------------*/
 static void dispatch_utility(midi2_dispatch *dp, uint32_t w) {
-  uint8_t group  = (uint8_t)((w >> 24) & 0x0F);
+  /* MT 0x0 is Groupless per M2-104-UM v1.1.2 section 1.4: bits [27:24]
+   * are Reserved on every Utility message. The dispatcher does not read
+   * them and the JR callbacks do not surface them. */
   uint8_t status = (uint8_t)((w >> 20) & 0x0F);
 
   switch (status) {
@@ -54,10 +56,10 @@ static void dispatch_utility(midi2_dispatch *dp, uint32_t w) {
       if (dp->on_noop) dp->on_noop(dp->context);
       break;
     case MIDI2_UTILITY_JR_CLOCK:
-      if (dp->on_jr_clock) dp->on_jr_clock(group, (uint16_t)(w & 0xFFFF), dp->context);
+      if (dp->on_jr_clock) dp->on_jr_clock((uint16_t)(w & 0xFFFF), dp->context);
       break;
     case MIDI2_UTILITY_JR_TIMESTAMP:
-      if (dp->on_jr_timestamp) dp->on_jr_timestamp(group, (uint16_t)(w & 0xFFFF), dp->context);
+      if (dp->on_jr_timestamp) dp->on_jr_timestamp((uint16_t)(w & 0xFFFF), dp->context);
       break;
     case MIDI2_UTILITY_DCTPQ:
       if (dp->on_dctpq) dp->on_dctpq((uint16_t)(w & 0xFFFF), dp->context);
@@ -183,8 +185,10 @@ static void dispatch_cv2(midi2_dispatch *dp, const uint32_t *w) {
 
     case MIDI2_STATUS_PROGRAM: {
       if (dp->on_program) {
+        /* Bank Valid (B) bit lives in byte 4 option flags (LSB) per
+         * M2-104-UM section 7.4.9, not in byte 5 MSB. */
+        bool bank_valid  = (w[0] & UINT32_C(0x01)) != 0;
         uint8_t program  = (uint8_t)((w[1] >> 24) & 0x7F);
-        bool bank_valid  = (w[1] & (UINT32_C(1) << 31)) != 0;
         uint8_t bank_msb = (uint8_t)((w[1] >> 8) & 0x7F);
         uint8_t bank_lsb = (uint8_t)(w[1] & 0x7F);
         dp->on_program(group, channel, program, bank_valid, bank_msb, bank_lsb, dp->context);

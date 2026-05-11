@@ -66,8 +66,11 @@ extern "C" {
  * MT 0x0: Utility
  *--------------------------------------------------------------------*/
 typedef void (*midi2_dp_noop_cb)(void *context);
-typedef void (*midi2_dp_jr_clock_cb)(uint8_t group, uint16_t timestamp, void *context);
-typedef void (*midi2_dp_jr_timestamp_cb)(uint8_t group, uint16_t timestamp, void *context);
+/* JR Clock and JR Timestamp messages are Groupless per M2-104-UM v1.1.2
+ * (section 1.4). The former Group field on the wire is now Reserved; the
+ * callbacks accordingly receive only the timestamp. */
+typedef void (*midi2_dp_jr_clock_cb)(uint16_t timestamp, void *context);
+typedef void (*midi2_dp_jr_timestamp_cb)(uint16_t timestamp, void *context);
 typedef void (*midi2_dp_dctpq_cb)(uint16_t tpq, void *context);
 typedef void (*midi2_dp_dc_cb)(uint32_t ticks, void *context);
 
