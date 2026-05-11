@@ -1,15 +1,13 @@
 ## ESP-IDF Component Manager manifest.
 ##
-## Lets ESP-IDF projects pull midi2 directly from GitHub without
-## vendoring src/dist into the consumer tree:
+## Lets ESP-IDF projects pull midi2 from the ESP Component Registry
+## without vendoring src/dist into the consumer tree:
 ##
 ##   # in your_app/main/idf_component.yml
 ##   dependencies:
-##     midi2:
-##       git: https://github.com/sauloverissimo/midi2.git
-##       version: "v0.3.4"
+##     sauloverissimo/midi2: ">=0.4.0"
 ##
-## The Component Manager clones midi2 into managed_components/, and
+## The Component Manager fetches midi2 into managed_components/, and
 ## ESP-IDF picks it up as a component because the top-level CMakeLists
 ## detects ESP_PLATFORM and calls idf_component_register at the top of
 ## the file.

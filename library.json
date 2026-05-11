@@ -16,6 +16,7 @@
   ],
   "license": "MIT",
   "homepage": "https://github.com/sauloverissimo/midi2",
+  "headers": "midi2.h",
   "frameworks": "*",
   "platforms": "*",
   "build": {
