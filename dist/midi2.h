@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-/* Auto-generated from midi2 v0.3.0 -- 2026-04-25
+/* Auto-generated from midi2 v0.3.4 -- 2026-05-11
  * https://github.com/sauloverissimo/midi2
  *
  * Portable MIDI 2.0 library (C99, zero dependencies)
@@ -791,10 +791,18 @@ static inline void midi2_msg_stream_config_request(uint32_t *w, uint8_t protocol
        | ((uint32_t)protocol << 8);
 }
 
-static inline void midi2_msg_stream_config_notify(uint32_t *w, uint8_t protocol) {
+/* Stream Configuration Notification (status 0x06).
+ * protocol: 0x01=MIDI1, 0x02=MIDI2.
+ * rx_jr_enable: device is currently configured to accept JR Timestamps inbound.
+ * tx_jr_enable: device is currently emitting JR Timestamps outbound. */
+static inline void midi2_msg_stream_config_notify(uint32_t *w, uint8_t protocol,
+                                                    bool rx_jr_enable,
+                                                    bool tx_jr_enable) {
   memset(w, 0, 16);
   w[0] = midi2_msg_build_stream_w0(0, MIDI2_STREAM_CONFIG_NOTIFY)
-       | ((uint32_t)protocol << 8);
+       | ((uint32_t)protocol << 8)
+       | (rx_jr_enable ? (UINT32_C(1) << 1) : 0)
+       | (tx_jr_enable ? (UINT32_C(1) << 0) : 0);
 }
 
 /* Function Block Discovery
@@ -810,7 +818,8 @@ static inline void midi2_msg_stream_fb_discovery(uint32_t *w, uint8_t fb_num, ui
 /* Function Block Info
  * active: FB is active
  * fb_num: function block number
- * direction: 0x00=input, 0x01=output, 0x02=bidirectional
+ * direction: 0x00=reserved, 0x01=Receiver, 0x02=Sender, 0x03=Bidirectional
+ * ui_hint: 0x00=Undeclared, 0x01=Receiver, 0x02=Sender, 0x03=Sender+Receiver
  * first_group: first group in this FB
  * num_groups: number of groups
  * midi_ci_ver: MIDI-CI version support (0=none, 1=1.1, 2=1.2)
@@ -818,7 +827,7 @@ static inline void midi2_msg_stream_fb_discovery(uint32_t *w, uint8_t fb_num, ui
  * protocol: 0x00=unknown, 0x01=MIDI1, 0x02=MIDI2, 0x03=both */
 static inline void midi2_msg_stream_fb_info(uint32_t *w,
                                               bool active, uint8_t fb_num,
-                                              uint8_t direction,
+                                              uint8_t direction, uint8_t ui_hint,
                                               uint8_t first_group, uint8_t num_groups,
                                               uint8_t midi_ci_ver, bool sysex8,
                                               uint8_t protocol) {
@@ -826,6 +835,7 @@ static inline void midi2_msg_stream_fb_info(uint32_t *w,
   w[0] = midi2_msg_build_stream_w0(0, MIDI2_STREAM_FB_INFO)
        | (active ? (UINT32_C(1) << 15) : 0)
        | ((uint32_t)(fb_num & 0x7F) << 8)
+       | ((uint32_t)(ui_hint & 0x03) << 4)
        | (uint32_t)(direction & 0x03);
   w[1] = ((uint32_t)(first_group & 0x0F) << 24)
        | ((uint32_t)(num_groups & 0x0F) << 16)
@@ -2191,7 +2201,8 @@ typedef void (*midi2_dp_fb_name_cb)(uint8_t format, uint8_t fb_num,
                                       const uint8_t *name, uint8_t len, void *context);
 typedef void (*midi2_dp_config_cb)(uint8_t protocol, bool rx_jr, bool tx_jr, void *context);
 typedef void (*midi2_dp_fb_discovery_cb)(uint8_t fb_num, uint8_t filter, void *context);
-typedef void (*midi2_dp_fb_info_cb)(bool active, uint8_t fb_num, uint8_t direction,
+typedef void (*midi2_dp_fb_info_cb)(bool active, uint8_t fb_num,
+                                      uint8_t direction, uint8_t ui_hint,
                                       uint8_t first_group, uint8_t num_groups,
                                       uint8_t midi_ci_ver, uint8_t max_sysex8_streams,
                                       uint8_t protocol, void *context);
@@ -3507,13 +3518,15 @@ static void dispatch_stream(midi2_dispatch *dp, const uint32_t *w) {
       if (dp->on_fb_info) {
         bool active     = (w[0] & (UINT32_C(1) << 15)) != 0;
         uint8_t fb_num  = (uint8_t)((w[0] >> 8) & 0x7F);
+        uint8_t ui_hint = (uint8_t)((w[0] >> 4) & 0x03);
         uint8_t dir     = (uint8_t)(w[0] & 0x03);
         uint8_t first   = (uint8_t)((w[1] >> 24) & 0x0F);
         uint8_t ngrp    = (uint8_t)((w[1] >> 16) & 0x0F);
         uint8_t ci_ver  = (uint8_t)((w[1] >> 8) & 0xFF);
         uint8_t s8str   = (uint8_t)((w[1] >> 2) & 0x3F);
         uint8_t proto   = (uint8_t)(w[1] & 0x03);
-        dp->on_fb_info(active, fb_num, dir, first, ngrp, ci_ver, s8str, proto, dp->context);
+        dp->on_fb_info(active, fb_num, dir, ui_hint, first, ngrp, ci_ver,
+                       s8str, proto, dp->context);
       }
       break;
 

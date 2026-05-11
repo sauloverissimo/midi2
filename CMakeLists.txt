@@ -50,7 +50,7 @@ if(ESP_PLATFORM)
     return()
 endif()
 
-project(midi2 VERSION 0.3.4 LANGUAGES C)
+project(midi2 VERSION 0.4.0 LANGUAGES C)
 
 # GNUInstallDirs has to come before target_include_directories so that
 # $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}> evaluates to the real

@@ -772,10 +772,18 @@ static inline void midi2_msg_stream_config_request(uint32_t *w, uint8_t protocol
        | ((uint32_t)protocol << 8);
 }
 
-static inline void midi2_msg_stream_config_notify(uint32_t *w, uint8_t protocol) {
+/* Stream Configuration Notification (status 0x06).
+ * protocol: 0x01=MIDI1, 0x02=MIDI2.
+ * rx_jr_enable: device is currently configured to accept JR Timestamps inbound.
+ * tx_jr_enable: device is currently emitting JR Timestamps outbound. */
+static inline void midi2_msg_stream_config_notify(uint32_t *w, uint8_t protocol,
+                                                    bool rx_jr_enable,
+                                                    bool tx_jr_enable) {
   memset(w, 0, 16);
   w[0] = midi2_msg_build_stream_w0(0, MIDI2_STREAM_CONFIG_NOTIFY)
-       | ((uint32_t)protocol << 8);
+       | ((uint32_t)protocol << 8)
+       | (rx_jr_enable ? (UINT32_C(1) << 1) : 0)
+       | (tx_jr_enable ? (UINT32_C(1) << 0) : 0);
 }
 
 /* Function Block Discovery
@@ -791,7 +799,8 @@ static inline void midi2_msg_stream_fb_discovery(uint32_t *w, uint8_t fb_num, ui
 /* Function Block Info
  * active: FB is active
  * fb_num: function block number
- * direction: 0x00=input, 0x01=output, 0x02=bidirectional
+ * direction: 0x00=reserved, 0x01=Receiver, 0x02=Sender, 0x03=Bidirectional
+ * ui_hint: 0x00=Undeclared, 0x01=Receiver, 0x02=Sender, 0x03=Sender+Receiver
  * first_group: first group in this FB
  * num_groups: number of groups
  * midi_ci_ver: MIDI-CI version support (0=none, 1=1.1, 2=1.2)
@@ -799,7 +808,7 @@ static inline void midi2_msg_stream_fb_discovery(uint32_t *w, uint8_t fb_num, ui
  * protocol: 0x00=unknown, 0x01=MIDI1, 0x02=MIDI2, 0x03=both */
 static inline void midi2_msg_stream_fb_info(uint32_t *w,
                                               bool active, uint8_t fb_num,
-                                              uint8_t direction,
+                                              uint8_t direction, uint8_t ui_hint,
                                               uint8_t first_group, uint8_t num_groups,
                                               uint8_t midi_ci_ver, bool sysex8,
                                               uint8_t protocol) {
@@ -807,6 +816,7 @@ static inline void midi2_msg_stream_fb_info(uint32_t *w,
   w[0] = midi2_msg_build_stream_w0(0, MIDI2_STREAM_FB_INFO)
        | (active ? (UINT32_C(1) << 15) : 0)
        | ((uint32_t)(fb_num & 0x7F) << 8)
+       | ((uint32_t)(ui_hint & 0x03) << 4)
        | (uint32_t)(direction & 0x03);
   w[1] = ((uint32_t)(first_group & 0x0F) << 24)
        | ((uint32_t)(num_groups & 0x0F) << 16)

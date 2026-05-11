@@ -1,5 +1,68 @@
 # Changelog
 
+## [0.4.0]
+
+Spec-completeness pass on UMP Stream messages. Two builders gain the
+flags they were missing per [M2-104-UM §7.1.5](https://midi.org/midi-2-0)
+(Stream Config Notification) and §7.1.3 (Function Block Info
+Notification). This is a **breaking** API change: both functions, the
+`on_fb_info` dispatch callback, and the `midi2_dp_fb_info_cb` typedef
+gain new parameters. Pre-1.0 minor bump signals the change per SemVer.
+
+### Breaking
+
+- **`midi2_msg_stream_config_notify(w, protocol)` →
+  `midi2_msg_stream_config_notify(w, protocol, rx_jr_enable, tx_jr_enable)`**.
+  The two new booleans drive bits [1:0] of word 0 (`JR_TX_ENABLE` =
+  bit 0, `JR_RX_ENABLE` = bit 1). Without them, downstream MIDI 2.0
+  hosts (Windows MIDI Services, macOS Audio MIDI Setup) reported
+  `Sending JR Timestamps: False` even when the device was actively
+  emitting JR Timestamp UMPs via `midi2_proc_enable_jr_heartbeat`.
+
+- **`midi2_msg_stream_fb_info(w, active, fb_num, direction, first_group,
+  num_groups, midi_ci_ver, sysex8, protocol)` →
+  `midi2_msg_stream_fb_info(w, active, fb_num, direction, ui_hint,
+  first_group, num_groups, midi_ci_ver, sysex8, protocol)`**.
+  New `ui_hint` argument (bits [5:4] of word 0): `0` Undeclared, `0x01`
+  Receiver, `0x02` Sender, `0x03` Sender + Receiver. Hosts use this to
+  pick FB icons / labels in their port pickers. Direction (bits [1:0])
+  is unchanged.
+
+- **`midi2_dp_fb_info_cb` callback signature** gains `ui_hint` between
+  `direction` and `first_group`. Recipes wiring `on_fb_info` directly
+  must update their handler signature.
+
+- **`midi2_dispatch.c on_fb_info` trampoline** decodes `ui_hint` from
+  bits [5:4] and forwards it through the callback.
+
+### Tests
+
+- `test_stream_config_notify_jr_bits` — asserts independent control of
+  `JR_TX_ENABLE` and `JR_RX_ENABLE`.
+- `test_stream_fb_info_ui_hint` — asserts `ui_hint` and `direction` use
+  independent bit lanes (any combination, any FB).
+- `test_dp_config_notify_jr_bits` — round-trip builder→dispatcher
+  preserves both JR flags.
+- `test_dp_fb_info` — re-asserts the round-trip with `ui_hint=0x03`.
+
+Total: 324 assertions across the 8 host test binaries, ASan + UBSan
+clean. No surface other than these two builders shifted.
+
+### Migration
+
+Default-safe values reproduce the prior behaviour on the wire:
+
+```c
+midi2_msg_stream_config_notify(w, protocol, /*rx_jr*/ false, /*tx_jr*/ false);
+midi2_msg_stream_fb_info(w, active, fb_num, direction, /*ui_hint*/ 0x00,
+                         first_group, num_groups, midi_ci_ver, sysex8, protocol);
+```
+
+Recipes whose device actively emits JR Timestamps (typical when
+`enableJRHeartbeat()` is on) should pass `tx_jr_enable=true`. Recipes
+with a known FB role should declare `ui_hint` (`0x02` for senders,
+`0x03` for bidirectional devices, `0x01` for pure listeners).
+
 ## [0.3.4]
 
 Fix the ESP-IDF Component Manager path. v0.3.3 routed

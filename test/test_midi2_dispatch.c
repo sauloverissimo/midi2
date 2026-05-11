@@ -49,7 +49,7 @@ static struct {
   uint8_t proto;
   /* FB */
   bool fb_active;
-  uint8_t fb_num, fb_dir, fb_first, fb_ngrp;
+  uint8_t fb_num, fb_dir, fb_ui_hint, fb_first, fb_ngrp;
   /* Clip */
   bool clip_start;
   /* MDS */
@@ -234,10 +234,12 @@ static void cb_config(uint8_t proto, bool rxjr, bool txjr, void *c) {
 static void cb_fb_discovery(uint8_t fb, uint8_t filter, void *c) {
   (void)c; ctx.called = 1; ctx.fb_num = fb; ctx.filter = filter;
 }
-static void cb_fb_info(bool act, uint8_t fb, uint8_t dir, uint8_t first, uint8_t ngrp,
+static void cb_fb_info(bool act, uint8_t fb, uint8_t dir, uint8_t ui_hint,
+                          uint8_t first, uint8_t ngrp,
                           uint8_t ci, uint8_t s8, uint8_t proto, void *c) {
   (void)c; (void)ci; (void)s8;
-  ctx.called = 1; ctx.fb_active = act; ctx.fb_num = fb; ctx.fb_dir = dir;
+  ctx.called = 1; ctx.fb_active = act; ctx.fb_num = fb;
+  ctx.fb_dir = dir; ctx.fb_ui_hint = ui_hint;
   ctx.fb_first = first; ctx.fb_ngrp = ngrp; ctx.proto = proto;
 }
 static void cb_clip(bool start, void *c) { (void)c; ctx.called = 1; ctx.clip_start = start; }
@@ -725,16 +727,18 @@ void test_dp_config_request(void) {
 }
 
 void test_dp_fb_info(void) {
-  TEST("dispatch: FB Info active, bidir, groups 0-3");
+  TEST("dispatch: FB Info active, bidir, ui_hint=Sender+Receiver, groups 0-3");
   midi2_dispatch dp = make_dp();
   reset_ctx();
   uint32_t w[4];
-  midi2_msg_stream_fb_info(w, true, 0, 0x02, 0, 4, 2, false, 0x02);
+  midi2_msg_stream_fb_info(w, true, 0, /*direction*/ 0x02, /*ui_hint*/ 0x03,
+                           0, 4, 2, false, 0x02);
   midi2_dispatch_feed(w, 4, &dp);
   CHECK(ctx.called, "callback fired");
   CHECK(ctx.fb_active, "active");
   CHECK(ctx.fb_num == 0, "fb_num");
-  CHECK(ctx.fb_dir == 0x02, "bidir");
+  CHECK(ctx.fb_dir == 0x02, "direction=bidir");
+  CHECK(ctx.fb_ui_hint == 0x03, "ui_hint=Sender+Receiver");
   CHECK(ctx.fb_first == 0, "first_group");
   CHECK(ctx.fb_ngrp == 4, "num_groups");
   PASS();
@@ -1053,14 +1057,30 @@ void test_dp_product_id(void) {
 }
 
 void test_dp_config_notify(void) {
-  TEST("dispatch: Config Notify MIDI 1.0");
+  TEST("dispatch: Config Notify MIDI 1.0, no JR bits");
   midi2_dispatch dp = make_dp();
   reset_ctx();
   uint32_t w[4];
-  midi2_msg_stream_config_notify(w, 0x01);
+  midi2_msg_stream_config_notify(w, 0x01, /*rx_jr*/ false, /*tx_jr*/ false);
   midi2_dispatch_feed(w, 4, &dp);
   CHECK(ctx.called, "callback fired");
   CHECK(ctx.proto == 0x01, "protocol=MIDI1");
+  CHECK(!ctx.rx_jr, "rx_jr cleared");
+  CHECK(!ctx.tx_jr, "tx_jr cleared");
+  PASS();
+}
+
+void test_dp_config_notify_jr_bits(void) {
+  TEST("dispatch: Config Notify MIDI 2.0 with TX JR enabled");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w[4];
+  midi2_msg_stream_config_notify(w, 0x02, /*rx_jr*/ false, /*tx_jr*/ true);
+  midi2_dispatch_feed(w, 4, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.proto == 0x02, "protocol=MIDI2");
+  CHECK(!ctx.rx_jr, "rx_jr stays false");
+  CHECK(ctx.tx_jr,  "tx_jr set");
   PASS();
 }
 
@@ -1277,6 +1297,7 @@ int main(void) {
   test_dp_config_request();
   test_dp_config_with_jr();
   test_dp_config_notify();
+  test_dp_config_notify_jr_bits();
   test_dp_fb_discovery();
   test_dp_fb_info();
   test_dp_fb_name();

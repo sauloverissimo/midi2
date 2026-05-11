@@ -519,13 +519,15 @@ static void dispatch_stream(midi2_dispatch *dp, const uint32_t *w) {
       if (dp->on_fb_info) {
         bool active     = (w[0] & (UINT32_C(1) << 15)) != 0;
         uint8_t fb_num  = (uint8_t)((w[0] >> 8) & 0x7F);
+        uint8_t ui_hint = (uint8_t)((w[0] >> 4) & 0x03);
         uint8_t dir     = (uint8_t)(w[0] & 0x03);
         uint8_t first   = (uint8_t)((w[1] >> 24) & 0x0F);
         uint8_t ngrp    = (uint8_t)((w[1] >> 16) & 0x0F);
         uint8_t ci_ver  = (uint8_t)((w[1] >> 8) & 0xFF);
         uint8_t s8str   = (uint8_t)((w[1] >> 2) & 0x3F);
         uint8_t proto   = (uint8_t)(w[1] & 0x03);
-        dp->on_fb_info(active, fb_num, dir, first, ngrp, ci_ver, s8str, proto, dp->context);
+        dp->on_fb_info(active, fb_num, dir, ui_hint, first, ngrp, ci_ver,
+                       s8str, proto, dp->context);
       }
       break;
 

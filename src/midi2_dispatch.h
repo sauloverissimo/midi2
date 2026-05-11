@@ -191,7 +191,8 @@ typedef void (*midi2_dp_fb_name_cb)(uint8_t format, uint8_t fb_num,
                                       const uint8_t *name, uint8_t len, void *context);
 typedef void (*midi2_dp_config_cb)(uint8_t protocol, bool rx_jr, bool tx_jr, void *context);
 typedef void (*midi2_dp_fb_discovery_cb)(uint8_t fb_num, uint8_t filter, void *context);
-typedef void (*midi2_dp_fb_info_cb)(bool active, uint8_t fb_num, uint8_t direction,
+typedef void (*midi2_dp_fb_info_cb)(bool active, uint8_t fb_num,
+                                      uint8_t direction, uint8_t ui_hint,
                                       uint8_t first_group, uint8_t num_groups,
                                       uint8_t midi_ci_ver, uint8_t max_sysex8_streams,
                                       uint8_t protocol, void *context);
