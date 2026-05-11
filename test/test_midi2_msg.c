@@ -413,9 +413,18 @@ void test_stream_device_identity(void) {
 void test_stream_config_request(void) {
   TEST("Stream: Config Request MIDI 2.0");
   uint32_t w[4];
-  midi2_msg_stream_config_request(w, 0x02);
+  midi2_msg_stream_config_request(w, 0x02, /*rx_jr*/ false, /*tx_jr*/ false);
   CHECK(((w[0] >> 16) & 0x3FF) == 0x005, "status=config request");
   CHECK(((w[0] >> 8) & 0xFF) == 0x02, "protocol=MIDI2");
+  CHECK((w[0] & 0x03) == 0, "JR bits clear");
+  PASS();
+}
+
+void test_stream_config_request_jr_bits(void) {
+  TEST("Stream: Config Request asks for TX JR enable");
+  uint32_t w[4];
+  midi2_msg_stream_config_request(w, 0x02, /*rx_jr*/ true, /*tx_jr*/ true);
+  CHECK((w[0] & 0x03) == 0x03, "both JR bits set");
   PASS();
 }
 
@@ -453,10 +462,10 @@ void test_stream_fb_discovery(void) {
 }
 
 void test_stream_fb_info(void) {
-  TEST("Stream: FB Info bidirectional");
+  TEST("Stream: FB Info bidirectional, no SysEx8");
   uint32_t w[4];
   midi2_msg_stream_fb_info(w, true, 0, /*direction*/ 0x02, /*ui_hint*/ 0x00,
-                           0, 4, 2, false, 0x02);
+                           0, 4, 2, /*max_sysex8_streams*/ 0, 0x02);
   CHECK(((w[0] >> 16) & 0x3FF) == 0x011, "status=FB info");
   CHECK(w[0] & (1u << 15), "active");
   CHECK(((w[0] >> 8) & 0x7F) == 0, "fb_num=0");
@@ -464,6 +473,7 @@ void test_stream_fb_info(void) {
   CHECK(((w[0] >> 4) & 0x03) == 0x00, "ui_hint=undeclared");
   CHECK(((w[1] >> 24) & 0x0F) == 0, "first_group=0");
   CHECK(((w[1] >> 16) & 0x0F) == 4, "num_groups=4");
+  CHECK(((w[1] >> 2) & 0x3F) == 0, "max_sysex8_streams=0");
   CHECK((w[1] & 0x03) == 0x02, "protocol=MIDI2");
   PASS();
 }
@@ -472,15 +482,28 @@ void test_stream_fb_info_ui_hint(void) {
   TEST("Stream: FB Info with UI Hint Sender+Receiver");
   uint32_t w[4];
   midi2_msg_stream_fb_info(w, true, 0, /*direction*/ 0x03, /*ui_hint*/ 0x03,
-                           0, 1, 2, false, 0x02);
+                           0, 1, 2, 0, 0x02);
   CHECK((w[0] & 0x03) == 0x03, "direction=bidirectional");
   CHECK(((w[0] >> 4) & 0x03) == 0x03, "ui_hint=Sender+Receiver");
 
   // Validate ui_hint and direction live in independent bit lanes.
   midi2_msg_stream_fb_info(w, true, 0, /*direction*/ 0x01, /*ui_hint*/ 0x02,
-                           0, 1, 2, false, 0x02);
+                           0, 1, 2, 0, 0x02);
   CHECK((w[0] & 0x03) == 0x01, "direction=Receiver");
   CHECK(((w[0] >> 4) & 0x03) == 0x02, "ui_hint=Sender");
+  PASS();
+}
+
+void test_stream_fb_info_sysex8_streams(void) {
+  TEST("Stream: FB Info max_sysex8_streams full range");
+  uint32_t w[4];
+  midi2_msg_stream_fb_info(w, true, 0, 0x02, 0x03, 0, 1, 2,
+                           /*max_sysex8_streams*/ 0x3F, 0x02);
+  CHECK(((w[1] >> 2) & 0x3F) == 0x3F, "max=63");
+
+  midi2_msg_stream_fb_info(w, true, 0, 0x02, 0x03, 0, 1, 2,
+                           /*max_sysex8_streams*/ 1, 0x02);
+  CHECK(((w[1] >> 2) & 0x3F) == 1, "max=1");
   PASS();
 }
 
@@ -1142,11 +1165,13 @@ int main(void) {
   test_stream_endpoint_info();
   test_stream_device_identity();
   test_stream_config_request();
+  test_stream_config_request_jr_bits();
   test_stream_config_notify();
   test_stream_config_notify_jr_bits();
   test_stream_fb_discovery();
   test_stream_fb_info();
   test_stream_fb_info_ui_hint();
+  test_stream_fb_info_sysex8_streams();
   test_stream_clip();
 
   printf("\n[SysEx8]\n");

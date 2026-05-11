@@ -764,12 +764,19 @@ static inline void midi2_msg_stream_device_identity(uint32_t *w,
   w[3] = version_id;
 }
 
-/* Stream Configuration Request/Notify
- * protocol: 0x01 = MIDI 1.0, 0x02 = MIDI 2.0 */
-static inline void midi2_msg_stream_config_request(uint32_t *w, uint8_t protocol) {
+/* Stream Configuration Request (status 0x05).
+ * Sent host->device to request a protocol / JR Timestamps configuration.
+ * protocol: 0x01 = MIDI 1.0, 0x02 = MIDI 2.0.
+ * rx_jr_enable: ask the device to accept JR Timestamps inbound.
+ * tx_jr_enable: ask the device to emit JR Timestamps outbound. */
+static inline void midi2_msg_stream_config_request(uint32_t *w, uint8_t protocol,
+                                                     bool rx_jr_enable,
+                                                     bool tx_jr_enable) {
   memset(w, 0, 16);
   w[0] = midi2_msg_build_stream_w0(0, MIDI2_STREAM_CONFIG_REQUEST)
-       | ((uint32_t)protocol << 8);
+       | ((uint32_t)protocol << 8)
+       | (rx_jr_enable ? (UINT32_C(1) << 1) : 0)
+       | (tx_jr_enable ? (UINT32_C(1) << 0) : 0);
 }
 
 /* Stream Configuration Notification (status 0x06).
@@ -804,13 +811,14 @@ static inline void midi2_msg_stream_fb_discovery(uint32_t *w, uint8_t fb_num, ui
  * first_group: first group in this FB
  * num_groups: number of groups
  * midi_ci_ver: MIDI-CI version support (0=none, 1=1.1, 2=1.2)
- * sysex8: supports SysEx8
+ * max_sysex8_streams: 0 = SysEx8 not supported, 1..63 = max concurrent streams
  * protocol: 0x00=unknown, 0x01=MIDI1, 0x02=MIDI2, 0x03=both */
 static inline void midi2_msg_stream_fb_info(uint32_t *w,
                                               bool active, uint8_t fb_num,
                                               uint8_t direction, uint8_t ui_hint,
                                               uint8_t first_group, uint8_t num_groups,
-                                              uint8_t midi_ci_ver, bool sysex8,
+                                              uint8_t midi_ci_ver,
+                                              uint8_t max_sysex8_streams,
                                               uint8_t protocol) {
   memset(w, 0, 16);
   w[0] = midi2_msg_build_stream_w0(0, MIDI2_STREAM_FB_INFO)
@@ -821,7 +829,7 @@ static inline void midi2_msg_stream_fb_info(uint32_t *w,
   w[1] = ((uint32_t)(first_group & 0x0F) << 24)
        | ((uint32_t)(num_groups & 0x0F) << 16)
        | ((uint32_t)(midi_ci_ver & 0x03) << 8)
-       | (sysex8 ? (UINT32_C(1) << 2) : 0)
+       | ((uint32_t)(max_sysex8_streams & 0x3F) << 2)
        | (uint32_t)(protocol & 0x03);
 }
 

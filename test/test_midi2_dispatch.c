@@ -715,14 +715,29 @@ void test_dp_endpoint_name(void) {
 }
 
 void test_dp_config_request(void) {
-  TEST("dispatch: Config Request MIDI 2.0");
+  TEST("dispatch: Config Request MIDI 2.0, JR off");
   midi2_dispatch dp = make_dp();
   reset_ctx();
   uint32_t w[4];
-  midi2_msg_stream_config_request(w, 0x02);
+  midi2_msg_stream_config_request(w, 0x02, /*rx_jr*/ false, /*tx_jr*/ false);
   midi2_dispatch_feed(w, 4, &dp);
   CHECK(ctx.called, "callback fired");
   CHECK(ctx.proto == 0x02, "protocol=MIDI2");
+  CHECK(!ctx.rx_jr, "rx_jr off");
+  CHECK(!ctx.tx_jr, "tx_jr off");
+  PASS();
+}
+
+void test_dp_config_request_jr_bits(void) {
+  TEST("dispatch: Config Request asks TX JR enable");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t w[4];
+  midi2_msg_stream_config_request(w, 0x02, /*rx_jr*/ false, /*tx_jr*/ true);
+  midi2_dispatch_feed(w, 4, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(!ctx.rx_jr, "rx_jr off");
+  CHECK(ctx.tx_jr,  "tx_jr on");
   PASS();
 }
 
@@ -732,7 +747,7 @@ void test_dp_fb_info(void) {
   reset_ctx();
   uint32_t w[4];
   midi2_msg_stream_fb_info(w, true, 0, /*direction*/ 0x02, /*ui_hint*/ 0x03,
-                           0, 4, 2, false, 0x02);
+                           0, 4, 2, /*max_sysex8_streams*/ 0, 0x02);
   midi2_dispatch_feed(w, 4, &dp);
   CHECK(ctx.called, "callback fired");
   CHECK(ctx.fb_active, "active");
@@ -1295,6 +1310,7 @@ int main(void) {
   test_dp_endpoint_name();
   test_dp_product_id();
   test_dp_config_request();
+  test_dp_config_request_jr_bits();
   test_dp_config_with_jr();
   test_dp_config_notify();
   test_dp_config_notify_jr_bits();
