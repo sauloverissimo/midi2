@@ -1244,6 +1244,40 @@ void test_dp_upscale_off_by_default(void) {
 }
 
 /*--------------------------------------------------------------------+
+ * NULL paths (boundary defensive checks)
+ *--------------------------------------------------------------------*/
+
+void test_dp_init_null_safe(void) {
+  TEST("dispatch_init: NULL dp is no-op (no crash)");
+  midi2_dispatch_init(NULL);
+  PASS();
+}
+
+void test_dp_feed_null_context(void) {
+  TEST("dispatch_feed: NULL context is no-op (no crash)");
+  uint32_t w = 0x20903C7Fu;
+  midi2_dispatch_feed(&w, 1, NULL);
+  PASS();
+}
+
+void test_dp_feed_null_words(void) {
+  TEST("dispatch_feed: NULL words is no-op (no crash)");
+  midi2_dispatch dp;
+  midi2_dispatch_init(&dp);
+  midi2_dispatch_feed(NULL, 1, &dp);
+  PASS();
+}
+
+void test_dp_feed_zero_word_count(void) {
+  TEST("dispatch_feed: word_count=0 is no-op (no crash)");
+  midi2_dispatch dp;
+  midi2_dispatch_init(&dp);
+  uint32_t w = 0x20903C7Fu;
+  midi2_dispatch_feed(&w, 0, &dp);
+  PASS();
+}
+
+/*--------------------------------------------------------------------+
  * Main
  *--------------------------------------------------------------------*/
 int main(void) {
@@ -1330,6 +1364,12 @@ int main(void) {
   test_dp_upscale_cc();
   test_dp_upscale_pitch_bend();
   test_dp_upscale_off_by_default();
+
+  printf("\n[NULL Paths]\n");
+  test_dp_init_null_safe();
+  test_dp_feed_null_context();
+  test_dp_feed_null_words();
+  test_dp_feed_zero_word_count();
 
   printf("\n=== Results: %d passed, %d failed ===\n\n", passed, failed);
   return failed > 0 ? 1 : 0;

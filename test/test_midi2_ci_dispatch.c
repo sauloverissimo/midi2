@@ -527,6 +527,29 @@ void test_ci_dp_null_safe(void) {
   PASS();
 }
 
+void test_ci_dp_init_null_state(void) {
+  TEST("dispatch_init: NULL dp is no-op (no crash)");
+  midi2_ci_dispatch_init(NULL);
+  PASS();
+}
+
+void test_ci_dp_feed_null_state(void) {
+  TEST("dispatch_feed: NULL dp returns false");
+  uint8_t buf[64];
+  midi2_ci_build_discovery(buf, 0x02, 0x1234567, 0x002109, 1, 2, 0, 0x0C, 512, 0);
+  CHECK(!midi2_ci_dispatch_feed(NULL, 0, buf, 30), "NULL dp -> false");
+  PASS();
+}
+
+void test_ci_dp_feed_null_data(void) {
+  TEST("dispatch_feed: NULL data returns false");
+  midi2_ci_dispatch dp;
+  midi2_ci_dispatch_init(&dp);
+  CHECK(!midi2_ci_dispatch_feed(&dp, 0, NULL, 0), "NULL data, len 0");
+  CHECK(!midi2_ci_dispatch_feed(&dp, 0, NULL, 100), "NULL data, len >= 13 (was UB)");
+  PASS();
+}
+
 void test_ci_dp_not_ci(void) {
   TEST("CI dispatch: non-CI SysEx returns false");
   midi2_ci_dispatch dp = make_dp();
@@ -610,6 +633,11 @@ int main(void) {
   test_ci_dp_not_ci();
   test_ci_dp_unknown();
   test_ci_dp_group_preserved();
+
+  printf("\n[NULL Paths]\n");
+  test_ci_dp_init_null_state();
+  test_ci_dp_feed_null_state();
+  test_ci_dp_feed_null_data();
 
   printf("\n=== Results: %d passed, %d failed ===\n\n", passed, failed);
   return failed > 0 ? 1 : 0;

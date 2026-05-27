@@ -88,12 +88,14 @@ typedef struct {
 } midi2_conv_state;
 
 /** Initialize converter state.
- *  @param state         State struct (caller-allocated)
- *  @param group         UMP group to assign to converted messages */
+ *  @param state         State struct (caller-allocated). Safe to pass NULL
+ *                       (function is no-op).
+ *  @param group         UMP group to assign to converted messages (0-15). */
 void midi2_conv_init(midi2_conv_state *state, uint8_t group);
 
 /* Feed one MIDI 1.0 byte. Returns true when a complete UMP message is ready
- * in state->ump[]. Returns false if more bytes are needed.
+ * in state->ump[]. Returns false if more bytes are needed, or if state is
+ * NULL (safe to call with NULL state).
  *
  * SysEx of any length is fully supported via streaming UMP SysEx7 packets.
  * Each call produces at most one UMP message (1 or 2 words). */

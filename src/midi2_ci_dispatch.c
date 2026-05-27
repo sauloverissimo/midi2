@@ -36,6 +36,7 @@
 #include <string.h>
 
 void midi2_ci_dispatch_init(midi2_ci_dispatch *dp) {
+  if (dp == NULL) return;
   memset(dp, 0, sizeof(*dp));
 }
 
@@ -57,7 +58,7 @@ static midi2_ci_header make_hdr(const uint8_t *d, uint8_t group) {
  *--------------------------------------------------------------------*/
 static void dispatch_pe_data(midi2_ci_dp_pe_data_cb cb, midi2_ci_header hdr,
                                 const uint8_t *d, uint16_t len, void *ctx) {
-  if (!cb) return;
+  if (cb == NULL) return;
   if (len < 14) return;  /* header(13) + request_id(1) minimum */
   uint8_t request_id = d[13];
   uint16_t p = 14;
@@ -87,7 +88,7 @@ static void dispatch_pe_data(midi2_ci_dp_pe_data_cb cb, midi2_ci_header hdr,
  *--------------------------------------------------------------------*/
 bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
                                const uint8_t *data, uint16_t length) {
-  if (!dp || !data) return false;
+  if (dp == NULL || data == NULL) return false;
   if (!midi2_ci_is_ci(data, length)) return false;
 
   midi2_ci_header hdr = make_hdr(data, group);
@@ -98,7 +99,7 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
     /*--- Management ---*/
 
     case MIDI2_CI_DISCOVERY: {
-      if (!dp->on_discovery || length < 29) break;
+      if (dp->on_discovery == NULL || length < 29) break;
       uint8_t out_path = (hdr.version >= MIDI2_CI_VERSION_2 && length >= 30) ? data[29] : 0;
       dp->on_discovery(hdr, midi2_ci_get_mfr_id(data), midi2_ci_get_family(data),
                            midi2_ci_get_model(data), midi2_ci_get_sw_rev(data),
@@ -108,7 +109,7 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
     }
 
     case MIDI2_CI_DISCOVERY_REPLY: {
-      if (!dp->on_discovery_reply || length < 29) break;
+      if (dp->on_discovery_reply == NULL || length < 29) break;
       uint8_t out_path = 0, fb = 0x7F;
       if (hdr.version >= MIDI2_CI_VERSION_2 && length >= 31) {
         out_path = data[29];
@@ -122,13 +123,13 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
     }
 
     case MIDI2_CI_ENDPOINT_INFO: {
-      if (!dp->on_endpoint_info || length < 14) break;
+      if (dp->on_endpoint_info == NULL || length < 14) break;
       dp->on_endpoint_info(hdr, data[13], dp->context);
       return true;
     }
 
     case MIDI2_CI_ENDPOINT_INFO_REPLY: {
-      if (!dp->on_endpoint_info_reply || length < 16) break;
+      if (dp->on_endpoint_info_reply == NULL || length < 16) break;
       uint8_t status = data[13];
       uint16_t info_len = midi2_ci_read_14(&data[14]);
       const uint8_t *info = (info_len > 0 && length >= 16 + info_len) ? &data[16] : NULL;
@@ -137,13 +138,13 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
     }
 
     case MIDI2_CI_INVALIDATE_MUID: {
-      if (!dp->on_invalidate_muid || length < 17) break;
+      if (dp->on_invalidate_muid == NULL || length < 17) break;
       dp->on_invalidate_muid(hdr, midi2_ci_get_target_muid(data), dp->context);
       return true;
     }
 
     case MIDI2_CI_ACK: {
-      if (!dp->on_ack || length < 13) break;
+      if (dp->on_ack == NULL || length < 13) break;
       uint8_t orig = 0, sc = 0, sd = 0;
       const uint8_t *det = NULL;
       uint16_t ml = 0;
@@ -159,7 +160,7 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
     }
 
     case MIDI2_CI_NAK: {
-      if (!dp->on_nak || length < 13) break;
+      if (dp->on_nak == NULL || length < 13) break;
       uint8_t orig = 0, sc = 0, sd = 0;
       const uint8_t *det = NULL;
       uint16_t ml = 0;
@@ -177,13 +178,13 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
     /*--- Profile Configuration ---*/
 
     case MIDI2_CI_PROFILE_INQUIRY: {
-      if (!dp->on_profile_inquiry) break;
+      if (dp->on_profile_inquiry == NULL) break;
       dp->on_profile_inquiry(hdr, dp->context);
       return true;
     }
 
     case MIDI2_CI_PROFILE_INQUIRY_REPLY: {
-      if (!dp->on_profile_inquiry_reply || length < 15) break;
+      if (dp->on_profile_inquiry_reply == NULL || length < 15) break;
       uint16_t en_count = midi2_ci_read_14(&data[13]);
       uint16_t en_bytes = (uint16_t)(en_count * 5);
       if (15 + en_bytes + 2 > length) break;  /* bounds check */
@@ -200,7 +201,7 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
     }
 
     case MIDI2_CI_SET_PROFILE_ON: {
-      if (!dp->on_set_profile_on || length < 18) break;
+      if (dp->on_set_profile_on == NULL || length < 18) break;
       uint16_t nch = 0;
       if (hdr.version >= MIDI2_CI_VERSION_2 && length >= 20) {
         nch = midi2_ci_read_14(&data[18]);
@@ -210,13 +211,13 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
     }
 
     case MIDI2_CI_SET_PROFILE_OFF: {
-      if (!dp->on_set_profile_off || length < 18) break;
+      if (dp->on_set_profile_off == NULL || length < 18) break;
       dp->on_set_profile_off(hdr, &data[13], 0, dp->context);
       return true;
     }
 
     case MIDI2_CI_PROFILE_ENABLED: {
-      if (!dp->on_profile_enabled || length < 18) break;
+      if (dp->on_profile_enabled == NULL || length < 18) break;
       uint16_t nch = 0;
       if (hdr.version >= MIDI2_CI_VERSION_2 && length >= 20) {
         nch = midi2_ci_read_14(&data[18]);
@@ -226,7 +227,7 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
     }
 
     case MIDI2_CI_PROFILE_DISABLED: {
-      if (!dp->on_profile_disabled || length < 18) break;
+      if (dp->on_profile_disabled == NULL || length < 18) break;
       uint16_t nch = 0;
       if (hdr.version >= MIDI2_CI_VERSION_2 && length >= 20) {
         nch = midi2_ci_read_14(&data[18]);
@@ -236,25 +237,25 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
     }
 
     case MIDI2_CI_PROFILE_ADDED: {
-      if (!dp->on_profile_added || length < 18) break;
+      if (dp->on_profile_added == NULL || length < 18) break;
       dp->on_profile_added(hdr, &data[13], dp->context);
       return true;
     }
 
     case MIDI2_CI_PROFILE_REMOVED: {
-      if (!dp->on_profile_removed || length < 18) break;
+      if (dp->on_profile_removed == NULL || length < 18) break;
       dp->on_profile_removed(hdr, &data[13], dp->context);
       return true;
     }
 
     case MIDI2_CI_PROFILE_DETAILS: {
-      if (!dp->on_profile_details || length < 19) break;
+      if (dp->on_profile_details == NULL || length < 19) break;
       dp->on_profile_details(hdr, &data[13], data[18], dp->context);
       return true;
     }
 
     case MIDI2_CI_PROFILE_DETAILS_REPLY: {
-      if (!dp->on_profile_details_reply || length < 21) break;
+      if (dp->on_profile_details_reply == NULL || length < 21) break;
       uint8_t target = data[18];
       uint16_t dl = midi2_ci_read_14(&data[19]);
       const uint8_t *dd = (dl > 0 && length >= 21 + dl) ? &data[21] : NULL;
@@ -263,7 +264,7 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
     }
 
     case MIDI2_CI_PROFILE_SPECIFIC_DATA: {
-      if (!dp->on_profile_specific_data || length < 22) break;
+      if (dp->on_profile_specific_data == NULL || length < 22) break;
       uint32_t dl = midi2_ci_read_28(&data[18]);
       const uint8_t *dd = (dl > 0 && dl <= (uint32_t)(length - 22)) ? &data[22] : NULL;
       dp->on_profile_specific_data(hdr, &data[13], dd, dl, dp->context);
@@ -273,7 +274,7 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
     /*--- Property Exchange ---*/
 
     case MIDI2_CI_PE_CAPABILITY: {
-      if (!dp->on_pe_capability || length < 14) break;
+      if (dp->on_pe_capability == NULL || length < 14) break;
       uint8_t max_sim = data[13];
       uint8_t maj = 0, min = 0;
       if (hdr.version >= MIDI2_CI_VERSION_2 && length >= 16) {
@@ -284,7 +285,7 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
     }
 
     case MIDI2_CI_PE_CAPABILITY_REPLY: {
-      if (!dp->on_pe_capability_reply || length < 14) break;
+      if (dp->on_pe_capability_reply == NULL || length < 14) break;
       uint8_t max_sim = data[13];
       uint8_t maj = 0, min = 0;
       if (hdr.version >= MIDI2_CI_VERSION_2 && length >= 16) {
@@ -325,32 +326,32 @@ bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
     /*--- Process Inquiry ---*/
 
     case MIDI2_CI_PI_CAPABILITY: {
-      if (!dp->on_pi_capability) break;
+      if (dp->on_pi_capability == NULL) break;
       dp->on_pi_capability(hdr, dp->context);
       return true;
     }
 
     case MIDI2_CI_PI_CAPABILITY_REPLY: {
-      if (!dp->on_pi_capability_reply || length < 14) break;
+      if (dp->on_pi_capability_reply == NULL || length < 14) break;
       dp->on_pi_capability_reply(hdr, data[13], dp->context);
       return true;
     }
 
     case MIDI2_CI_PI_MIDI_REPORT: {
-      if (!dp->on_pi_midi_report || length < 18) break;
+      if (dp->on_pi_midi_report == NULL || length < 18) break;
       dp->on_pi_midi_report(hdr, data[13], data[14],
                                 data[16], data[17], dp->context);
       return true;
     }
 
     case MIDI2_CI_PI_MIDI_REPORT_REPLY: {
-      if (!dp->on_pi_midi_report_reply || length < 17) break;
+      if (dp->on_pi_midi_report_reply == NULL || length < 17) break;
       dp->on_pi_midi_report_reply(hdr, data[13], data[15], data[16], dp->context);
       return true;
     }
 
     case MIDI2_CI_PI_MIDI_REPORT_END: {
-      if (!dp->on_pi_midi_report_end) break;
+      if (dp->on_pi_midi_report_end == NULL) break;
       dp->on_pi_midi_report_end(hdr, dp->context);
       return true;
     }

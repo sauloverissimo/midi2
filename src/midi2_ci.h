@@ -172,7 +172,8 @@ typedef struct {
 /** Initialize state with caller-provided storage.
  *  Delegates to midi2_ci_init_ex(..., NULL, 0), so the subscriber
  *  registry is absent and subscribe/notify APIs return ERR_FULL.
- *  @param state         State struct (caller-allocated)
+ *  @param state         State struct (caller-allocated). Safe to pass NULL
+ *                       (function is no-op).
  *  @param muid_seed     Random or unique value for MUID generation (28-bit)
  *  @param profiles      Caller's profile array, or NULL if no profiles needed
  *  @param max_profiles  Capacity of profiles array
@@ -184,19 +185,21 @@ void midi2_ci_init(midi2_ci_state *state, uint32_t muid_seed,
 
 /** Extended initializer that also wires a subscriber-registry array
  *  for PE Subscribe / Notify. Pass NULL / 0 for the subscribers
- *  argument to match midi2_ci_init semantics.
+ *  argument to match midi2_ci_init semantics. Safe to call with
+ *  NULL state (function is no-op).
  *  (v0.3.0+) */
 void midi2_ci_init_ex(midi2_ci_state *state, uint32_t muid_seed,
                        uint8_t (*profiles)[5], uint8_t max_profiles,
                        midi2_ci_property *properties, uint8_t max_properties,
                        midi2_ci_subscriber *subscribers, uint8_t max_subscribers);
 
-/** Configure device identity */
+/** Configure device identity. Safe to call with NULL state (no-op). */
 void midi2_ci_set_identity(midi2_ci_state *state,
                              uint32_t manufacturer_id, uint16_t family_id,
                              uint16_t model_id, uint32_t version_id);
 
-/** Set the write function (how CI sends SysEx responses) */
+/** Set the write function (how CI sends SysEx responses).
+ *  Safe to call with NULL state (no-op). */
 void midi2_ci_set_write_fn(midi2_ci_state *state,
                               midi2_proc_write_fn write_fn, void *context);
 
@@ -204,38 +207,46 @@ void midi2_ci_set_write_fn(midi2_ci_state *state,
  *  MUID on Invalidate MUID messages and on peer MUID collisions. Without
  *  this, both situations are silently ignored (v0.2.3 behavior).
  *  The callback is invoked from within process_sysex; it must be re-entrant
- *  and should return quickly. Only the lower 28 bits matter. (v0.2.4+) */
+ *  and should return quickly. Only the lower 28 bits matter.
+ *  Safe to call with NULL state (no-op). (v0.2.4+) */
 void midi2_ci_set_rng(midi2_ci_state *state,
                          midi2_ci_rng_fn rng, void *context);
 
 /** Enable/disable automatic NAK (Sub-ID#2 0x7F, status 0x01 NOT_SUPPORTED)
  *  replies for CI sub-ids the convenience responder does not handle.
  *  M2-101-UM Appendix E requires a device to "Be able to send a NAK message
- *  when appropriate". Default: false (v0.2.3 compatible). (v0.2.4+) */
+ *  when appropriate". Default: false (v0.2.3 compatible).
+ *  Safe to call with NULL state (no-op). (v0.2.4+) */
 void midi2_ci_set_nak_on_unknown(midi2_ci_state *state, bool enabled);
 
 /** Enable/disable automatic broadcast of an Invalidate MUID frame for the
  *  old MUID whenever the convenience responder regenerates due to an
- *  inbound collision. Default: true (v0.3.0+). */
+ *  inbound collision. Default: true.
+ *  Safe to call with NULL state (no-op). (v0.3.0+) */
 void midi2_ci_set_auto_invalidate_on_collision(midi2_ci_state *state, bool enabled);
 
 /** Generate a fresh 28-bit MUID using the configured RNG, avoiding the
  *  reserved values 0x00000000 and 0x0FFFFFFF (broadcast). If no RNG is
  *  set, falls back to perturbing the current MUID. Returns the new MUID
- *  and also stores it into state->muid. (v0.2.4+) */
+ *  and also stores it into state->muid. Returns 0u (reserved sentinel)
+ *  if state is NULL. (v0.2.4+) */
 uint32_t midi2_ci_new_muid(midi2_ci_state *state);
 
-/** Add a profile. Returns MIDI2_CI_OK or MIDI2_CI_ERR_FULL. */
+/** Add a profile. Returns MIDI2_CI_OK, MIDI2_CI_ERR_FULL, or
+ *  MIDI2_CI_ERR_NULL (state is NULL). */
 int midi2_ci_add_profile(midi2_ci_state *state, const uint8_t profile_id[5]);
 
-/** Remove a profile. Returns MIDI2_CI_OK or MIDI2_CI_ERR_NOT_FOUND. */
+/** Remove a profile. Returns MIDI2_CI_OK, MIDI2_CI_ERR_NOT_FOUND, or
+ *  MIDI2_CI_ERR_NULL (state is NULL). */
 int midi2_ci_remove_profile(midi2_ci_state *state, const uint8_t profile_id[5]);
 
-/** Add a static property. Returns MIDI2_CI_OK or MIDI2_CI_ERR_FULL. */
+/** Add a static property. Returns MIDI2_CI_OK, MIDI2_CI_ERR_FULL, or
+ *  MIDI2_CI_ERR_NULL (state is NULL). */
 int midi2_ci_add_property_static(midi2_ci_state *state,
                                     const char *name, const char *value);
 
-/** Add a dynamic property with getter/setter. Returns MIDI2_CI_OK or MIDI2_CI_ERR_FULL. */
+/** Add a dynamic property with getter/setter. Returns MIDI2_CI_OK,
+ *  MIDI2_CI_ERR_FULL, or MIDI2_CI_ERR_NULL (state is NULL). */
 int midi2_ci_add_property_dynamic(midi2_ci_state *state,
                                      const char *name,
                                      midi2_ci_pe_getter getter,
@@ -244,25 +255,32 @@ int midi2_ci_add_property_dynamic(midi2_ci_state *state,
 /** Remove a property by name. Remaining properties are shifted left to
  *  preserve contiguous storage. Returns MIDI2_CI_OK or
  *  MIDI2_CI_ERR_NOT_FOUND. Symmetric with midi2_ci_remove_profile.
- *  (v0.3.0+) */
+ *  Safe to call with NULL state or NULL name (returns
+ *  MIDI2_CI_ERR_NOT_FOUND). (v0.3.0+) */
 int midi2_ci_remove_property(midi2_ci_state *state, const char *name);
 
 /** Clear all registered profiles (count-only reset; storage contents are
- *  left intact for caller inspection or reuse). (v0.3.0+) */
+ *  left intact for caller inspection or reuse).
+ *  Safe to call with NULL state (no-op). (v0.3.0+) */
 void midi2_ci_reset_profiles(midi2_ci_state *state);
 
 /** Clear all registered properties (count-only reset; storage contents
- *  are left intact for caller inspection or reuse). (v0.3.0+) */
+ *  are left intact for caller inspection or reuse).
+ *  Safe to call with NULL state (no-op). (v0.3.0+) */
 void midi2_ci_reset_properties(midi2_ci_state *state);
 
 /** Toggle the subscribable flag on a registered property at runtime.
- *  Returns MIDI2_CI_OK or MIDI2_CI_ERR_NOT_FOUND. (v0.3.0+) */
+ *  Returns MIDI2_CI_OK or MIDI2_CI_ERR_NOT_FOUND.
+ *  Safe to call with NULL state or NULL name (returns
+ *  MIDI2_CI_ERR_NOT_FOUND). (v0.3.0+) */
 int midi2_ci_pe_set_subscribable(midi2_ci_state *state,
                                   const char *name, bool subscribable);
 
 /** Register a subscriber (caller_muid) for the named PE resource. The
  *  property must be registered and marked subscribable. Duplicate
  *  (muid, name) pairs are idempotent and return OK.
+ *  Safe to call with NULL state or NULL resource_name (returns
+ *  MIDI2_CI_ERR_NOT_FOUND).
  *  @return MIDI2_CI_OK, MIDI2_CI_ERR_NOT_FOUND (property unknown or
  *          not subscribable), or MIDI2_CI_ERR_FULL (no subscriber
  *          capacity, including the case of midi2_ci_init without a
@@ -271,6 +289,8 @@ int midi2_ci_subscribe_add(midi2_ci_state *state, uint32_t caller_muid,
                             const char *resource_name);
 
 /** Remove a subscriber from the named resource.
+ *  Safe to call with NULL state or NULL resource_name (returns
+ *  MIDI2_CI_ERR_NOT_FOUND, via indirect find_subscriber_idx guard).
  *  @return MIDI2_CI_OK or MIDI2_CI_ERR_NOT_FOUND. (v0.3.0+) */
 int midi2_ci_subscribe_remove(midi2_ci_state *state, uint32_t caller_muid,
                                const char *resource_name);
@@ -279,12 +299,13 @@ int midi2_ci_subscribe_remove(midi2_ci_state *state, uint32_t caller_muid,
  *  Returns MIDI2_CI_OK even when the subscriber list is empty, or
  *  MIDI2_CI_ERR_NOT_FOUND when the property is unknown. Emission uses
  *  the state's write_fn (same path as Discovery / PE Reply).
- *  (v0.3.0+) */
+ *  Safe to call with NULL state or NULL resource_name (returns
+ *  MIDI2_CI_ERR_NOT_FOUND). (v0.3.0+) */
 int midi2_ci_notify_property_changed(midi2_ci_state *state,
                                       const char *resource_name);
 
 /** Return the current number of active subscribers across all
- *  resources. (v0.3.0+) */
+ *  resources. Returns 0 if state is NULL. (v0.3.0+) */
 uint8_t midi2_ci_get_subscriber_count(const midi2_ci_state *state);
 
 /** Process incoming SysEx that might be MIDI-CI.
@@ -298,6 +319,7 @@ uint8_t midi2_ci_get_subscriber_count(const midi2_ci_state *state);
  *  - All replies use MIDI-CI Message Version 1 (no v2 extended fields).
  *  - For full PE/Profile control, use midi2_ci_dispatch directly.
  *
+ *  @param state   CI state struct. Safe to pass NULL (returns false).
  *  @param group   UMP group the SysEx arrived on (responses go to same group)
  *  @param data    Reassembled SysEx content (no F0/F7)
  *  @param length  Length of data */

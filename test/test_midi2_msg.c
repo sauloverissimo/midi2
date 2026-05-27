@@ -66,15 +66,25 @@ void test_scale_roundtrip_14_32_14(void) {
 /* --- Word Count --- */
 
 void test_word_count(void) {
-  TEST("word count for all known MTs");
-  CHECK(midi2_msg_word_count(0x00) == 1, "MT 0x0");
-  CHECK(midi2_msg_word_count(0x01) == 1, "MT 0x1");
-  CHECK(midi2_msg_word_count(0x02) == 1, "MT 0x2");
-  CHECK(midi2_msg_word_count(0x03) == 2, "MT 0x3");
-  CHECK(midi2_msg_word_count(0x04) == 2, "MT 0x4");
-  CHECK(midi2_msg_word_count(0x05) == 4, "MT 0x5");
-  CHECK(midi2_msg_word_count(0x0D) == 4, "MT 0xD");
-  CHECK(midi2_msg_word_count(0x0F) == 4, "MT 0xF");
+  TEST("word count for all 16 MTs per UMP 1.1.2 sec 2.1.4");
+  /* Defined MTs */
+  CHECK(midi2_msg_word_count(0x00) == 1, "MT 0x0 Utility");
+  CHECK(midi2_msg_word_count(0x01) == 1, "MT 0x1 System RT/Common");
+  CHECK(midi2_msg_word_count(0x02) == 1, "MT 0x2 MIDI 1.0 CV");
+  CHECK(midi2_msg_word_count(0x03) == 2, "MT 0x3 Data 64 (SysEx7)");
+  CHECK(midi2_msg_word_count(0x04) == 2, "MT 0x4 MIDI 2.0 CV");
+  CHECK(midi2_msg_word_count(0x05) == 4, "MT 0x5 Data 128");
+  CHECK(midi2_msg_word_count(0x0D) == 4, "MT 0xD Flex Data");
+  CHECK(midi2_msg_word_count(0x0F) == 4, "MT 0xF UMP Stream");
+  /* Reserved MTs (spec-allocated sizes, future-proof against unknown streams) */
+  CHECK(midi2_msg_word_count(0x06) == 1, "MT 0x6 reserved 32-bit");
+  CHECK(midi2_msg_word_count(0x07) == 1, "MT 0x7 reserved 32-bit");
+  CHECK(midi2_msg_word_count(0x08) == 2, "MT 0x8 reserved 64-bit");
+  CHECK(midi2_msg_word_count(0x09) == 2, "MT 0x9 reserved 64-bit");
+  CHECK(midi2_msg_word_count(0x0A) == 2, "MT 0xA reserved 64-bit");
+  CHECK(midi2_msg_word_count(0x0B) == 3, "MT 0xB reserved 96-bit");
+  CHECK(midi2_msg_word_count(0x0C) == 3, "MT 0xC reserved 96-bit");
+  CHECK(midi2_msg_word_count(0x0E) == 4, "MT 0xE reserved 128-bit");
   PASS();
 }
 
@@ -1117,6 +1127,31 @@ void test_cable_event_null_safe(void) {
   PASS();
 }
 
+/* --- NULL paths (boundary conversion functions) --- */
+
+void test_mt4_to_mt2_null_input(void) {
+  TEST("mt4_to_mt2: NULL mt4_words returns 0");
+  uint32_t out_word = 0xDEADBEEFu;
+  CHECK(midi2_msg_mt4_to_mt2(NULL, &out_word) == 0, "NULL input rejected");
+  CHECK(out_word == 0xDEADBEEFu, "out_word untouched on rejection");
+  PASS();
+}
+
+void test_mt4_to_mt2_null_output(void) {
+  TEST("mt4_to_mt2: NULL out_word returns 0");
+  uint32_t mt4[2];
+  midi2_msg_note_on(mt4, 0, 0, 60, 0xC000, 0, 0);
+  CHECK(midi2_msg_mt4_to_mt2(mt4, NULL) == 0, "NULL output rejected");
+  PASS();
+}
+
+void test_mt2_to_mt4_null_output(void) {
+  TEST("mt2_to_mt4: NULL out returns false");
+  uint32_t mt2 = 0x20903C7Fu; /* MT 0x2 Note On */
+  CHECK(!midi2_msg_mt2_to_mt4(mt2, NULL), "NULL output rejected");
+  PASS();
+}
+
 int main(void) {
   printf("\n=== midi2_msg.h Unit Tests ===\n\n");
 
@@ -1254,6 +1289,11 @@ int main(void) {
   test_cable_event_reserved_cin();
   test_cable_event_sysex_cin();
   test_cable_event_null_safe();
+
+  printf("\n[NULL Paths (boundary conversions)]\n");
+  test_mt4_to_mt2_null_input();
+  test_mt4_to_mt2_null_output();
+  test_mt2_to_mt4_null_output();
 
   printf("\n[MT 0x2 -> MT 0x4 Translation]\n");
   test_mt2_to_mt4_note_on();

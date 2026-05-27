@@ -36,6 +36,7 @@
 #include <string.h>
 
 void midi2_conv_init(midi2_conv_state *state, uint8_t group) {
+  if (state == NULL) return;
   memset(state, 0, sizeof(midi2_conv_state));
   state->group = group & 0x0F;
 }
@@ -118,6 +119,7 @@ static bool emit_sysex_packet(midi2_conv_state *state, bool is_end) {
 }
 
 bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte) {
+  if (state == NULL) return false;
   state->ump_words = 0;
 
   /* Real-Time messages (F8-FF) can appear anywhere, even mid-message */

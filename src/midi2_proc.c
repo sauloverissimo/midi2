@@ -42,6 +42,7 @@ void midi2_proc_init(midi2_proc_state *state,
                        uint8_t *sysex7_buf, uint16_t sysex7_buf_size,
                        uint8_t *sysex8_buf, uint16_t sysex8_buf_size) {
   uint8_t i;
+  if (state == NULL) return;
   memset(state, 0, sizeof(midi2_proc_state));
   state->group_mask = 0xFFFF;
   state->sysex_group = 0xFF;
@@ -186,6 +187,7 @@ static void sysex8_process(midi2_proc_state *state, uint8_t group, const uint32_
  * Feed
  *--------------------------------------------------------------------*/
 void midi2_proc_feed(midi2_proc_state *state, const uint32_t *words, uint8_t word_count) {
+  if (state == NULL || words == NULL) return;
   uint8_t mt = midi2_msg_get_mt(words);
   uint8_t group = midi2_msg_get_group(words);
 
@@ -220,6 +222,7 @@ void midi2_proc_feed(midi2_proc_state *state, const uint32_t *words, uint8_t wor
  * Group remap
  *--------------------------------------------------------------------*/
 void midi2_proc_remap_group(midi2_proc_state *state, uint32_t *words) {
+  if (state == NULL || words == NULL) return;
   uint8_t mt = midi2_msg_get_mt(words);
   if (mt != MIDI2_MT_UTILITY && mt != MIDI2_MT_STREAM) {
     uint8_t group = midi2_msg_get_group(words);
@@ -236,6 +239,8 @@ void midi2_proc_send_sysex7(uint8_t group, const uint8_t *data, uint16_t length,
   uint32_t w[2];
   uint16_t offset = 0;
 
+  if (write_fn == NULL) return;
+  if (data == NULL) return;
   if (length == 0) return;
 
   if (length <= 6) {
@@ -265,6 +270,28 @@ void midi2_proc_send_sysex7(uint8_t group, const uint8_t *data, uint16_t length,
 }
 
 /*--------------------------------------------------------------------+
+ * Internal helper: UMP Stream message form code selector
+ *
+ * Per M2-104-UM §7.1 Table 51, multi-packet stream messages encode
+ * their position in the Format field:
+ *   Complete = 0 (single-packet message)
+ *   Start    = 1 (first of multi-packet)
+ *   Continue = 2 (middle of multi-packet)
+ *   End      = 3 (final of multi-packet)
+ *
+ * Used by send_fb_name, stream_text_emit, send_sysex8.
+ *--------------------------------------------------------------------*/
+static inline uint8_t midi2_proc_stream_form(uint8_t is_first, uint8_t is_last) {
+  static const uint8_t lut[4] = {
+    [0] = 2u,  /* 00: !first, !last → Continue */
+    [1] = 3u,  /* 01: !first,  last → End */
+    [2] = 1u,  /* 10:  first, !last → Start */
+    [3] = 0u,  /* 11:  first,  last → Complete */
+  };
+  return lut[((is_first ? 2u : 0u)) | (is_last ? 1u : 0u)];
+}
+
+/*--------------------------------------------------------------------+
  * Function Block Name Notification (UMP Stream MT 0xF status 0x12)
  *
  * M2-104-UM §7.1.9. 4-word packet; 1 name byte at byte 3 of word 0 plus
@@ -277,7 +304,7 @@ void midi2_proc_send_sysex7(uint8_t group, const uint8_t *data, uint16_t length,
 
 void midi2_proc_send_fb_name(uint8_t fb_idx, const char *name,
                                midi2_proc_write_fn write_fn, void *context) {
-  if (!write_fn || !name) return;
+  if (write_fn == NULL || name == NULL) return;
 
   uint16_t total = 0;
   while (name[total] && total < MIDI2_FB_NAME_MAX_BYTES) total++;
@@ -291,10 +318,7 @@ void midi2_proc_send_fb_name(uint8_t fb_idx, const char *name,
                  : (uint8_t)remaining;
     uint8_t is_first = (offset == 0);
     uint8_t is_last  = (remaining <= MIDI2_FB_NAME_BYTES_PER_UMP);
-    uint8_t form = (is_first && is_last) ? 0u   /* Complete */
-                 : is_first              ? 1u   /* Start */
-                 : is_last               ? 3u   /* End */
-                                         : 2u;  /* Continue */
+    uint8_t form = midi2_proc_stream_form(is_first, is_last);
 
     uint32_t msg[4] = {0};
     msg[0] = ((uint32_t)0xFu << 28)
@@ -333,7 +357,7 @@ typedef void (*stream_text_builder_fn)(uint32_t *w, uint8_t format,
 static void stream_text_emit(stream_text_builder_fn builder,
                               const char *text,
                               midi2_proc_write_fn write_fn, void *context) {
-  if (!write_fn || !text) return;
+  if (write_fn == NULL || text == NULL) return;
   uint16_t total = 0;
   while (text[total] && total < MIDI2_STREAM_TEXT_MAX_BYTES) total++;
   if (total == 0) return;
@@ -346,10 +370,7 @@ static void stream_text_emit(stream_text_builder_fn builder,
                  : (uint8_t)remaining;
     uint8_t is_first = (offset == 0);
     uint8_t is_last  = (remaining <= MIDI2_STREAM_TEXT_BYTES_PER_UMP);
-    uint8_t form = (is_first && is_last) ? 0u   /* Complete */
-                 : is_first              ? 1u   /* Start */
-                 : is_last               ? 3u   /* End */
-                                         : 2u;  /* Continue */
+    uint8_t form = midi2_proc_stream_form(is_first, is_last);
     uint32_t msg[4];
     builder(msg, form, (const uint8_t *)(text + offset), n);
     write_fn(msg, 4, context);
@@ -376,7 +397,7 @@ void midi2_proc_send_device_identity(uint32_t manufacturer_id,
                                       uint16_t family_id, uint16_t model_id,
                                       uint32_t version_id,
                                       midi2_proc_write_fn write_fn, void *context) {
-  if (!write_fn) return;
+  if (write_fn == NULL) return;
   uint32_t msg[4];
   midi2_msg_stream_device_identity(msg, manufacturer_id, family_id,
                                     model_id, version_id);
@@ -398,9 +419,9 @@ void midi2_proc_send_device_identity(uint32_t manufacturer_id,
 void midi2_proc_send_sysex8(uint8_t group, uint8_t stream_id,
                              const uint8_t *data, uint16_t length,
                              midi2_proc_write_fn write_fn, void *context) {
-  if (!write_fn) return;
+  if (write_fn == NULL) return;
+  if (data == NULL) return;
   if (length == 0) return;
-  if (!data) return;
 
   uint16_t offset = 0;
   while (offset < length) {
@@ -410,10 +431,9 @@ void midi2_proc_send_sysex8(uint8_t group, uint8_t stream_id,
                  : (uint8_t)remaining;
     uint8_t is_first = (offset == 0);
     uint8_t is_last  = (remaining <= MIDI2_SYSEX8_BYTES_PER_UMP);
-    uint8_t status = (is_first && is_last) ? MIDI2_SYSEX8_COMPLETE
-                   : is_first              ? MIDI2_SYSEX8_START
-                   : is_last               ? MIDI2_SYSEX8_END
-                                           : MIDI2_SYSEX8_CONTINUE;
+    /* SysEx8 status nibble: form << 4 maps to MIDI2_SYSEX8_* enum values
+     * (Complete=0x00, Start=0x10, Continue=0x20, End=0x30). */
+    uint8_t status = (uint8_t)(midi2_proc_stream_form(is_first, is_last) << 4);
     uint32_t msg[4];
     midi2_msg_sysex8_packet(msg, group, status, stream_id,
                              data + offset, n);

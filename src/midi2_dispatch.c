@@ -36,9 +36,22 @@
 #include <string.h>
 
 /*--------------------------------------------------------------------+
+ * Internal helper: sign-extend 4-bit signed nibble to int8_t
+ *
+ * MIDI 2.0 Flex Data uses 4-bit signed values for "sharps/flats" count
+ * in Key Signature and Chord Name messages (range -7..+7, encoded with
+ * bit 3 as the sign bit per M2-104-UM §7.5.5 / §7.5.6). Used by
+ * dispatch_flex for KEY_SIG and CHORD_NAME (top/bass).
+ *--------------------------------------------------------------------*/
+static inline int8_t midi2_dispatch_sign_extend_4(uint8_t v) {
+  return (v & 0x08u) ? (int8_t)(v | 0xF0u) : (int8_t)(v & 0x0Fu);
+}
+
+/*--------------------------------------------------------------------+
  * Init
  *--------------------------------------------------------------------*/
 void midi2_dispatch_init(midi2_dispatch *dp) {
+  if (dp == NULL) return;
   memset(dp, 0, sizeof(*dp));
 }
 
@@ -346,7 +359,7 @@ static void dispatch_flex(midi2_dispatch *dp, const uint32_t *w) {
       case MIDI2_FLEX_KEY_SIG:
         if (dp->on_key_sig) {
           uint8_t sf_raw  = (uint8_t)((w[1] >> 28) & 0x0F);
-          int8_t sf       = (sf_raw & 0x08) ? (int8_t)(sf_raw | 0xF0) : (int8_t)sf_raw;
+          int8_t  sf      = midi2_dispatch_sign_extend_4(sf_raw);
           uint8_t tonic   = (uint8_t)((w[1] >> 24) & 0x0F);
           uint8_t keytype = (uint8_t)((w[1] >> 22) & 0x03);
           dp->on_key_sig(group, address, channel, sf, tonic, keytype, dp->context);
@@ -356,7 +369,7 @@ static void dispatch_flex(midi2_dispatch *dp, const uint32_t *w) {
       case MIDI2_FLEX_CHORD_NAME:
         if (dp->on_chord) {
           uint8_t tsf_raw = (uint8_t)((w[1] >> 28) & 0x0F);
-          int8_t  tsf = (tsf_raw & 0x08) ? (int8_t)(tsf_raw | 0xF0) : (int8_t)tsf_raw;
+          int8_t  tsf     = midi2_dispatch_sign_extend_4(tsf_raw);
           uint8_t tn  = (uint8_t)((w[1] >> 24) & 0x0F);
           uint8_t ct  = (uint8_t)((w[1] >> 16) & 0xFF);
           uint8_t a1t = (uint8_t)((w[1] >> 12) & 0x0F);
@@ -368,7 +381,7 @@ static void dispatch_flex(midi2_dispatch *dp, const uint32_t *w) {
           uint8_t a4t = (uint8_t)((w[2] >> 20) & 0x0F);
           uint8_t a4d = (uint8_t)((w[2] >> 16) & 0x0F);
           uint8_t bsf_raw = (uint8_t)((w[3] >> 28) & 0x0F);
-          int8_t  bsf = (bsf_raw & 0x08) ? (int8_t)(bsf_raw | 0xF0) : (int8_t)bsf_raw;
+          int8_t  bsf     = midi2_dispatch_sign_extend_4(bsf_raw);
           uint8_t bn  = (uint8_t)((w[3] >> 24) & 0x0F);
           uint8_t bt  = (uint8_t)((w[3] >> 16) & 0xFF);
           uint8_t b1t = (uint8_t)((w[3] >> 12) & 0x0F);
@@ -558,7 +571,7 @@ static void dispatch_stream(midi2_dispatch *dp, const uint32_t *w) {
  *--------------------------------------------------------------------*/
 void midi2_dispatch_feed(const uint32_t *words, uint8_t word_count, void *context) {
   midi2_dispatch *dp = (midi2_dispatch *)context;
-  if (!dp || !words || word_count == 0) return;
+  if (dp == NULL || words == NULL || word_count == 0) return;
 
   uint8_t mt = (uint8_t)((words[0] >> 28) & 0x0F);
 

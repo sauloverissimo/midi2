@@ -511,6 +511,19 @@ void test_roundtrip_discovery(void) {
 }
 
 /*--------------------------------------------------------------------+
+ * NULL paths (gate function defensive)
+ *--------------------------------------------------------------------*/
+
+void test_is_ci_null_safe(void) {
+  TEST("is_ci: NULL d returns false regardless of length");
+  CHECK(!midi2_ci_is_ci(NULL, 0), "NULL d, len=0");
+  CHECK(!midi2_ci_is_ci(NULL, 12), "NULL d, len<13");
+  CHECK(!midi2_ci_is_ci(NULL, 13), "NULL d, len=13 (would-be UB pre-fix)");
+  CHECK(!midi2_ci_is_ci(NULL, 1024), "NULL d, large len");
+  PASS();
+}
+
+/*--------------------------------------------------------------------+
  * Main
  *--------------------------------------------------------------------*/
 int main(void) {
@@ -561,6 +574,9 @@ int main(void) {
 
   printf("\n[Roundtrip]\n");
   test_roundtrip_discovery();
+
+  printf("\n[NULL Paths]\n");
+  test_is_ci_null_safe();
 
   printf("\n=== Results: %d passed, %d failed ===\n\n", passed, failed);
   return failed > 0 ? 1 : 0;

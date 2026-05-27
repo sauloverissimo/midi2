@@ -710,6 +710,47 @@ static void test_nak_on_unknown_opt_in(void) {
   PASS();
 }
 
+/* --- NULL paths (boundary defensive checks) --- */
+
+void test_ci_init_null_safe(void) {
+  TEST("ci_init/init_ex: NULL state is no-op (no crash)");
+  midi2_ci_init(NULL, 0, NULL, 0, NULL, 0);
+  midi2_ci_init_ex(NULL, 0, NULL, 0, NULL, 0, NULL, 0);
+  PASS();
+}
+
+void test_ci_setters_null_safe(void) {
+  TEST("ci setters: NULL state are no-op (no crash)");
+  midi2_ci_set_identity(NULL, 0, 0, 0, 0);
+  midi2_ci_set_write_fn(NULL, NULL, NULL);
+  midi2_ci_set_rng(NULL, NULL, NULL);
+  midi2_ci_set_nak_on_unknown(NULL, true);
+  PASS();
+}
+
+void test_ci_new_muid_null_safe(void) {
+  TEST("ci_new_muid: NULL state returns 0u (reserved sentinel)");
+  CHECK(midi2_ci_new_muid(NULL) == 0u, "NULL state -> 0u");
+  PASS();
+}
+
+void test_ci_profile_property_null_safe(void) {
+  TEST("ci profile/property mutators: NULL state returns ERR_NULL");
+  uint8_t profile[5] = {0};
+  CHECK(midi2_ci_add_profile(NULL, profile) == MIDI2_CI_ERR_NULL, "add_profile NULL");
+  CHECK(midi2_ci_remove_profile(NULL, profile) == MIDI2_CI_ERR_NULL, "remove_profile NULL");
+  CHECK(midi2_ci_add_property_static(NULL, "x", "y") == MIDI2_CI_ERR_NULL, "add_property_static NULL");
+  CHECK(midi2_ci_add_property_dynamic(NULL, "x", NULL, NULL) == MIDI2_CI_ERR_NULL, "add_property_dynamic NULL");
+  PASS();
+}
+
+void test_ci_process_sysex_null_safe(void) {
+  TEST("ci_process_sysex: NULL state returns false");
+  uint8_t data[16] = {0xF0, 0x7E, 0x00, 0x0D, 0x70, 0x01};
+  CHECK(!midi2_ci_process_sysex(NULL, 0, data, sizeof(data)), "NULL state -> false");
+  PASS();
+}
+
 /* --- Main --- */
 
 int main(void) {
@@ -763,6 +804,13 @@ int main(void) {
   test_notify_property_changed_emits();
   test_notify_unknown_property();
   test_notify_without_subscribers_is_ok();
+
+  printf("\n[NULL Paths]\n");
+  test_ci_init_null_safe();
+  test_ci_setters_null_safe();
+  test_ci_new_muid_null_safe();
+  test_ci_profile_property_null_safe();
+  test_ci_process_sysex_null_safe();
 
   printf("\n=== Results: %d passed, %d failed ===\n\n", passed, failed);
   return failed > 0 ? 1 : 0;

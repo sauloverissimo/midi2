@@ -104,7 +104,8 @@ typedef struct {
  *--------------------------------------------------------------------*/
 
 /** Initialize state with caller-provided SysEx buffers.
- *  @param state           State struct (caller-allocated)
+ *  @param state           State struct (caller-allocated). Safe to pass NULL
+ *                         (function is no-op).
  *  @param sysex7_buf      Buffer for SysEx7 reassembly, or NULL to disable
  *  @param sysex7_buf_size Size of sysex7_buf in bytes
  *  @param sysex8_buf      Buffer for SysEx8 reassembly, or NULL to disable
@@ -114,15 +115,18 @@ void midi2_proc_init(midi2_proc_state *state,
                        uint8_t *sysex8_buf, uint16_t sysex8_buf_size);
 
 /* Feed UMP words from transport. Processes, filters, dispatches to callbacks.
- * word_count must match the message size (1, 2, or 4 words). */
+ * word_count must match the message size (1, 2, or 4 words).
+ * Safe to call with NULL state or NULL words (function is no-op). */
 void midi2_proc_feed(midi2_proc_state *state, const uint32_t *words, uint8_t word_count);
 
 /* Apply group remap to outgoing words (modifies word 0 in-place).
- * Only remaps message types that have a group field (not Utility or Stream). */
+ * Only remaps message types that have a group field (not Utility or Stream).
+ * Safe to call with NULL state or NULL words (function is no-op). */
 void midi2_proc_remap_group(midi2_proc_state *state, uint32_t *words);
 
 /* Multi-packet SysEx7 send helper. Fragments data into UMP packets (max 6 bytes each),
- * calls write_fn for each 2-word packet. data does NOT include F0/F7 delimiters. */
+ * calls write_fn for each 2-word packet. data does NOT include F0/F7 delimiters.
+ * Safe to call with NULL write_fn, NULL data, or length 0 (function is no-op). */
 void midi2_proc_send_sysex7(uint8_t group, const uint8_t *data, uint16_t length,
                               midi2_proc_write_fn write_fn, void *context);
 
@@ -130,20 +134,25 @@ void midi2_proc_send_sysex7(uint8_t group, const uint8_t *data, uint16_t length,
  * UMP Stream MT 0xF, status 0x12. Fragments the UTF-8 name across
  * Complete / Start / Continue / End 4-word packets (13 name bytes per
  * UMP; total name limited to 91 bytes per spec). Remaining bytes of
- * the final packet are zero-padded per spec. (v0.2.4+) */
+ * the final packet are zero-padded per spec.
+ * Safe to call with NULL write_fn or NULL name (function is no-op).
+ * (v0.2.4+) */
 void midi2_proc_send_fb_name(uint8_t fb_idx, const char *name,
                                midi2_proc_write_fn write_fn, void *context);
 
 /* M2-104-UM §7.1.7 Endpoint Name Notification sender.
  * UMP Stream MT 0xF, status 0x003. Fragments UTF-8 name across
  * Complete / Start / Continue / End 4-word packets (14 name bytes
- * per UMP). Empty name sends nothing. (v0.3.0+) */
+ * per UMP). Empty name sends nothing.
+ * Safe to call with NULL write_fn or NULL name (function is no-op).
+ * (v0.3.0+) */
 void midi2_proc_send_endpoint_name(const char *name,
                                     midi2_proc_write_fn write_fn, void *context);
 
 /* M2-104-UM §7.1.8 Product Instance ID Notification sender.
  * UMP Stream MT 0xF, status 0x004. Fragmentation identical to
  * Endpoint Name (14 bytes per UMP). Empty id sends nothing.
+ * Safe to call with NULL write_fn or NULL id (function is no-op).
  * (v0.3.0+) */
 void midi2_proc_send_product_id(const char *id,
                                  midi2_proc_write_fn write_fn, void *context);
@@ -152,6 +161,7 @@ void midi2_proc_send_product_id(const char *id,
  * UMP Stream MT 0xF, status 0x002. Always emits a single 4-word UMP
  * (no fragmentation). Kept for callsite symmetry with the other
  * Stream senders. manufacturer_id uses lower 24 bits only.
+ * Safe to call with NULL write_fn (function is no-op).
  * (v0.3.0+) */
 void midi2_proc_send_device_identity(uint32_t manufacturer_id,
                                       uint16_t family_id, uint16_t model_id,
@@ -162,6 +172,8 @@ void midi2_proc_send_device_identity(uint32_t manufacturer_id,
  * into 4-word packets (13 data bytes per UMP; stream_id rides in
  * word 0 bits [15:8]). status nibble encodes Complete / Start /
  * Continue / End per M2-104-UM Table 14. Zero-length sends nothing.
+ * Safe to call with NULL write_fn, NULL data, or length 0 (function
+ * is no-op).
  * (v0.3.0+) */
 void midi2_proc_send_sysex8(uint8_t group, uint8_t stream_id,
                              const uint8_t *data, uint16_t length,

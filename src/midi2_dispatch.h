@@ -291,12 +291,15 @@ typedef struct {
  * Functions
  *--------------------------------------------------------------------*/
 
-/** Initialize dispatch, zeroing all callbacks. */
+/** Initialize dispatch, zeroing all callbacks.
+ *  Safe to call with NULL dp (function is no-op). */
 void midi2_dispatch_init(midi2_dispatch *dp);
 
 /** Feed one UMP message. Parses and dispatches to the appropriate callback.
  *  word_count must match the message size (1, 2, or 4 words).
- *  Can be used directly as midi2_proc on_ump callback. */
+ *  Can be used directly as midi2_proc on_ump callback.
+ *  Safe to call with NULL context, NULL words, or word_count 0 (function
+ *  is no-op). */
 void midi2_dispatch_feed(const uint32_t *words, uint8_t word_count, void *context);
 
 #ifdef __cplusplus

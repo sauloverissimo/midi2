@@ -184,9 +184,10 @@ static inline uint8_t  midi2_ci_get_version(const uint8_t *d)      { return d[4]
 static inline uint32_t midi2_ci_get_src_muid(const uint8_t *d)     { return midi2_ci_read_muid(&d[5]); }
 static inline uint32_t midi2_ci_get_dst_muid(const uint8_t *d)     { return midi2_ci_read_muid(&d[9]); }
 
-/** Check if SysEx payload is a MIDI-CI message (7E xx 0D ...). */
+/** Check if SysEx payload is a MIDI-CI message (7E xx 0D ...).
+ *  Safe to call with NULL d (returns false). */
 static inline bool midi2_ci_is_ci(const uint8_t *d, uint16_t len) {
-  return len >= 13 && d[0] == 0x7E && d[2] == 0x0D;
+  return d != NULL && len >= 13 && d[0] == 0x7E && d[2] == 0x0D;
 }
 
 /*--------------------------------------------------------------------+

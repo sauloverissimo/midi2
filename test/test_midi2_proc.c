@@ -570,6 +570,67 @@ void test_sysex8_multi_packet(void) {
   PASS();
 }
 
+/* --- NULL paths (boundary defensive checks) --- */
+
+void test_init_null_safe(void) {
+  TEST("proc_init: NULL state is no-op (no crash)");
+  midi2_proc_init(NULL, NULL, 0, NULL, 0);
+  /* If we reach here, no segfault occurred */
+  PASS();
+}
+
+void test_feed_null_safe(void) {
+  TEST("proc_feed: NULL state or NULL words returns no-op");
+  midi2_proc_state s;
+  uint8_t sx7[16], sx8[16];
+  midi2_proc_init(&s, sx7, sizeof(sx7), sx8, sizeof(sx8));
+  uint32_t w = 0x20903C7Fu;
+
+  midi2_proc_feed(NULL, &w, 1);  /* NULL state */
+  midi2_proc_feed(&s, NULL, 1);  /* NULL words */
+  /* No crash, no callbacks invoked */
+  PASS();
+}
+
+void test_remap_group_null_safe(void) {
+  TEST("proc_remap_group: NULL state or NULL words is no-op");
+  midi2_proc_state s;
+  uint8_t sx7[16], sx8[16];
+  midi2_proc_init(&s, sx7, sizeof(sx7), sx8, sizeof(sx8));
+  uint32_t w = 0x40903C7Fu;
+  uint32_t w_orig = w;
+
+  midi2_proc_remap_group(NULL, &w);   /* NULL state */
+  CHECK(w == w_orig, "w unchanged with NULL state");
+
+  midi2_proc_remap_group(&s, NULL);   /* NULL words */
+  /* No crash */
+  PASS();
+}
+
+static uint32_t null_safe_writes;
+static uint32_t null_safe_write_count(const uint32_t *w, uint32_t c, void *ctx) {
+  (void)w; (void)ctx;
+  null_safe_writes += c;
+  return c;
+}
+
+void test_send_sysex7_null_safe(void) {
+  TEST("proc_send_sysex7: NULL write_fn or NULL data with length>0 are no-op");
+  uint8_t data[6] = {1, 2, 3, 4, 5, 6};
+  null_safe_writes = 0;
+
+  midi2_proc_send_sysex7(0, data, 6, NULL, NULL);          /* NULL write_fn */
+  CHECK(null_safe_writes == 0, "no writes with NULL write_fn");
+
+  midi2_proc_send_sysex7(0, NULL, 6, null_safe_write_count, NULL); /* NULL data + len>0 */
+  CHECK(null_safe_writes == 0, "no writes with NULL data");
+
+  midi2_proc_send_sysex7(0, data, 0, null_safe_write_count, NULL); /* len=0 */
+  CHECK(null_safe_writes == 0, "no writes with length=0");
+  PASS();
+}
+
 /* --- Main --- */
 
 int main(void) {
@@ -624,6 +685,12 @@ int main(void) {
   printf("\n[SysEx8 Reassembly]\n");
   test_sysex8_complete();
   test_sysex8_multi_packet();
+
+  printf("\n[NULL Paths (boundary defensive)]\n");
+  test_init_null_safe();
+  test_feed_null_safe();
+  test_remap_group_null_safe();
+  test_send_sysex7_null_safe();
 
   printf("\n=== Results: %d passed, %d failed ===\n\n", passed, failed);
   return failed > 0 ? 1 : 0;

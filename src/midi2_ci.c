@@ -42,6 +42,7 @@ void midi2_ci_init_ex(midi2_ci_state *state, uint32_t muid_seed,
                        uint8_t (*profiles)[5], uint8_t max_profiles,
                        midi2_ci_property *properties, uint8_t max_properties,
                        midi2_ci_subscriber *subscribers, uint8_t max_subscribers) {
+  if (state == NULL) return;
   memset(state, 0, sizeof(midi2_ci_state));
   state->muid = muid_seed & 0x0FFFFFFF;
   state->profiles = profiles;
@@ -71,6 +72,7 @@ void midi2_ci_init(midi2_ci_state *state, uint32_t muid_seed,
 void midi2_ci_set_identity(midi2_ci_state *state,
                              uint32_t manufacturer_id, uint16_t family_id,
                              uint16_t model_id, uint32_t version_id) {
+  if (state == NULL) return;
   state->manufacturer_id = manufacturer_id;
   state->family_id = family_id;
   state->model_id = model_id;
@@ -79,17 +81,20 @@ void midi2_ci_set_identity(midi2_ci_state *state,
 
 void midi2_ci_set_write_fn(midi2_ci_state *state,
                               midi2_proc_write_fn write_fn, void *context) {
+  if (state == NULL) return;
   state->write_fn = write_fn;
   state->write_context = context;
 }
 
 void midi2_ci_set_rng(midi2_ci_state *state,
                          midi2_ci_rng_fn rng, void *context) {
+  if (state == NULL) return;
   state->rng         = rng;
   state->rng_context = context;
 }
 
 void midi2_ci_set_nak_on_unknown(midi2_ci_state *state, bool enabled) {
+  if (state == NULL) return;
   state->nak_on_unknown = enabled;
 }
 
@@ -101,6 +106,7 @@ void midi2_ci_set_auto_invalidate_on_collision(midi2_ci_state *state, bool enabl
 uint32_t midi2_ci_new_muid(midi2_ci_state *state) {
   uint32_t m;
   uint8_t tries = 0;
+  if (state == NULL) return 0u;
   do {
     if (state->rng) {
       m = state->rng(state->rng_context) & 0x0FFFFFFFu;
@@ -120,6 +126,7 @@ uint32_t midi2_ci_new_muid(midi2_ci_state *state) {
  * Profiles
  *--------------------------------------------------------------------*/
 int midi2_ci_add_profile(midi2_ci_state *state, const uint8_t profile_id[5]) {
+  if (state == NULL) return MIDI2_CI_ERR_NULL;
   if (state->profiles == NULL) return MIDI2_CI_ERR_NULL;
   if (state->profile_count >= state->profile_capacity) return MIDI2_CI_ERR_FULL;
   memcpy(state->profiles[state->profile_count], profile_id, 5);
@@ -129,6 +136,7 @@ int midi2_ci_add_profile(midi2_ci_state *state, const uint8_t profile_id[5]) {
 
 int midi2_ci_remove_profile(midi2_ci_state *state, const uint8_t profile_id[5]) {
   uint8_t i;
+  if (state == NULL) return MIDI2_CI_ERR_NULL;
   for (i = 0; i < state->profile_count; i++) {
     if (memcmp(state->profiles[i], profile_id, 5) == 0) {
       uint8_t j;
@@ -147,6 +155,7 @@ int midi2_ci_remove_profile(midi2_ci_state *state, const uint8_t profile_id[5]) 
  *--------------------------------------------------------------------*/
 int midi2_ci_add_property_static(midi2_ci_state *state,
                                     const char *name, const char *value) {
+  if (state == NULL) return MIDI2_CI_ERR_NULL;
   if (state->properties == NULL) return MIDI2_CI_ERR_NULL;
   if (state->property_count >= state->property_capacity) return MIDI2_CI_ERR_FULL;
   state->properties[state->property_count].name = name;
@@ -162,6 +171,7 @@ int midi2_ci_add_property_dynamic(midi2_ci_state *state,
                                      const char *name,
                                      midi2_ci_pe_getter getter,
                                      midi2_ci_pe_setter setter) {
+  if (state == NULL) return MIDI2_CI_ERR_NULL;
   if (state->properties == NULL) return MIDI2_CI_ERR_NULL;
   if (state->property_count >= state->property_capacity) return MIDI2_CI_ERR_FULL;
   state->properties[state->property_count].name = name;
@@ -490,7 +500,7 @@ static void ci_handle_invalidate_muid(midi2_ci_state *state, uint8_t group,
                                          const uint8_t *data, uint16_t length) {
   (void)group;
   if (length < 17) return;
-  if (!state->rng) return;
+  if (state->rng == NULL) return;
   uint32_t target = midi2_ci_get_target_muid(data);
   if (target != state->muid) return;
   midi2_ci_new_muid(state);
@@ -505,11 +515,11 @@ static void ci_handle_invalidate_muid(midi2_ci_state *state, uint8_t group,
  *--------------------------------------------------------------------*/
 static void ci_check_muid_collision(midi2_ci_state *state, uint8_t group,
                                        uint32_t peer_src_muid) {
-  if (!state->rng) return;
+  if (state->rng == NULL) return;
   if (peer_src_muid != state->muid) return;
   uint32_t old = state->muid;
   midi2_ci_new_muid(state);
-  if (!state->write_fn) return;
+  if (state->write_fn == NULL) return;
   if (!state->auto_invalidate_on_collision) return;
   uint8_t buf[24];
   uint16_t len = midi2_ci_build_invalidate_muid(
@@ -526,7 +536,7 @@ static void ci_check_muid_collision(midi2_ci_state *state, uint8_t group,
 static void ci_send_nak_not_supported(midi2_ci_state *state, uint8_t group,
                                          const uint8_t *data,
                                          uint8_t orig_sub_id) {
-  if (!state->write_fn) return;
+  if (state->write_fn == NULL) return;
   uint32_t src_muid = midi2_ci_get_src_muid(data);
   uint8_t device_id = midi2_ci_get_device_id(data);
   uint8_t buf[32];
@@ -558,6 +568,7 @@ static void ci_handle_process_inquiry(midi2_ci_state *state, uint8_t group,
  *--------------------------------------------------------------------*/
 bool midi2_ci_process_sysex(midi2_ci_state *state,
                                uint8_t group, const uint8_t *data, uint16_t length) {
+  if (state == NULL) return false;
   if (!midi2_ci_is_ci(data, length)) return false;
 
   /* Every inbound CI message is an opportunity to detect MUID collisions.

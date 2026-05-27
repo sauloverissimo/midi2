@@ -344,6 +344,23 @@ void test_new_status_cancels_previous(void) {
   PASS();
 }
 
+/* --- NULL paths --- */
+
+void test_init_null_safe(void) {
+  TEST("conv_init: NULL state is no-op (no crash)");
+  midi2_conv_init(NULL, 0);
+  /* If we reach here, no segfault occurred */
+  PASS();
+}
+
+void test_feed_null_safe(void) {
+  TEST("conv_feed: NULL state returns false (no crash)");
+  CHECK(!midi2_conv_feed(NULL, 0x90), "NULL state rejected");
+  CHECK(!midi2_conv_feed(NULL, 0xF8), "NULL state rejected (real-time)");
+  CHECK(!midi2_conv_feed(NULL, 0xF0), "NULL state rejected (sysex start)");
+  PASS();
+}
+
 /* --- Main --- */
 
 int main(void) {
@@ -379,6 +396,10 @@ int main(void) {
   printf("\n[Edge Cases]\n");
   test_orphan_data_byte();
   test_new_status_cancels_previous();
+
+  printf("\n[NULL Paths]\n");
+  test_init_null_safe();
+  test_feed_null_safe();
 
   printf("\n=== Results: %d passed, %d failed ===\n\n", passed, failed);
   return failed > 0 ? 1 : 0;

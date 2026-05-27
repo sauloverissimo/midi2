@@ -241,12 +241,14 @@ typedef struct {
  * Functions
  *--------------------------------------------------------------------*/
 
-/** Initialize dispatch, zeroing all callbacks. */
+/** Initialize dispatch, zeroing all callbacks.
+ *  Safe to call with NULL dp (function is no-op). */
 void midi2_ci_dispatch_init(midi2_ci_dispatch *dp);
 
 /** Feed a reassembled SysEx payload (without F0/F7).
  *  Parses the CI header, dispatches to the appropriate callback.
  *  Returns true if the message was recognized as MIDI-CI, false otherwise.
+ *  Safe to call with NULL dp or NULL data (returns false).
  *  @param group  UMP group the SysEx arrived on */
 bool midi2_ci_dispatch_feed(midi2_ci_dispatch *dp, uint8_t group,
                                const uint8_t *data, uint16_t length);

@@ -44,6 +44,15 @@ extern "C" {
 #endif
 
 /*--------------------------------------------------------------------+
+ * Internal helper: conditional bit set
+ *
+ * MIDI2_BIT_IF(cond, n) → (1u << n) if cond is true, else 0u.
+ * Used to pack multiple boolean flags into bitfield words concisely.
+ * Compile-time const expression when cond and n are constants.
+ *--------------------------------------------------------------------*/
+#define MIDI2_BIT_IF(cond, n) ((cond) ? (UINT32_C(1) << (n)) : UINT32_C(0))
+
+/*--------------------------------------------------------------------+
  * UMP Message Types (bits [31:28] of word 0)
  *--------------------------------------------------------------------*/
 enum {
@@ -136,23 +145,23 @@ enum {
 
 /*--------------------------------------------------------------------+
  * Word Count
+ *
+ * Word count per Message Type, covering all 16 MTs per UMP 1.1.2
+ * sec 2.1.4 (MT Allocation). Reserved MTs (0x6, 0x7, 0x8, 0x9, 0xA,
+ * 0xB, 0xC, 0xE) map to their spec-defined length so an unknown stream
+ * advances by the right amount instead of cascading misalignment.
+ *
+ * Accepts any uint8_t; only the low nibble is consulted (defensive
+ * mask, mt > 0x0F is treated as mt & 0x0F).
  *--------------------------------------------------------------------*/
 static inline uint8_t midi2_msg_word_count(uint8_t mt) {
-  switch (mt) {
-    case MIDI2_MT_UTILITY:
-    case MIDI2_MT_SYSTEM:
-    case MIDI2_MT_MIDI1_CV:
-      return 1;
-    case MIDI2_MT_SYSEX7:
-    case MIDI2_MT_MIDI2_CV:
-      return 2;
-    case MIDI2_MT_DATA128:
-    case MIDI2_MT_FLEX_DATA:
-    case MIDI2_MT_STREAM:
-      return 4;
-    default:
-      return 1;
-  }
+  static const uint8_t lut[16] = {
+    [0x0] = 1, [0x1] = 1, [0x2] = 1, [0x3] = 2,  /* utility, system, MIDI1 CV, SysEx7 */
+    [0x4] = 2, [0x5] = 4, [0x6] = 1, [0x7] = 1,  /* MIDI2 CV, Data128, reserved 32-bit */
+    [0x8] = 2, [0x9] = 2, [0xA] = 2, [0xB] = 3,  /* reserved 64-bit, reserved 96-bit */
+    [0xC] = 3, [0xD] = 4, [0xE] = 4, [0xF] = 4,  /* reserved 96-bit, Flex Data, reserved 128, UMP Stream */
+  };
+  return lut[mt & 0x0F];
 }
 
 /*--------------------------------------------------------------------+
@@ -784,12 +793,12 @@ static inline void midi2_msg_stream_endpoint_info(uint32_t *w,
   w[0] = midi2_msg_build_stream_w0(0, MIDI2_STREAM_ENDPOINT_INFO)
        | ((uint32_t)ump_ver_major << 8)
        | (uint32_t)ump_ver_minor;
-  w[1] = (static_fb ? (UINT32_C(1) << 31) : 0)
+  w[1] = MIDI2_BIT_IF(static_fb, 31)
        | ((uint32_t)(num_fb & 0x7F) << 24)
-       | (midi2_proto ? (UINT32_C(1) << 9) : 0)
-       | (midi1_proto ? (UINT32_C(1) << 8) : 0)
-       | (rx_jr ? (UINT32_C(1) << 1) : 0)
-       | (tx_jr ? UINT32_C(1) : 0);
+       | MIDI2_BIT_IF(midi2_proto, 9)
+       | MIDI2_BIT_IF(midi1_proto, 8)
+       | MIDI2_BIT_IF(rx_jr, 1)
+       | MIDI2_BIT_IF(tx_jr, 0);
 }
 
 /* Device Identity Notification */
@@ -1071,9 +1080,12 @@ static inline uint32_t midi2_msg_from_midi1(uint8_t group,
  *   - Pitch Bend: combines data1 (LSB) + data2 (MSB) before scaling
  *
  * Returns true if the message was translated, false if mt2_word is not
- * a Channel Voice message (wrong MT or unrecognized status).
+ * a Channel Voice message (wrong MT or unrecognized status), or if out
+ * is NULL. Safe to call with out == NULL; returns false without side
+ * effects.
  *--------------------------------------------------------------------*/
 static inline bool midi2_msg_mt2_to_mt4(uint32_t mt2_word, uint32_t out[2]) {
+  if (out == NULL) return false;
   if (midi2_msg_get_mt(&mt2_word) != MIDI2_MT_MIDI1_CV) return false;
 
   uint8_t group   = (mt2_word >> 24) & 0x0F;
@@ -1149,11 +1161,12 @@ static inline bool midi2_msg_mt2_to_mt4(uint32_t mt2_word, uint32_t out[2]) {
  *   Program Change    : program byte preserved; bank dropped
  *   Per-Note CC/PB/Mgmt, RPN/NRPN/Rel: dropped (no MIDI 1.0 form)
  *
- *  @return number of MT 0x2 words written (0 or 1).
+ *  @return number of MT 0x2 words written (0 or 1). Returns 0 if either
+ *          mt4_words or out_word is NULL.
  *  (v0.3.0+) */
 static inline uint32_t midi2_msg_mt4_to_mt2(const uint32_t mt4_words[2],
                                              uint32_t *out_word) {
-  if (out_word == NULL) return 0;
+  if (mt4_words == NULL || out_word == NULL) return 0;
   uint8_t mt = (uint8_t)((mt4_words[0] >> 28) & 0x0Fu);
   if (mt != MIDI2_MT_MIDI2_CV) return 0;
   uint8_t grp  = (uint8_t)((mt4_words[0] >> 24) & 0x0Fu);
@@ -1258,21 +1271,24 @@ static inline bool midi2_msg_cable_event_to_ump(uint32_t cable_event,
   uint8_t data2  = (uint8_t)((cable_event >> 24) & 0xFFu);
   uint8_t cin    = (uint8_t)(b0 & 0x0Fu);
 
-  switch (cin) {
-    case 0x2: case 0x3:
-    case 0x8: case 0x9: case 0xA: case 0xB:
-    case 0xC: case 0xD: case 0xE:
-      *ump_out = ((uint32_t)MIDI2_MT_MIDI1_CV << 28)
-               | ((uint32_t)(group & 0x0Fu) << 24)
-               | ((uint32_t)status << 16)
-               | ((uint32_t)(data1 & 0x7Fu) << 8)
-               | ((uint32_t)(data2 & 0x7Fu));
-      return true;
-    default:
-      /* Reserved (0x0, 0x1) or SysEx fragment (0x4-0x7, 0xF).
-       * SysEx fragments are handled by midi2_conv (stateful). */
-      return false;
-  }
+  /* USB MIDI 1.0 class spec table 4-1: CINs that map to Channel Voice
+   * or 2/3-byte System Common UMP MT 0x2. Other CINs are reserved
+   * (0x0, 0x1), SysEx fragments handled by midi2_conv (0x4-0x7), or
+   * single-byte real-time (0xF). */
+  static const uint8_t cin_to_cv[16] = {
+    [0x2] = 1, [0x3] = 1,                       /* 2/3-byte System Common */
+    [0x8] = 1, [0x9] = 1, [0xA] = 1, [0xB] = 1, /* Note Off/On, PolyAT, CC */
+    [0xC] = 1, [0xD] = 1, [0xE] = 1,            /* Program, ChanAT, PB */
+  };
+
+  if (cin_to_cv[cin] == 0u) return false;
+
+  *ump_out = ((uint32_t)MIDI2_MT_MIDI1_CV << 28)
+           | ((uint32_t)(group & 0x0Fu) << 24)
+           | ((uint32_t)status << 16)
+           | ((uint32_t)(data1 & 0x7Fu) << 8)
+           | ((uint32_t)(data2 & 0x7Fu));
+  return true;
 }
 
 #ifdef __cplusplus
