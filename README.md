@@ -9,7 +9,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![C99](https://img.shields.io/badge/standard-C99-blue.svg)]()
 [![Zero Alloc](https://img.shields.io/badge/allocation-zero-orange.svg)]()
+[![MIDI 2.0](https://img.shields.io/badge/MIDI-2.0-blueviolet.svg)](https://midi.org/specifications/midi-2-0-specifications)
 [![ESP Component Registry](https://components.espressif.com/components/sauloverissimo/midi2/badge.svg)](https://components.espressif.com/components/sauloverissimo/midi2)
+[![Platform](https://img.shields.io/badge/Platform-Arduino%20%7C%20PlatformIO%20%7C%20ESP--IDF%20%7C%20Zephyr%20%7C%20CMake-E8B838.svg)](#integration)
 [![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-pink.svg)](https://github.com/sponsors/sauloverissimo)
 
 ---
@@ -44,6 +46,7 @@ The first published wrapper is [**midi2cpp**](https://github.com/sauloverissimo/
     - [Arduino IDE / arduino-cli](#arduino-ide--arduino-cli)
     - [PlatformIO](#platformio)
     - [ESP-IDF (Component Manager)](#esp-idf-component-manager)
+    - [Zephyr (west module)](#zephyr-west-module)
     - [Single-header (stb-style)](#single-header-stb-style)
     - [Manual vendor (amalgam pair)](#manual-vendor-amalgam-pair)
     - [Module by module](#module-by-module)
@@ -141,7 +144,7 @@ if (rc == MIDI2_CI_ERR_FULL) {
 
 ## Continuous integration
 
-328 assertions across 8 suites compile clean with `-Wall -Wextra -Wpedantic`. CI runs 11 jobs on every push:
+350 assertions across 8 suites compile clean with `-Wall -Wextra -Wpedantic`. CI runs 12 jobs on every push:
 
 | Target | Type |
 |--------|------|
@@ -156,6 +159,7 @@ if (rc == MIDI2_CI_ERR_FULL) {
 | RISC-V 64 | Cross-compile |
 | ESP32 (ESP-IDF component) | Cross-compile |
 | AVR ATmega328P | Cross-compile (header-only) |
+| Zephyr (native_sim/native/64) | Compile and run |
 
 ## Build and test locally
 
@@ -199,6 +203,27 @@ dependencies:
 ```
 
 `idf.py reconfigure` drops the component into `managed_components/midi2/`. The `if(ESP_PLATFORM)` gate in `CMakeLists.txt` routes ESP-IDF builds to `idf_component_register` with the modular `src/midi2_*.c` set, so the same source serves IDF, Arduino, PlatformIO, and native CMake without forks.
+
+### Zephyr (west module)
+
+midi2 ships a `zephyr/` module manifest. Add it to your application's `west.yml`:
+
+```yaml
+manifest:
+  projects:
+    - name: midi2
+      url: https://github.com/sauloverissimo/midi2
+      revision: v0.5.0
+      path: modules/lib/midi2
+```
+
+Then enable in `prj.conf`:
+
+```
+CONFIG_MIDI2=y
+```
+
+`west build` picks up the module via `zephyr/module.yml` and compiles the modular `src/midi2_*.c` set under Zephyr's CMake. midi2 stays at the message layer; pair with `CONFIG_USBD_MIDI2` for USB UMP I/O, or with the Network MIDI 2.0 stack for IP-based transport.
 
 ### Single-header (stb-style)
 
