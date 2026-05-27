@@ -18,7 +18,7 @@ Flash-ready applications targeting a specific board. Each recipe ships its own R
 
 | Recipe | Board | MCU | Transport | What it ships |
 |--------|-------|-----|-----------|---------------|
-| [`zephyr/rpi_pico_device_midi2_showcase/`](zephyr/rpi_pico_device_midi2_showcase) | Raspberry Pi Pico | RP2040 (Cortex-M0+) | Zephyr `usbd_midi2` | Full-spec USB MIDI 2.0 device, 14-scene UMP showcase (Flex Data, Per-Note expression, RPN/NRPN, Note Attribute, multi-fragment SysEx7, System Common / Real-Time, Delta Clockstamp, JR Heartbeat) + MIDI-CI responder with 1 Profile and 3 Property Exchange properties. Flash 67 KB, RAM 14 KB on RP2040. Hardware validated 2026-05-27 |
+| [`rpi-pico-device-zephyr/`](rpi-pico-device-zephyr) | Raspberry Pi Pico | RP2040 (Cortex-M0+) | Zephyr `usbd_midi2` | Full-spec USB MIDI 2.0 device, 14-scene UMP showcase (Flex Data, Per-Note expression, RPN/NRPN, Note Attribute, multi-fragment SysEx7, System Common / Real-Time, Delta Clockstamp, JR Heartbeat) + MIDI-CI responder with 1 Profile and 3 Property Exchange properties. Flash 67 KB, RAM 14 KB on RP2040. Hardware validated 2026-05-27 |
 
 ## What lives elsewhere
 

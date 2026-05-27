@@ -13,7 +13,7 @@ validation and lookup tables. No public API signature changes.
   set serves IDF, Arduino, PlatformIO, native CMake and Zephyr without
   forks. Pair with the Zephyr `usbd_midi2` device class for USB UMP or
   with the Network MIDI 2.0 stack for IP transport.
-- **Zephyr example** at `examples/zephyr/rpi_pico_device_midi2_showcase/`:
+- **Zephyr example** at `examples/rpi-pico-device-zephyr/`:
   full-spec USB MIDI 2.0 device on Raspberry Pi Pico (RP2040). 14-scene
   cycle covering Flex Data, Per-Note expression, RPN/NRPN, Note Attribute,
   multi-fragment SysEx7, System Common/Real-Time, Delta Clockstamp, JR

@@ -1,4 +1,4 @@
-# [midi2](../../..) | Device MIDI 2.0
+# [midi2](../..) | Device MIDI 2.0
 ## Raspberry Pi Pico (RP2040), Zephyr
 
 Full-spec USB MIDI 2.0 device on the **Raspberry Pi Pico (RP2040)** under Zephyr v4.4+. Headless 14-scene cycle demonstrates every MIDI 2.0 message category beyond MIDI 1.0, plus a MIDI-CI Discovery + Profile + Property Exchange responder, all running on top of Zephyr's `usbd_midi2` device class.
@@ -45,7 +45,7 @@ Requires:
 #     revision: v0.5.0
 #     path: modules/lib/midi2
 
-cd examples/zephyr/rpi_pico_device_midi2_showcase
+cd examples/rpi-pico-device-zephyr
 west build -b rpi_pico .
 ```
 
@@ -67,6 +67,19 @@ picotool load build/zephyr/zephyr.uf2 -fx
 ```
 
 After reset the same USB-C reappears as `midi2 RP2040 Showcase` (USB MIDI 2.0 device).
+
+## Hardware
+
+![rpi-pico-pinout](board/pinout.png)
+
+| Pin | Use |
+|---|---|
+| USB-C (micro-USB on original Pi Pico) | USB MIDI 2.0 device interface; also flash path via the RP2040 BOOTSEL ROM bootloader before the app runs |
+| GP25 | On-board LED (`led0` alias). Driven high while the host has enabled the MIDI 2.0 alt setting |
+| GP0 / GP1 | UART0 TX / RX (Zephyr console, optional, `printk` routed here in the default board config) |
+| BOOTSEL | Hold while plugging USB to enter ROM bootloader for drag-and-drop UF2 flashing |
+
+
 
 ## Memory footprint
 
@@ -112,6 +125,8 @@ Microsoft MIDI Services Console (Windows): `midi enumerate midi-services-endpoin
 **SysEx8** (MT 0x5) is intentionally not exercised. Host-side support is rare in the field today; the bench would emit packets nothing consumes.
 
 ## Scene timeline (~28.5 s loop, one pass per host enumeration cycle)
+
+![bench stack](board/stack.png)
 
 | Scene | Start (ms) | Content |
 |---|---|---|

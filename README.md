@@ -226,7 +226,7 @@ CONFIG_MIDI2=y
 
 `west build` picks up the module via `zephyr/module.yml` and compiles the modular `src/midi2_*.c` set under Zephyr's CMake. midi2 stays at the message layer; pair with `CONFIG_USBD_MIDI2` for USB UMP I/O, or with the Network MIDI 2.0 stack for IP-based transport.
 
-A ready-to-flash Zephyr example for the Raspberry Pi Pico (RP2040) lives under [`examples/zephyr/rpi_pico_device_midi2_showcase/`](examples/zephyr/rpi_pico_device_midi2_showcase): full-spec USB MIDI 2.0 device with a 14-scene UMP showcase plus a MIDI-CI responder.
+A ready-to-flash Zephyr example for the Raspberry Pi Pico (RP2040) lives under [`examples/rpi-pico-device-zephyr/`](examples/rpi-pico-device-zephyr): full-spec USB MIDI 2.0 device with a 14-scene UMP showcase plus a MIDI-CI responder.
 
 ### Single-header (stb-style)
 
@@ -267,7 +267,7 @@ Pedagogical sketches and a flash-ready Zephyr hardware recipe live under [`examp
 
 - [`examples/basic_usage.c`](examples/basic_usage.c): host C99 walkthrough of construction, dispatch, `midi2_proc` and CI Discovery.
 - [`examples/BasicUsage/`](examples/BasicUsage) and [`examples/CIDiscovery/`](examples/CIDiscovery): Arduino sketches for the same surfaces, runnable on Teensy 4.x and AVR.
-- [`examples/zephyr/rpi_pico_device_midi2_showcase/`](examples/zephyr/rpi_pico_device_midi2_showcase): flash-ready Raspberry Pi Pico USB MIDI 2.0 device with a 14-scene UMP showcase and a MIDI-CI responder.
+- [`examples/rpi-pico-device-zephyr/`](examples/rpi-pico-device-zephyr): flash-ready Raspberry Pi Pico USB MIDI 2.0 device with a 14-scene UMP showcase and a MIDI-CI responder.
 
 ## Architecture
 
