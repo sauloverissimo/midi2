@@ -1,0 +1,28 @@
+/*
+ * Copyright (c) 2026 Saulo Verissimo
+ * SPDX-License-Identifier: MIT
+ *
+ * UMP endpoint descriptor for the Zephyr usbd_midi2 device class.
+ *
+ * The Zephyr UMP Stream responder (CONFIG_MIDI2_UMP_STREAM_RESPONDER)
+ * reads `label` for the Endpoint Name UMP Stream message and serves
+ * one Function Block (FB) per child node. midi2 sits above this and
+ * owns Channel Voice, Flex Data, MIDI-CI and the showcase logic.
+ */
+
+/ {
+	usb_midi: usb_midi {
+		compatible = "zephyr,midi2-device";
+		status = "okay";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		label = "midi2 RP2040 Showcase";
+
+		fb_main: main_fb@0 {
+			reg = <0 1>;
+			protocol = "midi1-up-to-128b";
+			terminal-type = "bidirectional";
+			label = "Main";
+		};
+	};
+};
