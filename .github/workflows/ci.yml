@@ -269,3 +269,57 @@ jobs:
                 -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
           cmake --build build-consumer-asan --parallel
           ./build-consumer-asan/midi2_consumer
+
+  # ============================================================
+  # Zephyr (west module): builds the smoke consumer at
+  # tests/zephyr-consumer/ on native_sim/native/64. Confirms the
+  # zephyr/ module manifest keeps wiring midi2 sources into a Zephyr
+  # application and that dispatch fires end-to-end under Zephyr's
+  # kernel. native_sim uses host gcc -- no Zephyr SDK toolchain
+  # bundle needed.
+  # ============================================================
+
+  build-zephyr:
+    name: Zephyr (native_sim/native/64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: midi2
+      - name: Install west and host build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build device-tree-compiler
+          python3 -m pip install --user west pyelftools jsonschema PyYAML packaging \
+            anytree colorama docutils intelhex
+          echo "${HOME}/.local/bin" >> "$GITHUB_PATH"
+      - name: Cache Zephyr workspace
+        id: cache-zephyr
+        uses: actions/cache@v4
+        with:
+          path: zephyrproject
+          key: zephyrproject-v4.1.0-${{ runner.os }}
+      - name: Initialize Zephyr workspace (cache miss)
+        if: steps.cache-zephyr.outputs.cache-hit != 'true'
+        run: |
+          west init --mr v4.1.0 zephyrproject
+          cd zephyrproject
+          west update --narrow -o=--depth=1
+      - name: Install Zephyr Python requirements
+        run: |
+          python3 -m pip install --user -r zephyrproject/zephyr/scripts/requirements-base.txt
+      - name: Configure smoke consumer
+        env:
+          ZEPHYR_BASE: ${{ github.workspace }}/zephyrproject/zephyr
+        run: |
+          cd midi2/tests/zephyr-consumer
+          cmake -B build -GNinja \
+            -DBOARD=native_sim/native/64 \
+            -DZEPHYR_EXTRA_MODULES="$GITHUB_WORKSPACE/midi2"
+      - name: Build smoke consumer
+        run: cmake --build midi2/tests/zephyr-consumer/build
+      - name: Run smoke, assert PASS
+        run: |
+          OUTPUT=$(timeout 5 midi2/tests/zephyr-consumer/build/zephyr/zephyr.exe 2>&1 || true)
+          echo "$OUTPUT"
+          echo "$OUTPUT" | grep -q "midi2 Zephyr smoke: PASS"
