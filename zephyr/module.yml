@@ -1,0 +1,21 @@
+# Copyright (c) 2026 Saulo Verissimo
+# SPDX-License-Identifier: MIT
+#
+# Zephyr module manifest for midi2 (portable MIDI 2.0 C99 library).
+# Lets Zephyr applications consume midi2 via west manifest:
+#
+#   - name: midi2
+#     url: https://github.com/sauloverissimo/midi2
+#     revision: <tag>
+#     path: modules/lib/midi2
+#
+# Then enable in prj.conf:
+#
+#   CONFIG_MIDI2=y
+#
+# See https://github.com/sauloverissimo/midi2#readme for full docs.
+
+name: midi2
+build:
+  cmake: zephyr
+  kconfig: zephyr/Kconfig

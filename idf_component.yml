@@ -29,3 +29,10 @@ tags:
 
 dependencies:
   idf: ">=4.0"
+
+## Exclude non-ESP build artifacts from the published tarball. The
+## zephyr/ directory is a Zephyr module manifest consumed via west and
+## is irrelevant to ESP-IDF consumers.
+files:
+  exclude:
+    - "zephyr/**/*"

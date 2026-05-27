@@ -1,0 +1,23 @@
+# Copyright (c) 2026 Saulo Verissimo
+# SPDX-License-Identifier: MIT
+
+config MIDI2
+	bool "midi2 portable MIDI 2.0 library"
+	help
+	  Enables midi2, a portable C99 library implementing the
+	  MIDI 2.0 Universal MIDI Packet (UMP) message layer plus
+	  MIDI-CI convenience responder.
+
+	  The library is transport-agnostic. Pair with the Zephyr
+	  USB MIDI 2.0 device class (CONFIG_USBD_MIDI2) for USB
+	  UMP I/O, or with the Network MIDI 2.0 stack for IP-based
+	  UMP transport. Pure message-layer; no devicetree bindings
+	  required.
+
+	  Spec coverage:
+	    M2-104-UM v1.1.2 (UMP)         100%
+	    M2-101-UM v1.2   (MIDI-CI)     100%
+	    M2-115-U  v1.0.2 (Bit Scaling) 100%
+
+	  See https://github.com/sauloverissimo/midi2 for the
+	  full module documentation, API reference, and examples.
