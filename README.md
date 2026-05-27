@@ -50,6 +50,7 @@ The first published wrapper is [**midi2cpp**](https://github.com/sauloverissimo/
     - [Single-header (stb-style)](#single-header-stb-style)
     - [Manual vendor (amalgam pair)](#manual-vendor-amalgam-pair)
     - [Module by module](#module-by-module)
+  - [Examples](#examples)
   - [Architecture](#architecture)
   - [Design goals](#design-goals)
   - [What this library is not](#what-this-library-is-not)
@@ -259,6 +260,14 @@ midi2_msg.h          Always needed. Header-only.
        +- midi2_ci_dispatch  Typed CI callbacks.
        +- midi2_ci           Convenience CI responder.
 ```
+
+## Examples
+
+Pedagogical sketches and a flash-ready Zephyr hardware recipe live under [`examples/`](examples). See [`examples/README.md`](examples/README.md) for the index.
+
+- [`examples/basic_usage.c`](examples/basic_usage.c): host C99 walkthrough of construction, dispatch, `midi2_proc` and CI Discovery.
+- [`examples/BasicUsage/`](examples/BasicUsage) and [`examples/CIDiscovery/`](examples/CIDiscovery): Arduino sketches for the same surfaces, runnable on Teensy 4.x and AVR.
+- [`examples/zephyr/rpi_pico_device_midi2_showcase/`](examples/zephyr/rpi_pico_device_midi2_showcase): flash-ready Raspberry Pi Pico USB MIDI 2.0 device with a 14-scene UMP showcase and a MIDI-CI responder.
 
 ## Architecture
 

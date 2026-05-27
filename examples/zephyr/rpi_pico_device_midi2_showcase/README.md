@@ -1,6 +1,9 @@
-# midi2 Zephyr example: Raspberry Pi Pico USB MIDI 2.0 device showcase
+# [midi2](../../..) | Device MIDI 2.0
+## Raspberry Pi Pico (RP2040), Zephyr
 
 Full-spec USB MIDI 2.0 device on the **Raspberry Pi Pico (RP2040)** under Zephyr v4.4+. Headless 14-scene cycle demonstrates every MIDI 2.0 message category beyond MIDI 1.0, plus a MIDI-CI Discovery + Profile + Property Exchange responder, all running on top of Zephyr's `usbd_midi2` device class.
+
+![rpi-pico-device-midi2 banner](monitor/banner.png)
 
 ## USB identity
 
@@ -87,6 +90,10 @@ timeout 60 aseqdump -p ${PORT}
 ```
 
 Microsoft MIDI Services Console (Windows): `midi enumerate midi-services-endpoints -i` lists the device with Native data format = UMP, MIDI 2.0 Protocol = True. macOS Audio MIDI Setup shows it as a UMP endpoint.
+
+![bench monitor capturing the showcase cycle](monitor/monitor.png)
+
+![CI Property Exchange surface visible to the host](monitor/properties.png)
 
 ## Spec coverage
 
