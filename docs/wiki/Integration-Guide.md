@@ -55,6 +55,29 @@ git submodule add https://github.com/sauloverissimo/midi2.git lib/midi2
 lib_deps = https://github.com/sauloverissimo/midi2.git
 ```
 
+### Option 6: Zephyr (west module)
+
+A `zephyr/` module manifest is included. Add midi2 to your application's `west.yml`:
+
+```yaml
+manifest:
+  projects:
+    - name: midi2
+      url: https://github.com/sauloverissimo/midi2
+      revision: v0.5.0
+      path: modules/lib/midi2
+```
+
+Enable the library in `prj.conf`:
+
+```
+CONFIG_MIDI2=y
+```
+
+`west build` picks up the module via `zephyr/module.yml` and compiles the modular `src/midi2_*.c` set under Zephyr's CMake. Headers are exposed globally so the application uses `#include "midi2_msg.h"` directly.
+
+midi2 stays at the message layer. Pair with the Zephyr USB MIDI 2.0 device class (`CONFIG_USBD_MIDI2`) for USB UMP I/O, or with the Network MIDI 2.0 stack for IP-based transport.
+
 ## Project Structure
 
 ```
