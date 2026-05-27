@@ -187,7 +187,7 @@ Two example sketches under `examples/` (`BasicUsage`, `CIDiscovery`) appear in t
 `platformio.ini`:
 
 ```ini
-lib_deps = sauloverissimo/midi2 @ ^0.4.0
+lib_deps = sauloverissimo/midi2 @ ^0.5.0
 ```
 
 Library Manager pulls the same `src/` modular layout via `library.json` (`srcDir = src`).
@@ -199,7 +199,7 @@ Published on the [ESP Component Registry](https://components.espressif.com/compo
 ```yaml
 dependencies:
   idf: ">=5.0"
-  sauloverissimo/midi2: ">=0.4.0"
+  sauloverissimo/midi2: ">=0.5.0"
 ```
 
 `idf.py reconfigure` drops the component into `managed_components/midi2/`. The `if(ESP_PLATFORM)` gate in `CMakeLists.txt` routes ESP-IDF builds to `idf_component_register` with the modular `src/midi2_*.c` set, so the same source serves IDF, Arduino, PlatformIO, and native CMake without forks.
@@ -224,6 +224,8 @@ CONFIG_MIDI2=y
 ```
 
 `west build` picks up the module via `zephyr/module.yml` and compiles the modular `src/midi2_*.c` set under Zephyr's CMake. midi2 stays at the message layer; pair with `CONFIG_USBD_MIDI2` for USB UMP I/O, or with the Network MIDI 2.0 stack for IP-based transport.
+
+A ready-to-flash Zephyr example for the Raspberry Pi Pico (RP2040) lives under [`examples/zephyr/rpi_pico_device_midi2_showcase/`](examples/zephyr/rpi_pico_device_midi2_showcase): full-spec USB MIDI 2.0 device with a 14-scene UMP showcase plus a MIDI-CI responder.
 
 ### Single-header (stb-style)
 
