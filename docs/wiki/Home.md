@@ -1,32 +1,33 @@
 # midi2 Wiki
 
-Welcome to the midi2 wiki -- the complete guide for developers using or contributing to the midi2 portable MIDI 2.0 UMP library.
+The portable MIDI 2.0 UMP library: C99, zero dependencies, zero allocation. Runs from AVR to desktop.
 
 ## Contents
 
 ### Getting Started
-- [Getting Started](Getting-Started.md) -- Quick setup, first build, basic usage
-- [Integration Guide](Integration-Guide.md) -- How to add midi2 to your project
+- [Getting Started](Getting-Started.md): quick setup, first build, basic usage
+- [Integration Guide](Integration-Guide.md): Arduino LM, PlatformIO, ESP-IDF, Zephyr, CMake, vendor
 
 ### Architecture
-- [Architecture](Architecture.md) -- 4-layer model, module boundaries, data flow
-- [Module Reference](Module-Reference.md) -- All 7 modules in detail with API surface
+- [Architecture](Architecture.md): 4-layer model, module boundaries, data flow
+- [Module Reference](Module-Reference.md): all 7 modules with their public API surface
 
-### MIDI 2.0 Specifications
-- [MIDI 2.0 Spec Guide](Spec-Guide.md) -- Complete reference of all 25 MIDI 2.0 specifications
-- [UMP Message Reference](UMP-Message-Reference.md) -- Every UMP message type with bit layouts
-- [MIDI-CI Message Reference](CI-Message-Reference.md) -- Every CI message with field descriptions
+### MIDI 2.0 specifications
+- [Spec Guide](Spec-Guide.md): coverage map of every MIDI 2.0 specification
+- [UMP Message Reference](UMP-Message-Reference.md): every UMP message type with bit layouts
+- [MIDI-CI Message Reference](CI-Message-Reference.md): every CI message with field descriptions
 
 ### Validation
-- [Hardware Validation](Hardware-Validation.md) -- Test results on real hardware
+- [Hardware Validation](Hardware-Validation.md): test results on real hardware
 
 ### Contributing
-- [Design Decisions](Design-Decisions.md) -- Key architectural choices and their rationale
+- [Design Decisions](Design-Decisions.md): key architectural choices and their rationale
 
-## Quick Links
+## Quick links
 
-- **Repository**: [github.com/sauloverissimo/midi2](https://github.com/sauloverissimo/midi2)
-- **License**: MIT
-- **Language**: C99, zero dependencies, zero allocation
-- **Tests**: 321 passing across 8 test suites
-- **Specs covered**: M2-104-UM v1.1.2 (UMP) 100%, M2-101-UM v1.2 (CI) 100%
+- **Repository:** [github.com/sauloverissimo/midi2](https://github.com/sauloverissimo/midi2)
+- **Latest release:** [v0.5.0](https://github.com/sauloverissimo/midi2/releases/latest)
+- **License:** MIT
+- **Distribution:** Arduino Library Manager, PlatformIO Registry, ESP-IDF Component Manager, Zephyr west module, CMake `find_package` / `FetchContent`
+- **Tests:** 350 passing across 8 suites, 12 CI jobs (gcc / clang / MSVC / Apple clang / x86 32-bit / ASan + UBSan / ARM Cortex-M / Cortex-A / RISC-V / AVR / ESP32 / Zephyr native_sim) plus a CMake matrix on Linux + macOS + Windows
+- **Spec coverage:** M2-104-UM v1.1.2 (UMP) 100%, M2-101-UM v1.2 (MIDI-CI) 100%

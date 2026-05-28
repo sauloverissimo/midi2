@@ -125,9 +125,9 @@ Total overhead for a full stack (all modules): ~470 bytes + user-chosen buffers.
 
 ## Continuous Integration
 
-Every push triggers 11 parallel CI jobs verifying portability and correctness:
+Every push triggers 12 parallel CI jobs verifying portability and correctness:
 
-**Desktop (compile + run 321 tests):**
+**Desktop (compile + run 350 tests):**
 - gcc (Linux x64) -- primary compiler
 - clang (Linux x64) -- catches different warning classes
 - Apple clang (macOS) -- Darwin compatibility
@@ -141,3 +141,4 @@ Every push triggers 11 parallel CI jobs verifying portability and correctness:
 - RISC-V 64 (`riscv64-linux-gnu-gcc`) -- covers ESP32-C3/C6, future RISC-V platforms
 - ESP32 component check (`gcc -DESP_PLATFORM`) -- verifies ESP-IDF component compatibility
 - AVR ATmega328P (`avr-gcc`) -- verifies header-only modules on 8-bit MCU (Arduino Uno/Nano)
+- Zephyr native_sim/native/64 (`west` + Zephyr SDK) -- builds and runs the smoke consumer, confirms the west module integration

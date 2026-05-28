@@ -7,7 +7,21 @@
 
 No external dependencies. Only `stdint.h`, `stdbool.h`, and `string.h` from the C standard library.
 
-## Building and Testing
+## Install
+
+The fastest path depends on the build system. See the [Integration Guide](Integration-Guide.md) for the full set of options.
+
+| Build flow | Install |
+|---|---|
+| Arduino IDE | Library Manager, search `midi2`, click Install |
+| arduino-cli | `arduino-cli lib install midi2` |
+| PlatformIO | `lib_deps = sauloverissimo/midi2 @ ^0.5.0` |
+| ESP-IDF | `sauloverissimo/midi2: ">=0.5.0"` in `idf_component.yml` |
+| Zephyr | west manifest entry + `CONFIG_MIDI2=y` (see Integration Guide) |
+| CMake | `FetchContent_Declare(midi2 GIT_TAG v0.5.0)` |
+| Manual vendor | drop `dist/midi2.{h,c}` from a release into your tree |
+
+For local development:
 
 ```bash
 git clone https://github.com/sauloverissimo/midi2.git
@@ -15,15 +29,23 @@ cd midi2
 make test
 ```
 
-This compiles and runs all 321 tests with `-Wall -Wextra -Wpedantic`. You can also specify a compiler or enable sanitizers:
+This compiles and runs all 350 tests under `-Wall -Wextra -Wpedantic`. Switch compilers or enable sanitizers as needed:
 
 ```bash
 make CC=clang test                                              # clang
-make CC="gcc -fsanitize=address,undefined" test                 # memory + UB checks
+make CC="gcc -fsanitize=address,undefined" test                 # ASan + UBSan
 make CC="gcc -m32" test                                         # 32-bit verification
 ```
 
-## First Example: Build and Parse a Note On
+The CMake build is also exercised by CI:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+cmake --install build --prefix /tmp/midi2-install
+```
+
+## First example: build and parse a Note On
 
 ```c
 #include "midi2.h"
@@ -31,26 +53,26 @@ make CC="gcc -m32" test                                         # 32-bit verific
 int main(void) {
     /* Build a MIDI 2.0 Note On: group 0, channel 0, note 60 (C4), velocity 75% */
     uint32_t w[2];
-    midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0);
+    midi2_msg_note_on(w, 0, 0, 60, 0xC000, 0, 0);
 
     /* Parse it back */
-    uint8_t mt      = midi2_msg_get_mt(w);        /* 0x04 = MIDI 2.0 CV */
-    uint8_t group   = midi2_msg_get_group(w);     /* 0 */
-    uint8_t channel = midi2_msg_get_channel(w);   /* 0 */
-    uint8_t note    = midi2_msg_get_note(w);      /* 60 */
-    uint16_t vel    = midi2_msg_get_velocity(w);  /* 0xC000 */
+    uint8_t  mt      = midi2_msg_get_mt(w);        /* 0x04 = MIDI 2.0 CV */
+    uint8_t  group   = midi2_msg_get_group(w);     /* 0 */
+    uint8_t  channel = midi2_msg_get_channel(w);   /* 0 */
+    uint8_t  note    = midi2_msg_get_note(w);      /* 60 */
+    uint16_t vel     = midi2_msg_get_velocity(w);  /* 0xC000 */
 
-    /* Scale a legacy 7-bit velocity to 16-bit */
-    uint16_t vel16 = midi2_msg_scale_up_7to16(100);  /* bit-replicated */
-    uint8_t vel7   = midi2_msg_scale_down_16to7(vel16);  /* round-trip safe */
+    /* Scale a legacy 7-bit velocity to 16-bit (round-trip safe) */
+    uint16_t vel16 = midi2_msg_scale_up_7to16(100);
+    uint8_t  vel7  = midi2_msg_scale_down_16to7(vel16);
 
     return 0;
 }
 ```
 
-Compile with: `gcc -std=c99 -I src example.c -o example` (midi2_msg is header-only, no `.c` needed)
+Compile: `gcc -std=c99 -I src example.c -o example`. `midi2_msg` is header-only, no `.c` to link.
 
-## Second Example: Typed Dispatch
+## Second example: typed dispatch
 
 ```c
 #define MIDI2_IMPLEMENTATION
@@ -59,52 +81,51 @@ Compile with: `gcc -std=c99 -I src example.c -o example` (midi2_msg is header-on
 void on_note_on(uint8_t group, uint8_t channel, uint8_t note,
                 uint16_t velocity, uint8_t attr_type,
                 uint16_t attr_data, void *ctx) {
-    printf("Note On: ch=%d note=%d vel=%u\n", channel, note, velocity);
+    printf("Note On: ch=%u note=%u vel=%u\n", channel, note, velocity);
 }
 
 void on_cc(uint8_t group, uint8_t channel, uint8_t index,
            uint32_t value, void *ctx) {
-    printf("CC: ch=%d index=%d value=%u\n", channel, index, value);
+    printf("CC: ch=%u index=%u value=%u\n", channel, index, value);
 }
 
 int main(void) {
     midi2_dispatch dp;
     midi2_dispatch_init(&dp);
     dp.on_note_on = on_note_on;
-    dp.on_cc = on_cc;
+    dp.on_cc      = on_cc;
 
-    /* Build a Note On and dispatch it */
     uint32_t w[2];
-    midi2_msg_note_on(w, 0, 0, 60, 0xFFFF, 0);
-    midi2_dispatch_feed(w, 2, &dp);  /* calls on_note_on */
+    midi2_msg_note_on(w, 0, 0, 60, 0xFFFF, 0, 0);
+    midi2_dispatch_feed(w, 2, &dp);   /* fires on_note_on */
 
     return 0;
 }
 ```
 
-Compile with: `gcc -std=c99 -I src example.c -o example` (MIDI2_IMPLEMENTATION includes all `.c` code)
+Compile: `gcc -std=c99 -I src example.c -o example`. `MIDI2_IMPLEMENTATION` pulls the implementations into the translation unit.
 
-## Third Example: Process + Dispatch Chain
+## Third example: proc to dispatch chain
 
 ```c
 #include "midi2.h"
 
-/* Chain: proc (SysEx reassembly, group filter) -> dispatch (typed callbacks) */
+/* Pipeline: proc (SysEx reassembly + group filter) -> dispatch (typed callbacks) */
 
-midi2_dispatch dp;
-midi2_proc_state proc;
-uint8_t sysex7_buf[128];
-uint8_t sysex8_buf[256];
+midi2_dispatch     dp;
+midi2_proc_state   proc;
+uint8_t            sysex7_buf[128];
+uint8_t            sysex8_buf[256];
 
 void setup(void) {
     midi2_dispatch_init(&dp);
     dp.on_note_on = my_note_on_handler;
-    dp.on_cc = my_cc_handler;
+    dp.on_cc      = my_cc_handler;
 
     midi2_proc_init(&proc, sysex7_buf, sizeof(sysex7_buf),
                            sysex8_buf, sizeof(sysex8_buf));
-    /* Chain: proc feeds dispatch */
-    proc.on_ump = midi2_dispatch_feed;
+
+    proc.on_ump  = midi2_dispatch_feed;
     proc.context = &dp;
 }
 
@@ -113,8 +134,8 @@ void on_ump_received(const uint32_t *words, uint8_t word_count) {
 }
 ```
 
-## What to Read Next
+## What to read next
 
-- [Module Reference](Module-Reference.md) -- detailed API for each module
-- [Architecture](Architecture.md) -- how the layers fit together
-- [Integration Guide](Integration-Guide.md) -- adding midi2 to your project
+- [Module Reference](Module-Reference.md): detailed API for each module
+- [Architecture](Architecture.md): how the layers fit together
+- [Integration Guide](Integration-Guide.md): every install path explained
