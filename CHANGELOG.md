@@ -2,48 +2,16 @@
 
 ## [0.5.0]
 
-Zephyr west module integration and an internal pass on input
-validation and lookup tables. No public API signature changes.
-
 ### Added
 
-- **Zephyr module support**. `zephyr/module.yml`, `zephyr/CMakeLists.txt`
-  and `zephyr/Kconfig` let Zephyr applications pull midi2 in via west
-  manifest and enable it with `CONFIG_MIDI2=y`. The same `src/midi2_*.c`
-  set serves IDF, Arduino, PlatformIO, native CMake and Zephyr without
-  forks. Pair with the Zephyr `usbd_midi2` device class for USB UMP or
-  with the Network MIDI 2.0 stack for IP transport.
-- **Zephyr example** at `examples/rpi-pico-device-zephyr/`:
-  full-spec USB MIDI 2.0 device on Raspberry Pi Pico (RP2040). 14-scene
-  cycle covering Flex Data, Per-Note expression, RPN/NRPN, Note Attribute,
-  multi-fragment SysEx7, System Common/Real-Time, Delta Clockstamp, JR
-  Heartbeat plus a MIDI-CI responder. Layered on Zephyr `usbd_midi2`
-  with midi2 driving every UMP beyond what the Zephyr Stream responder
-  emits. Flash ~67 KB, RAM ~14 KB on RP2040.
-- **CI: Zephyr smoke job** on `native_sim/native/64` builds and runs
-  the consumer under `tests/zephyr-consumer/` on every push.
+- Zephyr module support (`zephyr/module.yml`, `CMakeLists.txt`, `Kconfig`).
+- Zephyr example for the Raspberry Pi Pico under `examples/rpi-pico-device-zephyr/`.
 
 ### Changed
 
-- **Input validation** hardened across module entry points. Public
-  functions treat NULL pointer arguments as no-ops or zero returns
-  rather than relying on caller discipline. API signatures unchanged.
-- **`midi2_msg_word_count`** covers all 16 message types using their
-  spec-defined lengths (M2-104-UM v1.1.2 §2.1.4). Reserved MTs advance
-  by the length the spec assigns them, so a router that walks an
-  unknown buffer still steps the correct number of words.
-- **Cable-event to UMP conversion** uses a lookup table instead of a
-  switch; semantics preserved (USB MIDI 1.0 class spec table 4-1).
-- Internal helpers reorganized for clarity (`midi2_proc_stream_form`
-  for SysEx form selection, `midi2_dispatch_sign_extend_4` for Flex
-  Data 4-bit signed nibbles).
-
-### Tests
-
-- 350 assertions across 8 suites, gcc and clang clean with
-  `-Wall -Wextra -Wpedantic`, ASan + UBSan clean.
-- Cross-compiles for ARM Cortex-M, AArch64, RISC-V 64, ESP32 (Xtensa),
-  AVR ATmega328P (header-only). Adds Zephyr native_sim/native/64.
+- NULL pointer arguments at public entry points are now no-ops or zero returns.
+- `midi2_msg_word_count` covers all 16 message types.
+- Internal helper and lookup-table cleanup.
 
 ## [0.4.0]
 
