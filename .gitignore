@@ -18,8 +18,9 @@ test/test_midi2_amalgam
 build/
 build-*/
 
-# docs
-docs/case-study-midi1-to-ump.md
+# Packaged release snapshots (dist/midi2.c + dist/midi2.h amalgam stay tracked)
+dist/midi2_*/
+
 # Editor
 *.swp
 *.swo

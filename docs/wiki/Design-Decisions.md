@@ -24,13 +24,13 @@ Key architectural choices made during midi2 development and their rationale.
 
 **Decision**: 49 individual UMP callbacks (`on_note_on`, `on_cc`, etc.) instead of 8 struct-based callbacks.
 
-**Why**: Analyzed against AM_MIDI2.0Lib (granular), ni-midi2 (views), cmidi2 (none), and Teensy (granular). Granular callbacks are semantically correct (each callback has named parameters matching the spec), auto-documented, and what the MIDI 2.0 ecosystem expects. See `decisoes.md` #10 for full analysis.
+**Why**: Analyzed against AM_MIDI2.0Lib (granular), ni-midi2 (views), cmidi2 (none), and Teensy (granular). Granular callbacks are semantically correct (each callback has named parameters matching the spec), auto-documented, and what the MIDI 2.0 ecosystem expects.
 
 ## 5. MIDI-CI as separate protocol layer
 
 **Decision**: CI split into 3 internal layers: `ci_msg` (construct/parse), `ci_dispatch` (callbacks), `ci` (convenience responder).
 
-**Why**: MIDI-CI is a protocol that rides on SysEx, not part of UMP format. No reference implementation (AM_MIDI2, ni-midi2, cmidi2) bundles auto-response into the parser. The convenience responder is optional for platforms that want it. See `decisoes.md` #11.
+**Why**: MIDI-CI is a protocol that rides on SysEx, not part of UMP format. No reference implementation (AM_MIDI2, ni-midi2, cmidi2) bundles auto-response into the parser. The convenience responder is optional for platforms that want it.
 
 ## 6. CI convenience responder is simplified
 
