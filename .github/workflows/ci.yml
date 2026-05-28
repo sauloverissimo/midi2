@@ -298,16 +298,22 @@ jobs:
         uses: actions/cache@v4
         with:
           path: zephyrproject
-          key: zephyrproject-v4.1.0-${{ runner.os }}
+          key: zephyrproject-v4.4.0-${{ runner.os }}
       - name: Initialize Zephyr workspace (cache miss)
         if: steps.cache-zephyr.outputs.cache-hit != 'true'
         run: |
-          west init --mr v4.1.0 zephyrproject
+          west init --mr v4.4.0 zephyrproject
           cd zephyrproject
           west update --narrow -o=--depth=1
       - name: Install Zephyr Python requirements
         run: |
           python3 -m pip install --user -r zephyrproject/zephyr/scripts/requirements-base.txt
+      - name: Install Zephyr SDK minimal
+        run: |
+          cd "$HOME"
+          wget -q https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v1.0.1/zephyr-sdk-1.0.1_linux-x86_64_minimal.tar.xz
+          tar xf zephyr-sdk-1.0.1_linux-x86_64_minimal.tar.xz
+          echo "ZEPHYR_SDK_INSTALL_DIR=$HOME/zephyr-sdk-1.0.1" >> "$GITHUB_ENV"
       - name: Configure smoke consumer
         env:
           ZEPHYR_BASE: ${{ github.workspace }}/zephyrproject/zephyr
