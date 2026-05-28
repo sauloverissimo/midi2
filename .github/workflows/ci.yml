@@ -146,6 +146,26 @@ jobs:
           AVRTEST
           echo "AVR ATmega328P (header-only): OK"
 
+  build-cxx-header:
+    name: C++ header compile (g++ c++17 / c++20)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Compile public headers as C++
+        run: |
+          # midi2.h is included directly by C++ consumers (midi2cpp,
+          # libDaisy, Teensy wrappers). Guards against C-only constructs
+          # such as designated array initializers that g++ rejects.
+          printf '#define MIDI2_IMPLEMENTATION\n#include "midi2.h"\nint main(void) { return (int)midi2_msg_word_count(0x4); }\n' > cxx_amalgam.cpp
+          printf '#include "midi2_msg.h"\nint main(void) { return (int)midi2_msg_word_count(0x4); }\n' > cxx_modular.cpp
+          for std in c++17 c++20; do
+            echo "  amalgam $std"
+            g++ -std=$std -Wall -Wextra -I dist cxx_amalgam.cpp -o /dev/null
+            echo "  modular $std"
+            g++ -std=$std -Wall -Wextra -I src cxx_modular.cpp -o /dev/null
+          done
+          echo "C++ header compile: OK"
+
   # ============================================================
   # Additional desktop architectures
   # ============================================================

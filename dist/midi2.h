@@ -174,11 +174,13 @@ enum {
  * mask, mt > 0x0F is treated as mt & 0x0F).
  *--------------------------------------------------------------------*/
 static inline uint8_t midi2_msg_word_count(uint8_t mt) {
+  /* Positional initializer (index 0x0..0xF). C99 and C++ both accept it;
+   * designated array initializers do not compile under C++. */
   static const uint8_t lut[16] = {
-    [0x0] = 1, [0x1] = 1, [0x2] = 1, [0x3] = 2,  /* utility, system, MIDI1 CV, SysEx7 */
-    [0x4] = 2, [0x5] = 4, [0x6] = 1, [0x7] = 1,  /* MIDI2 CV, Data128, reserved 32-bit */
-    [0x8] = 2, [0x9] = 2, [0xA] = 2, [0xB] = 3,  /* reserved 64-bit, reserved 96-bit */
-    [0xC] = 3, [0xD] = 4, [0xE] = 4, [0xF] = 4,  /* reserved 96-bit, Flex Data, reserved 128, UMP Stream */
+    1, 1, 1, 2,  /* 0x0 utility, 0x1 system, 0x2 MIDI1 CV, 0x3 SysEx7 */
+    2, 4, 1, 1,  /* 0x4 MIDI2 CV, 0x5 Data128, 0x6/0x7 reserved 32-bit */
+    2, 2, 2, 3,  /* 0x8/0x9/0xA reserved 64-bit, 0xB reserved 96-bit */
+    3, 4, 4, 4,  /* 0xC reserved 96-bit, 0xD Flex Data, 0xE reserved 128, 0xF UMP Stream */
   };
   return lut[mt & 0x0F];
 }
@@ -1294,10 +1296,13 @@ static inline bool midi2_msg_cable_event_to_ump(uint32_t cable_event,
    * or 2/3-byte System Common UMP MT 0x2. Other CINs are reserved
    * (0x0, 0x1), SysEx fragments handled by midi2_conv (0x4-0x7), or
    * single-byte real-time (0xF). */
+  /* Positional initializer (index 0x0..0xF). C99 and C++ both accept it;
+   * designated array initializers do not compile under C++. */
   static const uint8_t cin_to_cv[16] = {
-    [0x2] = 1, [0x3] = 1,                       /* 2/3-byte System Common */
-    [0x8] = 1, [0x9] = 1, [0xA] = 1, [0xB] = 1, /* Note Off/On, PolyAT, CC */
-    [0xC] = 1, [0xD] = 1, [0xE] = 1,            /* Program, ChanAT, PB */
+    0, 0, 1, 1,  /* 0x0/0x1 reserved, 0x2/0x3 System Common 2/3-byte */
+    0, 0, 0, 0,  /* 0x4-0x7 SysEx fragments (midi2_conv) */
+    1, 1, 1, 1,  /* 0x8 Note Off, 0x9 Note On, 0xA PolyAT, 0xB CC */
+    1, 1, 1, 0,  /* 0xC Program, 0xD ChanAT, 0xE PB, 0xF single-byte RT */
   };
 
   if (cin_to_cv[cin] == 0u) return false;
