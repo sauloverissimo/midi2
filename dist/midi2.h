@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-/* Auto-generated from midi2 v0.4.0 -- 2026-05-27
+/* Auto-generated from midi2 v0.5.0 -- 2026-05-28
  * https://github.com/sauloverissimo/midi2
  *
  * Portable MIDI 2.0 library (C99, zero dependencies)
