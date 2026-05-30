@@ -3889,19 +3889,19 @@ static void sysex8_process(midi2_proc_state *state, uint8_t group, const uint32_
   uint8_t n = 0;
   uint8_t total_data = (num_bytes > 1) ? (uint8_t)(num_bytes - 1) : 0;
 
-  if (total_data >= 1) data[n++] = words[0] & 0xFF;
-  if (total_data >= 2) data[n++] = (words[1] >> 24) & 0xFF;
-  if (total_data >= 3) data[n++] = (words[1] >> 16) & 0xFF;
-  if (total_data >= 4) data[n++] = (words[1] >> 8) & 0xFF;
-  if (total_data >= 5) data[n++] = words[1] & 0xFF;
-  if (total_data >= 6) data[n++] = (words[2] >> 24) & 0xFF;
-  if (total_data >= 7) data[n++] = (words[2] >> 16) & 0xFF;
-  if (total_data >= 8) data[n++] = (words[2] >> 8) & 0xFF;
-  if (total_data >= 9) data[n++] = words[2] & 0xFF;
-  if (total_data >= 10) data[n++] = (words[3] >> 24) & 0xFF;
-  if (total_data >= 11) data[n++] = (words[3] >> 16) & 0xFF;
-  if (total_data >= 12) data[n++] = (words[3] >> 8) & 0xFF;
-  if (total_data >= 13) data[n++] = words[3] & 0xFF;
+  if (total_data >= 1) data[n++] = (uint8_t)(words[0] & 0xFF);
+  if (total_data >= 2) data[n++] = (uint8_t)((words[1] >> 24) & 0xFF);
+  if (total_data >= 3) data[n++] = (uint8_t)((words[1] >> 16) & 0xFF);
+  if (total_data >= 4) data[n++] = (uint8_t)((words[1] >> 8) & 0xFF);
+  if (total_data >= 5) data[n++] = (uint8_t)(words[1] & 0xFF);
+  if (total_data >= 6) data[n++] = (uint8_t)((words[2] >> 24) & 0xFF);
+  if (total_data >= 7) data[n++] = (uint8_t)((words[2] >> 16) & 0xFF);
+  if (total_data >= 8) data[n++] = (uint8_t)((words[2] >> 8) & 0xFF);
+  if (total_data >= 9) data[n++] = (uint8_t)(words[2] & 0xFF);
+  if (total_data >= 10) data[n++] = (uint8_t)((words[3] >> 24) & 0xFF);
+  if (total_data >= 11) data[n++] = (uint8_t)((words[3] >> 16) & 0xFF);
+  if (total_data >= 12) data[n++] = (uint8_t)((words[3] >> 8) & 0xFF);
+  if (total_data >= 13) data[n++] = (uint8_t)(words[3] & 0xFF);
 
   if (status_nib == MIDI2_SYSEX8_COMPLETE) {
     /* Complete single-packet SysEx8 */
