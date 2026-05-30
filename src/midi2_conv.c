@@ -118,8 +118,11 @@ static bool emit_sysex_packet(midi2_conv_state *state, bool is_end) {
   return true;
 }
 
-bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte) {
-  if (state == NULL) return false;
+/* Inner body; assumes non-NULL state. The public wrapper enforces the
+ * single-context contract via the in_feed guard around this call. Wrapping
+ * (rather than touching each of the many return paths) keeps the set/clear in
+ * one place so no path can leak the flag. */
+static bool midi2_conv_feed_inner(midi2_conv_state *state, uint8_t byte) {
   state->ump_words = 0;
 
   /* Real-Time messages (F8-FF) can appear anywhere, even mid-message */
@@ -207,4 +210,17 @@ bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte) {
   }
 
   return false;
+}
+
+bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte) {
+  bool r;
+  if (state == NULL) return false;
+  /* Single-context contract: a callback must not re-enter feed on this state.
+   * Caught in debug builds; the set/clear lives only here so no inner return
+   * path can leak the flag. */
+  MIDI2_ASSERT(!state->in_feed);
+  state->in_feed = true;
+  r = midi2_conv_feed_inner(state, byte);
+  state->in_feed = false;
+  return r;
 }

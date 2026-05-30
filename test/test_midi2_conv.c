@@ -361,6 +361,25 @@ void test_feed_null_safe(void) {
   PASS();
 }
 
+/* Track 2: the wrapper must clear in_feed on every return path (conv_feed has
+ * many). Verify it is clear after a return-false byte, a return-true byte, and
+ * a real-time byte (a distinct early-return path). If any path leaked the flag,
+ * the next feed would trip the debug assert. */
+void test_conv_in_feed_cleared_all_paths(void) {
+  TEST("Track 2: in_feed cleared after every return path");
+  midi2_conv_state s;
+  midi2_conv_init(&s, 0);
+  CHECK(!midi2_conv_feed(&s, 0x90), "status byte: not ready");
+  CHECK(s.in_feed == false, "in_feed clear after return-false path");
+  CHECK(!midi2_conv_feed(&s, 0x3C), "data1: not ready");
+  CHECK(s.in_feed == false, "in_feed clear after data path");
+  CHECK(midi2_conv_feed(&s, 0x7F), "data2: ready");
+  CHECK(s.in_feed == false, "in_feed clear after return-true path");
+  CHECK(midi2_conv_feed(&s, 0xF8), "real-time: ready");
+  CHECK(s.in_feed == false, "in_feed clear after real-time early-return path");
+  PASS();
+}
+
 /* --- Main --- */
 
 int main(void) {
@@ -400,6 +419,7 @@ int main(void) {
   printf("\n[NULL Paths]\n");
   test_init_null_safe();
   test_feed_null_safe();
+  test_conv_in_feed_cleared_all_paths();
 
   printf("\n=== Results: %d passed, %d failed ===\n\n", passed, failed);
   return failed > 0 ? 1 : 0;

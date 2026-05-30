@@ -301,6 +301,9 @@ void midi2_dispatch_init(midi2_dispatch *dp);
  *  a typed message to be dropped rather than read past the buffer; unknown
  *  message types are still forwarded to on_unknown with the given word_count.
  *  Can be used directly as midi2_proc on_ump callback.
+ *  Dispatch holds no accumulating state of its own, but the single-context
+ *  contract of the midi2_proc/midi2_conv it feeds still applies: do not
+ *  re-enter the feeding state's feed from a callback.
  *  Safe to call with NULL context, NULL words, or word_count 0 (function
  *  is no-op). */
 void midi2_dispatch_feed(const uint32_t *words, uint8_t word_count, void *context);

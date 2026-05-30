@@ -97,6 +97,11 @@ typedef struct {
   midi2_proc_sysex7_cb  on_sysex7;
   midi2_proc_sysex8_cb  on_sysex8;
   void                 *context;
+
+  /** Debug-only reentrancy guard (see the single-context contract on
+   *  midi2_proc_feed). Always present so the struct size matches between debug
+   *  and release builds. */
+  bool                  in_feed;
 } midi2_proc_state;
 
 /*--------------------------------------------------------------------+
@@ -118,7 +123,12 @@ void midi2_proc_init(midi2_proc_state *state,
  * Precondition: words must contain at least midi2_msg_word_count(mt) valid words
  * for the message type encoded in words[0]. A shorter word_count causes the
  * message to be dropped rather than read past the buffer.
- * Safe to call with NULL state or NULL words (function is no-op). */
+ * Safe to call with NULL state or NULL words (function is no-op).
+ *
+ * Single-context: feed each state instance from one execution context at a
+ * time. Do not re-enter feed on the same instance from a callback or another
+ * context (e.g. an ISR). Violations are caught by a debug-build assertion
+ * (compiled out under NDEBUG). */
 void midi2_proc_feed(midi2_proc_state *state, const uint32_t *words, uint8_t word_count);
 
 /* Apply group remap to outgoing words (modifies word 0 in-place).

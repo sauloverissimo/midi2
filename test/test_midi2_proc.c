@@ -259,6 +259,52 @@ void test_proc_guard_sysex_reassembly(void) {
   PASS();
 }
 
+/* Track 2: the reentrancy guard works by holding state->in_feed true for the
+ * duration of feed. We verify that mechanism directly (deterministic, no abort):
+ * a callback observes the flag while feed is running, and a second state's flag
+ * stays independent. The MIDI2_ASSERT(!in_feed) in the wrapper therefore fires
+ * on a same-state re-entry. */
+static bool g_in_feed_during_cb;
+static const midi2_proc_state *g_observe_self;
+static const midi2_proc_state *g_observe_other;
+static bool g_other_in_feed_during_cb;
+
+static void observe_ump_cb(const uint32_t *w, uint8_t n, void *ctx) {
+  (void)w; (void)n; (void)ctx;
+  if (g_observe_self)  g_in_feed_during_cb       = g_observe_self->in_feed;
+  if (g_observe_other) g_other_in_feed_during_cb = g_observe_other->in_feed;
+}
+
+void test_proc_in_feed_set_during_feed(void) {
+  TEST("Track 2: in_feed is true during feed, clear after");
+  midi2_proc_state s;
+  midi2_proc_init(&s, proc_sysex_buf, sizeof(proc_sysex_buf), proc_sysex8_buf, sizeof(proc_sysex8_buf));
+  s.on_ump = observe_ump_cb;
+  g_observe_self = &s;
+  g_observe_other = NULL;
+  g_in_feed_during_cb = false;
+  uint32_t msg = 0x20903C7Fu;             /* MT2 -> reaches on_ump */
+  midi2_proc_feed(&s, &msg, 1);
+  CHECK(g_in_feed_during_cb == true, "in_feed set during feed (re-entry detectable)");
+  CHECK(s.in_feed == false, "in_feed cleared after feed returns");
+  PASS();
+}
+
+void test_proc_in_feed_independent_states(void) {
+  TEST("Track 2: a second state's in_feed stays independent");
+  midi2_proc_state a, b;
+  midi2_proc_init(&a, proc_sysex_buf, sizeof(proc_sysex_buf), proc_sysex8_buf, sizeof(proc_sysex8_buf));
+  midi2_proc_init(&b, proc_sysex_buf, sizeof(proc_sysex_buf), proc_sysex8_buf, sizeof(proc_sysex8_buf));
+  a.on_ump = observe_ump_cb;
+  g_observe_self = &a;
+  g_observe_other = &b;                    /* b is not being fed */
+  g_other_in_feed_during_cb = true;
+  uint32_t msg = 0x20903C7Fu;
+  midi2_proc_feed(&a, &msg, 1);
+  CHECK(g_other_in_feed_during_cb == false, "feeding a must not set b->in_feed");
+  PASS();
+}
+
 void test_sysex7_group_interleave_discards(void) {
   TEST("sysex7: different group mid-stream discards");
   midi2_proc_state s;
@@ -700,6 +746,10 @@ int main(void) {
   printf("\n[Track 1 guard]\n");
   test_proc_guard_short_data128();
   test_proc_guard_sysex_reassembly();
+
+  printf("\n[Track 2 reentrancy]\n");
+  test_proc_in_feed_set_during_feed();
+  test_proc_in_feed_independent_states();
   test_sysex7_group_interleave_discards();
 
   printf("\n[Group Remap]\n");

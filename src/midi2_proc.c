@@ -186,8 +186,9 @@ static void sysex8_process(midi2_proc_state *state, uint8_t group, const uint32_
 /*--------------------------------------------------------------------+
  * Feed
  *--------------------------------------------------------------------*/
-void midi2_proc_feed(midi2_proc_state *state, const uint32_t *words, uint8_t word_count) {
-  if (state == NULL || words == NULL) return;
+/* Inner body; assumes non-NULL state/words. The public wrapper enforces the
+ * single-context contract via the in_feed guard around this call. */
+static void midi2_proc_feed_inner(midi2_proc_state *state, const uint32_t *words, uint8_t word_count) {
   uint8_t mt = midi2_msg_get_mt(words);
   uint8_t group = midi2_msg_get_group(words);
 
@@ -220,6 +221,17 @@ void midi2_proc_feed(midi2_proc_state *state, const uint32_t *words, uint8_t wor
   if (mt != MIDI2_MT_SYSEX7 && mt != MIDI2_MT_DATA128 && state->on_ump) {
     state->on_ump(words, midi2_msg_word_count(mt), state->context);
   }
+}
+
+void midi2_proc_feed(midi2_proc_state *state, const uint32_t *words, uint8_t word_count) {
+  if (state == NULL || words == NULL) return;
+  /* Single-context contract: a callback must not re-enter feed on this state.
+   * Caught in debug builds; the set/clear lives only here so no inner return
+   * path can leak the flag. */
+  MIDI2_ASSERT(!state->in_feed);
+  state->in_feed = true;
+  midi2_proc_feed_inner(state, words, word_count);
+  state->in_feed = false;
 }
 
 /*--------------------------------------------------------------------+

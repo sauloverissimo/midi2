@@ -85,6 +85,11 @@ typedef struct {
   /** Output: completed UMP message */
   uint32_t ump[4];
   uint8_t  ump_words;
+
+  /** Debug-only reentrancy guard (see the single-context contract on
+   *  midi2_conv_feed). Always present so the struct size matches between debug
+   *  and release builds. */
+  bool     in_feed;
 } midi2_conv_state;
 
 /** Initialize converter state.
@@ -98,7 +103,12 @@ void midi2_conv_init(midi2_conv_state *state, uint8_t group);
  * NULL (safe to call with NULL state).
  *
  * SysEx of any length is fully supported via streaming UMP SysEx7 packets.
- * Each call produces at most one UMP message (1 or 2 words). */
+ * Each call produces at most one UMP message (1 or 2 words).
+ *
+ * Single-context: feed each state instance from one execution context at a
+ * time. Do not re-enter feed on the same instance from a callback or another
+ * context (e.g. an ISR). Violations are caught by a debug-build assertion
+ * (compiled out under NDEBUG). */
 bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte);
 
 #ifdef __cplusplus
