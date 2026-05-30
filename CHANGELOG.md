@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.6.0]
+
+No public API signature changes.
+
+### Fixed
+
+- `midi2_dispatch_feed` and `midi2_proc_feed` drop a typed message whose
+  `word_count` is shorter than its type requires instead of over-reading.
+- `midi2_ci` returns `MIDI2_CI_ERR_NULL` (was `MIDI2_CI_ERR_NOT_FOUND`) for a
+  NULL `state` or name in `midi2_ci_remove_property`,
+  `midi2_ci_pe_set_subscribable`, `midi2_ci_subscribe_add`,
+  `midi2_ci_subscribe_remove`, and `midi2_ci_notify_property_changed`.
+
+### Added
+
+- Overridable `MIDI2_ASSERT` macro; compiled out under `NDEBUG`.
+- Debug-only single-context reentrancy guard (`in_feed`) on `midi2_conv` and
+  `midi2_proc`; compiled out under `NDEBUG`.
+
+### Changed
+
+- Feed preconditions and the single-context contract documented in the
+  `midi2_dispatch`, `midi2_proc`, and `midi2_conv` headers.
+- Reproducible amalgam (no build-date stamp).
+
 ## [0.5.0]
 
 ### Added
