@@ -256,7 +256,7 @@ int midi2_ci_add_property_dynamic(midi2_ci_state *state,
  *  preserve contiguous storage. Returns MIDI2_CI_OK or
  *  MIDI2_CI_ERR_NOT_FOUND. Symmetric with midi2_ci_remove_profile.
  *  Safe to call with NULL state or NULL name (returns
- *  MIDI2_CI_ERR_NOT_FOUND). (v0.3.0+) */
+ *  MIDI2_CI_ERR_NULL). (v0.3.0+) */
 int midi2_ci_remove_property(midi2_ci_state *state, const char *name);
 
 /** Clear all registered profiles (count-only reset; storage contents are
@@ -272,7 +272,7 @@ void midi2_ci_reset_properties(midi2_ci_state *state);
 /** Toggle the subscribable flag on a registered property at runtime.
  *  Returns MIDI2_CI_OK or MIDI2_CI_ERR_NOT_FOUND.
  *  Safe to call with NULL state or NULL name (returns
- *  MIDI2_CI_ERR_NOT_FOUND). (v0.3.0+) */
+ *  MIDI2_CI_ERR_NULL). (v0.3.0+) */
 int midi2_ci_pe_set_subscribable(midi2_ci_state *state,
                                   const char *name, bool subscribable);
 
@@ -280,18 +280,19 @@ int midi2_ci_pe_set_subscribable(midi2_ci_state *state,
  *  property must be registered and marked subscribable. Duplicate
  *  (muid, name) pairs are idempotent and return OK.
  *  Safe to call with NULL state or NULL resource_name (returns
- *  MIDI2_CI_ERR_NOT_FOUND).
- *  @return MIDI2_CI_OK, MIDI2_CI_ERR_NOT_FOUND (property unknown or
- *          not subscribable), or MIDI2_CI_ERR_FULL (no subscriber
- *          capacity, including the case of midi2_ci_init without a
- *          subscribers array). (v0.3.0+) */
+ *  MIDI2_CI_ERR_NULL).
+ *  @return MIDI2_CI_OK, MIDI2_CI_ERR_NULL (NULL state or resource_name),
+ *          MIDI2_CI_ERR_NOT_FOUND (property unknown or not subscribable),
+ *          or MIDI2_CI_ERR_FULL (no subscriber capacity, including the case
+ *          of midi2_ci_init without a subscribers array). (v0.3.0+) */
 int midi2_ci_subscribe_add(midi2_ci_state *state, uint32_t caller_muid,
                             const char *resource_name);
 
 /** Remove a subscriber from the named resource.
  *  Safe to call with NULL state or NULL resource_name (returns
- *  MIDI2_CI_ERR_NOT_FOUND, via indirect find_subscriber_idx guard).
- *  @return MIDI2_CI_OK or MIDI2_CI_ERR_NOT_FOUND. (v0.3.0+) */
+ *  MIDI2_CI_ERR_NULL).
+ *  @return MIDI2_CI_OK, MIDI2_CI_ERR_NULL (NULL state or resource_name),
+ *          or MIDI2_CI_ERR_NOT_FOUND (subscriber not found). (v0.3.0+) */
 int midi2_ci_subscribe_remove(midi2_ci_state *state, uint32_t caller_muid,
                                const char *resource_name);
 
@@ -300,7 +301,7 @@ int midi2_ci_subscribe_remove(midi2_ci_state *state, uint32_t caller_muid,
  *  MIDI2_CI_ERR_NOT_FOUND when the property is unknown. Emission uses
  *  the state's write_fn (same path as Discovery / PE Reply).
  *  Safe to call with NULL state or NULL resource_name (returns
- *  MIDI2_CI_ERR_NOT_FOUND). (v0.3.0+) */
+ *  MIDI2_CI_ERR_NULL). (v0.3.0+) */
 int midi2_ci_notify_property_changed(midi2_ci_state *state,
                                       const char *resource_name);
 

@@ -185,7 +185,8 @@ int midi2_ci_add_property_dynamic(midi2_ci_state *state,
 
 int midi2_ci_remove_property(midi2_ci_state *state, const char *name) {
   uint8_t i;
-  if (state == NULL || name == NULL) return MIDI2_CI_ERR_NOT_FOUND;
+  if (state == NULL) return MIDI2_CI_ERR_NULL;
+  if (name == NULL) return MIDI2_CI_ERR_NULL;
   for (i = 0; i < state->property_count; i++) {
     if (state->properties[i].name != NULL
         && strcmp(state->properties[i].name, name) == 0) {
@@ -244,7 +245,9 @@ static int find_subscriber_idx(const midi2_ci_state *state, uint32_t muid,
 
 int midi2_ci_pe_set_subscribable(midi2_ci_state *state, const char *name,
                                   bool subscribable) {
-  int idx = find_property_idx(state, name);
+  int idx;
+  if (state == NULL || name == NULL) return MIDI2_CI_ERR_NULL;
+  idx = find_property_idx(state, name);
   if (idx < 0) return MIDI2_CI_ERR_NOT_FOUND;
   state->properties[idx].subscribable = subscribable;
   return MIDI2_CI_OK;
@@ -255,7 +258,7 @@ int midi2_ci_subscribe_add(midi2_ci_state *state, uint32_t caller_muid,
   uint8_t i;
   int pi;
   size_t n;
-  if (state == NULL || resource_name == NULL) return MIDI2_CI_ERR_NOT_FOUND;
+  if (state == NULL || resource_name == NULL) return MIDI2_CI_ERR_NULL;
   if (state->subscribers == NULL) return MIDI2_CI_ERR_FULL;
   pi = find_property_idx(state, resource_name);
   if (pi < 0) return MIDI2_CI_ERR_NOT_FOUND;
@@ -279,7 +282,9 @@ int midi2_ci_subscribe_add(midi2_ci_state *state, uint32_t caller_muid,
 
 int midi2_ci_subscribe_remove(midi2_ci_state *state, uint32_t caller_muid,
                                const char *resource_name) {
-  int idx = find_subscriber_idx(state, caller_muid, resource_name);
+  int idx;
+  if (state == NULL || resource_name == NULL) return MIDI2_CI_ERR_NULL;
+  idx = find_subscriber_idx(state, caller_muid, resource_name);
   if (idx < 0) return MIDI2_CI_ERR_NOT_FOUND;
   state->subscribers[idx].in_use = 0;
   state->subscribers[idx].caller_muid = 0;
@@ -322,7 +327,7 @@ int midi2_ci_notify_property_changed(midi2_ci_state *state,
   static const char HDR_SUFFIX[] = "\"}";
   uint8_t i;
   int pi;
-  if (state == NULL || resource_name == NULL) return MIDI2_CI_ERR_NOT_FOUND;
+  if (state == NULL || resource_name == NULL) return MIDI2_CI_ERR_NULL;
   pi = find_property_idx(state, resource_name);
   if (pi < 0) return MIDI2_CI_ERR_NOT_FOUND;
   if (state->write_fn == NULL || state->subscribers == NULL) return MIDI2_CI_OK;

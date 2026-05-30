@@ -751,6 +751,28 @@ void test_ci_process_sysex_null_safe(void) {
   PASS();
 }
 
+/* Track 3: NULL state/name returns MIDI2_CI_ERR_NULL consistently in the five
+ * functions that previously returned MIDI2_CI_ERR_NOT_FOUND for NULL. */
+void test_ci_null_arg_returns_err_null(void) {
+  TEST("Track 3: NULL state returns ERR_NULL in 5 fns");
+  CHECK(midi2_ci_remove_property(NULL, "x") == MIDI2_CI_ERR_NULL, "remove_property NULL state");
+  CHECK(midi2_ci_pe_set_subscribable(NULL, "x", true) == MIDI2_CI_ERR_NULL, "pe_set_subscribable NULL state");
+  CHECK(midi2_ci_subscribe_add(NULL, 1, "x") == MIDI2_CI_ERR_NULL, "subscribe_add NULL state");
+  CHECK(midi2_ci_subscribe_remove(NULL, 1, "x") == MIDI2_CI_ERR_NULL, "subscribe_remove NULL state");
+  CHECK(midi2_ci_notify_property_changed(NULL, "x") == MIDI2_CI_ERR_NULL, "notify NULL state");
+  PASS();
+}
+
+void test_ci_null_name_vs_missing(void) {
+  TEST("Track 3: NULL name -> ERR_NULL; missing name -> ERR_NOT_FOUND");
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0, test_profiles, 8, test_props, 4);
+  CHECK(midi2_ci_remove_property(&s, NULL) == MIDI2_CI_ERR_NULL, "remove_property NULL name");
+  CHECK(midi2_ci_notify_property_changed(&s, NULL) == MIDI2_CI_ERR_NULL, "notify NULL name");
+  CHECK(midi2_ci_remove_property(&s, "nope") == MIDI2_CI_ERR_NOT_FOUND, "missing name still NOT_FOUND");
+  PASS();
+}
+
 /* --- Main --- */
 
 int main(void) {
@@ -811,6 +833,8 @@ int main(void) {
   test_ci_new_muid_null_safe();
   test_ci_profile_property_null_safe();
   test_ci_process_sysex_null_safe();
+  test_ci_null_arg_returns_err_null();
+  test_ci_null_name_vs_missing();
 
   printf("\n=== Results: %d passed, %d failed ===\n\n", passed, failed);
   return failed > 0 ? 1 : 0;
