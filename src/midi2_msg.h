@@ -39,6 +39,15 @@
 #include <stdbool.h>
 #include <string.h>
 
+/* Overridable assertion for debug-build contract checks (programmer errors).
+ * Compiles out under NDEBUG. Define MIDI2_ASSERT before including midi2 to
+ * override it (e.g. a custom fault handler, or a no-op). Zero-dependency:
+ * defaults to the standard assert. */
+#ifndef MIDI2_ASSERT
+#  include <assert.h>
+#  define MIDI2_ASSERT(x) assert(x)
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
