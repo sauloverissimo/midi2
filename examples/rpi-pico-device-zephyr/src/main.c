@@ -300,7 +300,7 @@ static void install_ci_bootstrap(void)
 		"{\"manufacturer\":\"github.com/sauloverissimo\","
 		 "\"family\":\"rpi-pico-device-midi2\","
 		 "\"model\":\"showcase\","
-		 "\"version\":\"0.5.0\"}");
+		 "\"version\":\"0.6.0\"}");
 	LOG_INF("CI addPropertyStatic(DeviceInfo) rc=%d", rc);
 
 	rc = midi2_ci_add_property_dynamic(&g_ci, "ChannelList",

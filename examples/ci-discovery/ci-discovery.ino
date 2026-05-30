@@ -1,5 +1,5 @@
 /*
- * midi2 CIDiscovery example, Arduino sketch.
+ * midi2 ci-discovery example, Arduino sketch.
  *
  * Demonstrates the MIDI-CI Discovery responder running standalone:
  *   1. Initialise a midi2_ci_state with profiles + properties storage.
@@ -28,7 +28,7 @@ void setup() {
     Serial.begin(115200);
     while (!Serial) {}
 
-    Serial.println("=== midi2 CIDiscovery ===");
+    Serial.println("=== midi2 ci-discovery ===");
 
     static uint8_t profiles[2][5];
     static midi2_ci_property props[1];

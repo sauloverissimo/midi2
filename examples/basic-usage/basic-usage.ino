@@ -1,5 +1,5 @@
 /*
- * midi2 BasicUsage example, Arduino sketch.
+ * midi2 basic-usage example, Arduino sketch.
  *
  * Demonstrates the four core surfaces of the library on any
  * Arduino-compatible board:
@@ -57,7 +57,7 @@ void setup() {
         // Wait for USB CDC on boards where Serial is over USB.
     }
 
-    Serial.println("=== midi2 BasicUsage ===");
+    Serial.println("=== midi2 basic-usage ===");
 
     // -------- 1. Build messages --------
 

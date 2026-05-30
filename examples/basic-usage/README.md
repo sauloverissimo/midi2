@@ -1,4 +1,4 @@
-# [midi2](../..) | BasicUsage
+# [midi2](../..) | basic-usage
 
 Arduino sketch that exercises the four core surfaces of midi2 on any Arduino-compatible board. No MIDI transport required: the sketch builds messages, parses them, and prints decoded events over `Serial`.
 
@@ -19,7 +19,7 @@ Arduino IDE or arduino-cli, with the midi2 library installed:
 Sketch -> Include Library -> Manage Libraries -> midi2
 ```
 
-Or drop a clone of this repo into `~/Arduino/libraries/midi2/`. Open `BasicUsage.ino` and Upload.
+Or drop a clone of this repo into `~/Arduino/libraries/midi2/`. Open `basic-usage.ino` and Upload.
 
 ## Validated on
 

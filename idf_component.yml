@@ -5,7 +5,7 @@
 ##
 ##   # in your_app/main/idf_component.yml
 ##   dependencies:
-##     sauloverissimo/midi2: ">=0.5.0"
+##     sauloverissimo/midi2: ">=0.6.0"
 ##
 ## The Component Manager fetches midi2 into managed_components/, and
 ## ESP-IDF picks it up as a component because the top-level CMakeLists
@@ -13,7 +13,7 @@
 ## the file.
 
 description: "Portable MIDI 2.0 UMP library, C99 with zero dependencies and zero allocation."
-version: "0.5.0"
+version: "0.6.0"
 url: "https://github.com/sauloverissimo/midi2"
 documentation: "https://github.com/sauloverissimo/midi2#readme"
 issues: "https://github.com/sauloverissimo/midi2/issues"

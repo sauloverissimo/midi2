@@ -181,14 +181,14 @@ Install via Library Manager (search `midi2`, click Install) or manually drop the
 #include <midi2.h>
 ```
 
-Two example sketches under `examples/` (`BasicUsage`, `CIDiscovery`) appear in the IDE's File > Examples menu after install. Validated on Arduino UNO (AVR) and Teensy 4.1.
+Two example sketches under `examples/` (`basic-usage`, `ci-discovery`) appear in the IDE's File > Examples menu after install. Validated on Arduino UNO (AVR) and Teensy 4.1.
 
 ### PlatformIO
 
 `platformio.ini`:
 
 ```ini
-lib_deps = sauloverissimo/midi2 @ ^0.5.0
+lib_deps = sauloverissimo/midi2 @ ^0.6.0
 ```
 
 Library Manager pulls the same `src/` modular layout via `library.json` (`srcDir = src`).
@@ -200,7 +200,7 @@ Published on the [ESP Component Registry](https://components.espressif.com/compo
 ```yaml
 dependencies:
   idf: ">=5.0"
-  sauloverissimo/midi2: ">=0.5.0"
+  sauloverissimo/midi2: ">=0.6.0"
 ```
 
 `idf.py reconfigure` drops the component into `managed_components/midi2/`. The `if(ESP_PLATFORM)` gate in `CMakeLists.txt` routes ESP-IDF builds to `idf_component_register` with the modular `src/midi2_*.c` set, so the same source serves IDF, Arduino, PlatformIO, and native CMake without forks.
@@ -214,7 +214,7 @@ manifest:
   projects:
     - name: midi2
       url: https://github.com/sauloverissimo/midi2
-      revision: v0.5.0
+      revision: v0.6.0
       path: modules/lib/midi2
 ```
 
@@ -263,10 +263,9 @@ midi2_msg.h          Always needed. Header-only.
 
 ## Examples
 
-Pedagogical sketches and a flash-ready Zephyr hardware recipe live under [`examples/`](examples). See [`examples/README.md`](examples/README.md) for the index.
+Pedagogical sketches and a flash-ready Zephyr hardware recipe live under [`examples/`](examples).
 
-- [`examples/basic_usage.c`](examples/basic_usage.c): host C99 walkthrough of construction, dispatch, `midi2_proc` and CI Discovery.
-- [`examples/BasicUsage/`](examples/BasicUsage) and [`examples/CIDiscovery/`](examples/CIDiscovery): Arduino sketches for the same surfaces, runnable on Teensy 4.x and AVR.
+- [`examples/basic-usage/`](examples/basic-usage) and [`examples/ci-discovery/`](examples/ci-discovery): Arduino sketches covering UMP construction, scaling, typed dispatch, `midi2_proc`, and MIDI-CI Discovery. Runnable on Teensy 4.x and AVR.
 - [`examples/rpi-pico-device-zephyr/`](examples/rpi-pico-device-zephyr): flash-ready Raspberry Pi Pico USB MIDI 2.0 device with a 14-scene UMP showcase and a MIDI-CI responder.
 
 ## Architecture

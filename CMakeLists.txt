@@ -17,7 +17,7 @@
 #       include(FetchContent)
 #       FetchContent_Declare(midi2
 #         GIT_REPOSITORY https://github.com/sauloverissimo/midi2.git
-#         GIT_TAG        v0.5.0)
+#         GIT_TAG        v0.6.0)
 #       FetchContent_MakeAvailable(midi2)
 #     endif()
 #   endif()
@@ -50,7 +50,7 @@ if(ESP_PLATFORM)
     return()
 endif()
 
-project(midi2 VERSION 0.5.0 LANGUAGES C)
+project(midi2 VERSION 0.6.0 LANGUAGES C)
 
 # GNUInstallDirs has to come before target_include_directories so that
 # $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}> evaluates to the real

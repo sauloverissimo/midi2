@@ -1,6 +1,6 @@
 {
   "name": "midi2",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Portable MIDI 2.0 UMP library. C99, zero dependencies, zero allocation. Runs from AVR to desktop.",
   "keywords": "midi, midi2, ump, music, embedded, protocol",
   "repository": {

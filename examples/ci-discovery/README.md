@@ -1,4 +1,4 @@
-# [midi2](../..) | CIDiscovery
+# [midi2](../..) | ci-discovery
 
 Arduino sketch that runs the MIDI-CI Discovery responder standalone, with no USB transport in the loop. Useful as a starting point for any application that wants to advertise itself over MIDI-CI without first bringing up USB.
 
@@ -12,12 +12,12 @@ Arduino sketch that runs the MIDI-CI Discovery responder standalone, with no USB
 
 ## Build
 
-Arduino IDE or arduino-cli, with the midi2 library installed. Open `CIDiscovery.ino` and Upload.
+Arduino IDE or arduino-cli, with the midi2 library installed. Open `ci-discovery.ino` and Upload.
 
 ## Expected output
 
 ```
-=== midi2 CIDiscovery ===
+=== midi2 ci-discovery ===
 Identity + 1 custom profile registered. Sending fake Discovery Inquiry.
 Reply UMP words: 0x30164B7E 0x7F0D70...
 Auto-reply fired.
