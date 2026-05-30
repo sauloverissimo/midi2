@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-/* Auto-generated from midi2 v0.5.0 -- 2026-05-28
+/* Auto-generated from midi2 v0.5.0 (reproducible: no timestamp)
  * https://github.com/sauloverissimo/midi2
  *
  * Portable MIDI 2.0 library (C99, zero dependencies)
@@ -60,6 +60,15 @@ extern "C" {
  */
 
 
+
+/* Overridable assertion for debug-build contract checks (programmer errors).
+ * Compiles out under NDEBUG. Define MIDI2_ASSERT before including midi2 to
+ * override it (e.g. a custom fault handler, or a no-op). Zero-dependency:
+ * defaults to the standard assert. */
+#ifndef MIDI2_ASSERT
+#  include <assert.h>
+#  define MIDI2_ASSERT(x) assert(x)
+#endif
 
 
 /*--------------------------------------------------------------------+
@@ -2377,8 +2386,14 @@ typedef struct {
 void midi2_dispatch_init(midi2_dispatch *dp);
 
 /** Feed one UMP message. Parses and dispatches to the appropriate callback.
- *  word_count must match the message size (1, 2, or 4 words).
+ *  Precondition: words must contain at least midi2_msg_word_count(mt) valid
+ *  words for the message type encoded in words[0]. A shorter word_count causes
+ *  a typed message to be dropped rather than read past the buffer; unknown
+ *  message types are still forwarded to on_unknown with the given word_count.
  *  Can be used directly as midi2_proc on_ump callback.
+ *  Dispatch holds no accumulating state of its own, but the single-context
+ *  contract of the midi2_proc/midi2_conv it feeds still applies: do not
+ *  re-enter the feeding state's feed from a callback.
  *  Safe to call with NULL context, NULL words, or word_count 0 (function
  *  is no-op). */
 void midi2_dispatch_feed(const uint32_t *words, uint8_t word_count, void *context);
@@ -2453,6 +2468,11 @@ typedef struct {
   midi2_proc_sysex7_cb  on_sysex7;
   midi2_proc_sysex8_cb  on_sysex8;
   void                 *context;
+
+  /** Debug-only reentrancy guard (see the single-context contract on
+   *  midi2_proc_feed). Always present so the struct size matches between debug
+   *  and release builds. */
+  bool                  in_feed;
 } midi2_proc_state;
 
 /*--------------------------------------------------------------------+
@@ -2471,8 +2491,15 @@ void midi2_proc_init(midi2_proc_state *state,
                        uint8_t *sysex8_buf, uint16_t sysex8_buf_size);
 
 /* Feed UMP words from transport. Processes, filters, dispatches to callbacks.
- * word_count must match the message size (1, 2, or 4 words).
- * Safe to call with NULL state or NULL words (function is no-op). */
+ * Precondition: words must contain at least midi2_msg_word_count(mt) valid words
+ * for the message type encoded in words[0]. A shorter word_count causes the
+ * message to be dropped rather than read past the buffer.
+ * Safe to call with NULL state or NULL words (function is no-op).
+ *
+ * Single-context: feed each state instance from one execution context at a
+ * time. Do not re-enter feed on the same instance from a callback or another
+ * context (e.g. an ISR). Violations are caught by a debug-build assertion
+ * (compiled out under NDEBUG). */
 void midi2_proc_feed(midi2_proc_state *state, const uint32_t *words, uint8_t word_count);
 
 /* Apply group remap to outgoing words (modifies word 0 in-place).
@@ -2593,6 +2620,11 @@ typedef struct {
   /** Output: completed UMP message */
   uint32_t ump[4];
   uint8_t  ump_words;
+
+  /** Debug-only reentrancy guard (see the single-context contract on
+   *  midi2_conv_feed). Always present so the struct size matches between debug
+   *  and release builds. */
+  bool     in_feed;
 } midi2_conv_state;
 
 /** Initialize converter state.
@@ -2606,7 +2638,12 @@ void midi2_conv_init(midi2_conv_state *state, uint8_t group);
  * NULL (safe to call with NULL state).
  *
  * SysEx of any length is fully supported via streaming UMP SysEx7 packets.
- * Each call produces at most one UMP message (1 or 2 words). */
+ * Each call produces at most one UMP message (1 or 2 words).
+ *
+ * Single-context: feed each state instance from one execution context at a
+ * time. Do not re-enter feed on the same instance from a callback or another
+ * context (e.g. an ISR). Violations are caught by a debug-build assertion
+ * (compiled out under NDEBUG). */
 bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte);
 
 /* == midi2_ci_dispatch =================================================== */
@@ -3063,7 +3100,7 @@ int midi2_ci_add_property_dynamic(midi2_ci_state *state,
  *  preserve contiguous storage. Returns MIDI2_CI_OK or
  *  MIDI2_CI_ERR_NOT_FOUND. Symmetric with midi2_ci_remove_profile.
  *  Safe to call with NULL state or NULL name (returns
- *  MIDI2_CI_ERR_NOT_FOUND). (v0.3.0+) */
+ *  MIDI2_CI_ERR_NULL). (v0.3.0+) */
 int midi2_ci_remove_property(midi2_ci_state *state, const char *name);
 
 /** Clear all registered profiles (count-only reset; storage contents are
@@ -3079,7 +3116,7 @@ void midi2_ci_reset_properties(midi2_ci_state *state);
 /** Toggle the subscribable flag on a registered property at runtime.
  *  Returns MIDI2_CI_OK or MIDI2_CI_ERR_NOT_FOUND.
  *  Safe to call with NULL state or NULL name (returns
- *  MIDI2_CI_ERR_NOT_FOUND). (v0.3.0+) */
+ *  MIDI2_CI_ERR_NULL). (v0.3.0+) */
 int midi2_ci_pe_set_subscribable(midi2_ci_state *state,
                                   const char *name, bool subscribable);
 
@@ -3087,18 +3124,19 @@ int midi2_ci_pe_set_subscribable(midi2_ci_state *state,
  *  property must be registered and marked subscribable. Duplicate
  *  (muid, name) pairs are idempotent and return OK.
  *  Safe to call with NULL state or NULL resource_name (returns
- *  MIDI2_CI_ERR_NOT_FOUND).
- *  @return MIDI2_CI_OK, MIDI2_CI_ERR_NOT_FOUND (property unknown or
- *          not subscribable), or MIDI2_CI_ERR_FULL (no subscriber
- *          capacity, including the case of midi2_ci_init without a
- *          subscribers array). (v0.3.0+) */
+ *  MIDI2_CI_ERR_NULL).
+ *  @return MIDI2_CI_OK, MIDI2_CI_ERR_NULL (NULL state or resource_name),
+ *          MIDI2_CI_ERR_NOT_FOUND (property unknown or not subscribable),
+ *          or MIDI2_CI_ERR_FULL (no subscriber capacity, including the case
+ *          of midi2_ci_init without a subscribers array). (v0.3.0+) */
 int midi2_ci_subscribe_add(midi2_ci_state *state, uint32_t caller_muid,
                             const char *resource_name);
 
 /** Remove a subscriber from the named resource.
  *  Safe to call with NULL state or NULL resource_name (returns
- *  MIDI2_CI_ERR_NOT_FOUND, via indirect find_subscriber_idx guard).
- *  @return MIDI2_CI_OK or MIDI2_CI_ERR_NOT_FOUND. (v0.3.0+) */
+ *  MIDI2_CI_ERR_NULL).
+ *  @return MIDI2_CI_OK, MIDI2_CI_ERR_NULL (NULL state or resource_name),
+ *          or MIDI2_CI_ERR_NOT_FOUND (subscriber not found). (v0.3.0+) */
 int midi2_ci_subscribe_remove(midi2_ci_state *state, uint32_t caller_muid,
                                const char *resource_name);
 
@@ -3107,7 +3145,7 @@ int midi2_ci_subscribe_remove(midi2_ci_state *state, uint32_t caller_muid,
  *  MIDI2_CI_ERR_NOT_FOUND when the property is unknown. Emission uses
  *  the state's write_fn (same path as Discovery / PE Reply).
  *  Safe to call with NULL state or NULL resource_name (returns
- *  MIDI2_CI_ERR_NOT_FOUND). (v0.3.0+) */
+ *  MIDI2_CI_ERR_NULL). (v0.3.0+) */
 int midi2_ci_notify_property_changed(midi2_ci_state *state,
                                       const char *resource_name);
 
@@ -3256,6 +3294,7 @@ static void dispatch_cv1(midi2_dispatch *dp, uint32_t w) {
 /*--------------------------------------------------------------------+
  * Internal: dispatch MT 0x3 SysEx7 (2 words)
  *--------------------------------------------------------------------*/
+/* reads exactly midi2_msg_word_count(mt) words; the feed-level guard depends on this. */
 static void dispatch_sysex7(midi2_dispatch *dp, const uint32_t *w) {
   if (!dp->on_sysex7) return;
   uint8_t group   = (uint8_t)((w[0] >> 24) & 0x0F);
@@ -3278,6 +3317,7 @@ static void dispatch_sysex7(midi2_dispatch *dp, const uint32_t *w) {
 /*--------------------------------------------------------------------+
  * Internal: dispatch MT 0x4 MIDI 2.0 Channel Voice (2 words)
  *--------------------------------------------------------------------*/
+/* reads exactly midi2_msg_word_count(mt) words; the feed-level guard depends on this. */
 static void dispatch_cv2(midi2_dispatch *dp, const uint32_t *w) {
   uint8_t group   = (uint8_t)((w[0] >> 24) & 0x0F);
   uint8_t status  = (uint8_t)((w[0] >> 16) & 0xF0);
@@ -3376,6 +3416,7 @@ static void dispatch_cv2(midi2_dispatch *dp, const uint32_t *w) {
 /*--------------------------------------------------------------------+
  * Internal: dispatch MT 0x5 Data 128-bit (4 words)
  *--------------------------------------------------------------------*/
+/* reads exactly midi2_msg_word_count(mt) words; the feed-level guard depends on this. */
 static void dispatch_data128(midi2_dispatch *dp, const uint32_t *w) {
   uint8_t group       = (uint8_t)((w[0] >> 24) & 0x0F);
   uint8_t status_byte = (uint8_t)((w[0] >> 16) & 0xFF);
@@ -3435,6 +3476,7 @@ static void dispatch_data128(midi2_dispatch *dp, const uint32_t *w) {
 /*--------------------------------------------------------------------+
  * Internal: dispatch MT 0xD Flex Data (4 words)
  *--------------------------------------------------------------------*/
+/* reads exactly midi2_msg_word_count(mt) words; the feed-level guard depends on this. */
 static void dispatch_flex(midi2_dispatch *dp, const uint32_t *w) {
   uint8_t group   = (uint8_t)((w[0] >> 24) & 0x0F);
   uint8_t format  = (uint8_t)((w[0] >> 22) & 0x03);
@@ -3539,6 +3581,7 @@ static void dispatch_flex(midi2_dispatch *dp, const uint32_t *w) {
 /*--------------------------------------------------------------------+
  * Internal: dispatch MT 0xF UMP Stream (4 words)
  *--------------------------------------------------------------------*/
+/* reads exactly midi2_msg_word_count(mt) words; the feed-level guard depends on this. */
 static void dispatch_stream(midi2_dispatch *dp, const uint32_t *w) {
   uint8_t  format = (uint8_t)((w[0] >> 26) & 0x03);
   uint16_t status = (uint16_t)((w[0] >> 16) & 0x3FF);
@@ -3688,6 +3731,12 @@ void midi2_dispatch_feed(const uint32_t *words, uint8_t word_count, void *contex
   if (dp == NULL || words == NULL || word_count == 0) return;
 
   uint8_t mt = (uint8_t)((words[0] >> 28) & 0x0F);
+  /* Track 1 guard: bail on a typed message whose declared word_count is shorter
+   * than its type requires, rather than reading past the buffer. Applied per
+   * case so the default/on_unknown path keeps its short-buffer latitude. The
+   * guard depends on each multi-word dispatcher reading exactly
+   * midi2_msg_word_count(mt) words. */
+  uint8_t needed = midi2_msg_word_count(mt);
 
   switch (mt) {
     case MIDI2_MT_UTILITY:
@@ -3707,18 +3756,23 @@ void midi2_dispatch_feed(const uint32_t *words, uint8_t word_count, void *contex
       }
       break;
     case MIDI2_MT_SYSEX7:
+      if (word_count < needed) return;
       dispatch_sysex7(dp, words);
       break;
     case MIDI2_MT_MIDI2_CV:
+      if (word_count < needed) return;
       dispatch_cv2(dp, words);
       break;
     case MIDI2_MT_DATA128:
+      if (word_count < needed) return;
       dispatch_data128(dp, words);
       break;
     case MIDI2_MT_FLEX_DATA:
+      if (word_count < needed) return;
       dispatch_flex(dp, words);
       break;
     case MIDI2_MT_STREAM:
+      if (word_count < needed) return;
       dispatch_stream(dp, words);
       break;
     default:
@@ -3892,12 +3946,17 @@ static void sysex8_process(midi2_proc_state *state, uint8_t group, const uint32_
 /*--------------------------------------------------------------------+
  * Feed
  *--------------------------------------------------------------------*/
-void midi2_proc_feed(midi2_proc_state *state, const uint32_t *words, uint8_t word_count) {
-  if (state == NULL || words == NULL) return;
+/* Inner body; assumes non-NULL state/words. The public wrapper enforces the
+ * single-context contract via the in_feed guard around this call. */
+static void midi2_proc_feed_inner(midi2_proc_state *state, const uint32_t *words, uint8_t word_count) {
   uint8_t mt = midi2_msg_get_mt(words);
   uint8_t group = midi2_msg_get_group(words);
 
-  (void)word_count; /* caller provides for API clarity; MT determines actual size */
+  /* Track 1 guard: the front message at words[0] must fit in word_count words,
+   * else reading the SysEx reassembly payload would over-read the caller's
+   * buffer. A truncated message is dropped (a dropped SysEx fragment leaves the
+   * in-progress reassembly intact; its bytes are simply missing). */
+  if (word_count < midi2_msg_word_count(mt)) return;
 
   /* SysEx8: reassemble before group filtering (same rationale as SysEx7) */
   if (mt == MIDI2_MT_DATA128) {
@@ -3922,6 +3981,17 @@ void midi2_proc_feed(midi2_proc_state *state, const uint32_t *words, uint8_t wor
   if (mt != MIDI2_MT_SYSEX7 && mt != MIDI2_MT_DATA128 && state->on_ump) {
     state->on_ump(words, midi2_msg_word_count(mt), state->context);
   }
+}
+
+void midi2_proc_feed(midi2_proc_state *state, const uint32_t *words, uint8_t word_count) {
+  if (state == NULL || words == NULL) return;
+  /* Single-context contract: a callback must not re-enter feed on this state.
+   * Caught in debug builds; the set/clear lives only here so no inner return
+   * path can leak the flag. */
+  MIDI2_ASSERT(!state->in_feed);
+  state->in_feed = true;
+  midi2_proc_feed_inner(state, words, word_count);
+  state->in_feed = false;
 }
 
 /*--------------------------------------------------------------------+
@@ -4245,8 +4315,11 @@ static bool emit_sysex_packet(midi2_conv_state *state, bool is_end) {
   return true;
 }
 
-bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte) {
-  if (state == NULL) return false;
+/* Inner body; assumes non-NULL state. The public wrapper enforces the
+ * single-context contract via the in_feed guard around this call. Wrapping
+ * (rather than touching each of the many return paths) keeps the set/clear in
+ * one place so no path can leak the flag. */
+static bool midi2_conv_feed_inner(midi2_conv_state *state, uint8_t byte) {
   state->ump_words = 0;
 
   /* Real-Time messages (F8-FF) can appear anywhere, even mid-message */
@@ -4334,6 +4407,19 @@ bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte) {
   }
 
   return false;
+}
+
+bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte) {
+  bool r;
+  if (state == NULL) return false;
+  /* Single-context contract: a callback must not re-enter feed on this state.
+   * Caught in debug builds; the set/clear lives only here so no inner return
+   * path can leak the flag. */
+  MIDI2_ASSERT(!state->in_feed);
+  state->in_feed = true;
+  r = midi2_conv_feed_inner(state, byte);
+  state->in_feed = false;
+  return r;
 }
 
 /* == midi2_ci_dispatch (impl) ============================================ */
@@ -4846,7 +4932,8 @@ int midi2_ci_add_property_dynamic(midi2_ci_state *state,
 
 int midi2_ci_remove_property(midi2_ci_state *state, const char *name) {
   uint8_t i;
-  if (state == NULL || name == NULL) return MIDI2_CI_ERR_NOT_FOUND;
+  if (state == NULL) return MIDI2_CI_ERR_NULL;
+  if (name == NULL) return MIDI2_CI_ERR_NULL;
   for (i = 0; i < state->property_count; i++) {
     if (state->properties[i].name != NULL
         && strcmp(state->properties[i].name, name) == 0) {
@@ -4905,7 +4992,9 @@ static int find_subscriber_idx(const midi2_ci_state *state, uint32_t muid,
 
 int midi2_ci_pe_set_subscribable(midi2_ci_state *state, const char *name,
                                   bool subscribable) {
-  int idx = find_property_idx(state, name);
+  int idx;
+  if (state == NULL || name == NULL) return MIDI2_CI_ERR_NULL;
+  idx = find_property_idx(state, name);
   if (idx < 0) return MIDI2_CI_ERR_NOT_FOUND;
   state->properties[idx].subscribable = subscribable;
   return MIDI2_CI_OK;
@@ -4916,7 +5005,7 @@ int midi2_ci_subscribe_add(midi2_ci_state *state, uint32_t caller_muid,
   uint8_t i;
   int pi;
   size_t n;
-  if (state == NULL || resource_name == NULL) return MIDI2_CI_ERR_NOT_FOUND;
+  if (state == NULL || resource_name == NULL) return MIDI2_CI_ERR_NULL;
   if (state->subscribers == NULL) return MIDI2_CI_ERR_FULL;
   pi = find_property_idx(state, resource_name);
   if (pi < 0) return MIDI2_CI_ERR_NOT_FOUND;
@@ -4940,7 +5029,9 @@ int midi2_ci_subscribe_add(midi2_ci_state *state, uint32_t caller_muid,
 
 int midi2_ci_subscribe_remove(midi2_ci_state *state, uint32_t caller_muid,
                                const char *resource_name) {
-  int idx = find_subscriber_idx(state, caller_muid, resource_name);
+  int idx;
+  if (state == NULL || resource_name == NULL) return MIDI2_CI_ERR_NULL;
+  idx = find_subscriber_idx(state, caller_muid, resource_name);
   if (idx < 0) return MIDI2_CI_ERR_NOT_FOUND;
   state->subscribers[idx].in_use = 0;
   state->subscribers[idx].caller_muid = 0;
@@ -4983,7 +5074,7 @@ int midi2_ci_notify_property_changed(midi2_ci_state *state,
   static const char HDR_SUFFIX[] = "\"}";
   uint8_t i;
   int pi;
-  if (state == NULL || resource_name == NULL) return MIDI2_CI_ERR_NOT_FOUND;
+  if (state == NULL || resource_name == NULL) return MIDI2_CI_ERR_NULL;
   pi = find_property_idx(state, resource_name);
   if (pi < 0) return MIDI2_CI_ERR_NOT_FOUND;
   if (state->write_fn == NULL || state->subscribers == NULL) return MIDI2_CI_OK;

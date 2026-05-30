@@ -44,7 +44,7 @@ SOURCES=(midi2_dispatch midi2_proc midi2_conv midi2_ci_dispatch midi2_ci)
 
   cat <<EOF
 
-/* Auto-generated from midi2 v${VER} -- $(date -u +%Y-%m-%d)
+/* Auto-generated from midi2 v${VER} (reproducible: no timestamp)
  * https://github.com/sauloverissimo/midi2
  *
  * Portable MIDI 2.0 library (C99, zero dependencies)
@@ -103,7 +103,7 @@ OUT_C="${OUT%.h}.c"
 
   cat <<EOF
 
-/* Auto-generated from midi2 v${VER} -- $(date -u +%Y-%m-%d)
+/* Auto-generated from midi2 v${VER} (reproducible: no timestamp)
  * https://github.com/sauloverissimo/midi2
  *
  * Portable MIDI 2.0 library (C99, zero dependencies)

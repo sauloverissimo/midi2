@@ -151,13 +151,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - name: Regenerate amalgam and fail on drift
+        run: |
+          # The amalgam is C++-compiled below. Regenerate it from src/ and fail
+          # if the committed dist/ is stale, so a contributor who forgot to
+          # re-amalgamate cannot ship a src/ change the C++ job never saw.
+          ./tools/amalgamate.sh
+          git diff --exit-code dist/ \
+            || (echo "dist/ is stale: run tools/amalgamate.sh and commit" && exit 1)
       - name: Compile public headers as C++
         run: |
           # midi2.h is included directly by C++ consumers (midi2cpp,
           # libDaisy, Teensy wrappers). Guards against C-only constructs
-          # such as designated array initializers that g++ rejects.
+          # such as designated array initializers that g++ rejects. The
+          # modular arm includes every header a wrapper pulls in, so a
+          # C++-hostile construct in any of them fails here, not downstream.
           printf '#define MIDI2_IMPLEMENTATION\n#include "midi2.h"\nint main(void) { return (int)midi2_msg_word_count(0x4); }\n' > cxx_amalgam.cpp
-          printf '#include "midi2_msg.h"\nint main(void) { return (int)midi2_msg_word_count(0x4); }\n' > cxx_modular.cpp
+          printf '#include "midi2_msg.h"\n#include "midi2_conv.h"\n#include "midi2_proc.h"\nint main(void) { return (int)midi2_msg_word_count(0x4); }\n' > cxx_modular.cpp
           for std in c++17 c++20; do
             echo "  amalgam $std"
             g++ -std=$std -Wall -Wextra -I dist cxx_amalgam.cpp -o /dev/null
