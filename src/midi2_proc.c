@@ -191,7 +191,11 @@ void midi2_proc_feed(midi2_proc_state *state, const uint32_t *words, uint8_t wor
   uint8_t mt = midi2_msg_get_mt(words);
   uint8_t group = midi2_msg_get_group(words);
 
-  (void)word_count; /* caller provides for API clarity; MT determines actual size */
+  /* Track 1 guard: the front message at words[0] must fit in word_count words,
+   * else reading the SysEx reassembly payload would over-read the caller's
+   * buffer. A truncated message is dropped (a dropped SysEx fragment leaves the
+   * in-progress reassembly intact; its bytes are simply missing). */
+  if (word_count < midi2_msg_word_count(mt)) return;
 
   /* SysEx8: reassemble before group filtering (same rationale as SysEx7) */
   if (mt == MIDI2_MT_DATA128) {

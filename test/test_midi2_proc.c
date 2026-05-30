@@ -4,6 +4,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "midi2_proc.h"
 
@@ -209,6 +210,52 @@ void test_sysex7_multi_packet(void) {
   CHECK(last_sysex_len == 12, "12 bytes total");
   CHECK(last_sysex_data[0] == 0x01, "first byte");
   CHECK(last_sysex_data[11] == 0x0C, "last byte");
+  PASS();
+}
+
+/* Track 1: MT5 (Data128, needs 4 words) fed with word_count=1 must not
+ * over-read. Buffer holds exactly one word so ASan traps any read of w[1..3]. */
+void test_proc_guard_short_data128(void) {
+  TEST("guard: MT5 with word_count=1 does not over-read");
+  midi2_proc_state s;
+  midi2_proc_init(&s, proc_sysex_buf, sizeof(proc_sysex_buf), proc_sysex8_buf, sizeof(proc_sysex8_buf));
+  reset_state();
+  uint32_t *w = malloc(sizeof(uint32_t));   /* exactly ONE word */
+  w[0] = 0x50030000u;                        /* MT5, num_bytes=3 -> sysex8_process reads w[1] */
+  midi2_proc_feed(&s, w, 1);                 /* must early-return before sysex8_process */
+  free(w);
+  PASS();                                    /* ASan-clean == pass */
+}
+
+/* Track 1 caveat: START -> truncated CONTINUE (guard-dropped) -> valid END.
+ * Specified behavior: the dropped fragment's bytes are missing from the
+ * delivered SysEx, but the buffer is not corrupted and END still delivers. */
+void test_proc_guard_sysex_reassembly(void) {
+  TEST("guard: truncated SysEx7 CONTINUE drops cleanly, no corruption");
+  midi2_proc_state s;
+  midi2_proc_init(&s, proc_sysex_buf, sizeof(proc_sysex_buf), proc_sysex8_buf, sizeof(proc_sysex8_buf));
+  s.on_sysex7 = test_sysex_cb;
+  reset_state();
+
+  uint32_t w[2];
+  uint8_t part1[] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06};
+  uint8_t mid[]   = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF};
+  uint8_t part2[] = {0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C};
+
+  midi2_msg_sysex7_packet(w, 0, MIDI2_SYSEX7_START, part1, 6);
+  midi2_proc_feed(&s, w, 2);
+
+  midi2_msg_sysex7_packet(w, 0, MIDI2_SYSEX7_CONTINUE, mid, 6);
+  midi2_proc_feed(&s, w, 1);                 /* truncated: guard drops it */
+  CHECK(sysex_cb_count == 0, "still not delivered");
+
+  midi2_msg_sysex7_packet(w, 0, MIDI2_SYSEX7_END, part2, 6);
+  midi2_proc_feed(&s, w, 2);
+  CHECK(sysex_cb_count == 1, "delivered after END");
+  CHECK(last_sysex_len == 12, "12 bytes: START + END, dropped CONTINUE missing");
+  CHECK(last_sysex_data[0] == 0x01, "first byte from START");
+  CHECK(last_sysex_data[6] == 0x07, "byte 6 is END's first byte, not the dropped CONTINUE");
+  CHECK(last_sysex_data[11] == 0x0C, "last byte from END");
   PASS();
 }
 
@@ -649,6 +696,10 @@ int main(void) {
   printf("\n[SysEx7 Reassembly]\n");
   test_sysex7_complete();
   test_sysex7_multi_packet();
+
+  printf("\n[Track 1 guard]\n");
+  test_proc_guard_short_data128();
+  test_proc_guard_sysex_reassembly();
   test_sysex7_group_interleave_discards();
 
   printf("\n[Group Remap]\n");

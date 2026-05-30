@@ -4,6 +4,7 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "midi2_dispatch.h"
 
@@ -1277,6 +1278,36 @@ void test_dp_feed_zero_word_count(void) {
   PASS();
 }
 
+/* Track 1: a MIDI2 CV message (MT 0x4, needs 2 words) fed with word_count=1
+ * must NOT over-read words[1]. The buffer holds exactly one word so ASan traps
+ * any read of words[1]. */
+void test_dp_guard_short_cv2(void) {
+  TEST("guard: MT4 with word_count=1 does not over-read");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t *w = malloc(sizeof(uint32_t));   /* exactly ONE word */
+  w[0] = 0x40903C00u;                        /* MT4 note-on, group 0 */
+  midi2_dispatch_feed(w, 1, &dp);            /* must early-return */
+  CHECK(ctx.called == 0, "callback should not fire on truncated MT4");
+  free(w);
+  PASS();
+}
+
+/* Track 1: the guard must NOT touch the default/on_unknown path. A reserved MT
+ * needing 2 words (MT 0x8) fed with word_count=1 must still reach on_unknown. */
+void test_dp_guard_preserves_on_unknown(void) {
+  TEST("guard: short unknown-MT packet still reaches on_unknown");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  uint32_t *w = malloc(sizeof(uint32_t));
+  w[0] = 0x80000000u;                        /* MT 0x8 reserved, word_count=2 */
+  midi2_dispatch_feed(w, 1, &dp);
+  CHECK(ctx.called == 1, "on_unknown should still fire");
+  CHECK(ctx.unknown_wc == 1, "on_unknown sees the original word_count");
+  free(w);
+  PASS();
+}
+
 /*--------------------------------------------------------------------+
  * Main
  *--------------------------------------------------------------------*/
@@ -1370,6 +1401,10 @@ int main(void) {
   test_dp_feed_null_context();
   test_dp_feed_null_words();
   test_dp_feed_zero_word_count();
+
+  printf("\n[Track 1 guard]\n");
+  test_dp_guard_short_cv2();
+  test_dp_guard_preserves_on_unknown();
 
   printf("\n=== Results: %d passed, %d failed ===\n\n", passed, failed);
   return failed > 0 ? 1 : 0;

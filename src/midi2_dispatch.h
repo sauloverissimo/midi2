@@ -296,7 +296,10 @@ typedef struct {
 void midi2_dispatch_init(midi2_dispatch *dp);
 
 /** Feed one UMP message. Parses and dispatches to the appropriate callback.
- *  word_count must match the message size (1, 2, or 4 words).
+ *  Precondition: words must contain at least midi2_msg_word_count(mt) valid
+ *  words for the message type encoded in words[0]. A shorter word_count causes
+ *  a typed message to be dropped rather than read past the buffer; unknown
+ *  message types are still forwarded to on_unknown with the given word_count.
  *  Can be used directly as midi2_proc on_ump callback.
  *  Safe to call with NULL context, NULL words, or word_count 0 (function
  *  is no-op). */

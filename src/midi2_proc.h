@@ -115,7 +115,9 @@ void midi2_proc_init(midi2_proc_state *state,
                        uint8_t *sysex8_buf, uint16_t sysex8_buf_size);
 
 /* Feed UMP words from transport. Processes, filters, dispatches to callbacks.
- * word_count must match the message size (1, 2, or 4 words).
+ * Precondition: words must contain at least midi2_msg_word_count(mt) valid words
+ * for the message type encoded in words[0]. A shorter word_count causes the
+ * message to be dropped rather than read past the buffer.
  * Safe to call with NULL state or NULL words (function is no-op). */
 void midi2_proc_feed(midi2_proc_state *state, const uint32_t *words, uint8_t word_count);
 

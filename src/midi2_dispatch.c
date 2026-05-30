@@ -142,6 +142,7 @@ static void dispatch_cv1(midi2_dispatch *dp, uint32_t w) {
 /*--------------------------------------------------------------------+
  * Internal: dispatch MT 0x3 SysEx7 (2 words)
  *--------------------------------------------------------------------*/
+/* reads exactly midi2_msg_word_count(mt) words; the feed-level guard depends on this. */
 static void dispatch_sysex7(midi2_dispatch *dp, const uint32_t *w) {
   if (!dp->on_sysex7) return;
   uint8_t group   = (uint8_t)((w[0] >> 24) & 0x0F);
@@ -164,6 +165,7 @@ static void dispatch_sysex7(midi2_dispatch *dp, const uint32_t *w) {
 /*--------------------------------------------------------------------+
  * Internal: dispatch MT 0x4 MIDI 2.0 Channel Voice (2 words)
  *--------------------------------------------------------------------*/
+/* reads exactly midi2_msg_word_count(mt) words; the feed-level guard depends on this. */
 static void dispatch_cv2(midi2_dispatch *dp, const uint32_t *w) {
   uint8_t group   = (uint8_t)((w[0] >> 24) & 0x0F);
   uint8_t status  = (uint8_t)((w[0] >> 16) & 0xF0);
@@ -262,6 +264,7 @@ static void dispatch_cv2(midi2_dispatch *dp, const uint32_t *w) {
 /*--------------------------------------------------------------------+
  * Internal: dispatch MT 0x5 Data 128-bit (4 words)
  *--------------------------------------------------------------------*/
+/* reads exactly midi2_msg_word_count(mt) words; the feed-level guard depends on this. */
 static void dispatch_data128(midi2_dispatch *dp, const uint32_t *w) {
   uint8_t group       = (uint8_t)((w[0] >> 24) & 0x0F);
   uint8_t status_byte = (uint8_t)((w[0] >> 16) & 0xFF);
@@ -321,6 +324,7 @@ static void dispatch_data128(midi2_dispatch *dp, const uint32_t *w) {
 /*--------------------------------------------------------------------+
  * Internal: dispatch MT 0xD Flex Data (4 words)
  *--------------------------------------------------------------------*/
+/* reads exactly midi2_msg_word_count(mt) words; the feed-level guard depends on this. */
 static void dispatch_flex(midi2_dispatch *dp, const uint32_t *w) {
   uint8_t group   = (uint8_t)((w[0] >> 24) & 0x0F);
   uint8_t format  = (uint8_t)((w[0] >> 22) & 0x03);
@@ -425,6 +429,7 @@ static void dispatch_flex(midi2_dispatch *dp, const uint32_t *w) {
 /*--------------------------------------------------------------------+
  * Internal: dispatch MT 0xF UMP Stream (4 words)
  *--------------------------------------------------------------------*/
+/* reads exactly midi2_msg_word_count(mt) words; the feed-level guard depends on this. */
 static void dispatch_stream(midi2_dispatch *dp, const uint32_t *w) {
   uint8_t  format = (uint8_t)((w[0] >> 26) & 0x03);
   uint16_t status = (uint16_t)((w[0] >> 16) & 0x3FF);
@@ -574,6 +579,12 @@ void midi2_dispatch_feed(const uint32_t *words, uint8_t word_count, void *contex
   if (dp == NULL || words == NULL || word_count == 0) return;
 
   uint8_t mt = (uint8_t)((words[0] >> 28) & 0x0F);
+  /* Track 1 guard: bail on a typed message whose declared word_count is shorter
+   * than its type requires, rather than reading past the buffer. Applied per
+   * case so the default/on_unknown path keeps its short-buffer latitude. The
+   * guard depends on each multi-word dispatcher reading exactly
+   * midi2_msg_word_count(mt) words. */
+  uint8_t needed = midi2_msg_word_count(mt);
 
   switch (mt) {
     case MIDI2_MT_UTILITY:
@@ -593,18 +604,23 @@ void midi2_dispatch_feed(const uint32_t *words, uint8_t word_count, void *contex
       }
       break;
     case MIDI2_MT_SYSEX7:
+      if (word_count < needed) return;
       dispatch_sysex7(dp, words);
       break;
     case MIDI2_MT_MIDI2_CV:
+      if (word_count < needed) return;
       dispatch_cv2(dp, words);
       break;
     case MIDI2_MT_DATA128:
+      if (word_count < needed) return;
       dispatch_data128(dp, words);
       break;
     case MIDI2_MT_FLEX_DATA:
+      if (word_count < needed) return;
       dispatch_flex(dp, words);
       break;
     case MIDI2_MT_STREAM:
+      if (word_count < needed) return;
       dispatch_stream(dp, words);
       break;
     default:
