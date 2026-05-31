@@ -1,6 +1,6 @@
 # midi2 Wiki
 
-The portable MIDI 2.0 UMP library: C99, zero dependencies, zero allocation. Runs from AVR to desktop.
+Portable MIDI 2.0 infrastructure: C99, zero dependencies, zero allocation. Runs from AVR to desktop.
 
 ## Contents
 

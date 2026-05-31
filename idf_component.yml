@@ -12,7 +12,7 @@
 ## detects ESP_PLATFORM and calls idf_component_register at the top of
 ## the file.
 
-description: "Portable MIDI 2.0 UMP library, C99 with zero dependencies and zero allocation."
+description: "Portable MIDI 2.0 infrastructure, C99 with zero dependencies and zero allocation."
 version: "0.6.0"
 url: "https://github.com/sauloverissimo/midi2"
 documentation: "https://github.com/sauloverissimo/midi2#readme"

@@ -2,13 +2,13 @@
 # SPDX-License-Identifier: MIT
 
 config MIDI2
-	bool "midi2 portable MIDI 2.0 library"
+	bool "midi2 portable MIDI 2.0 infrastructure"
 	help
-	  Enables midi2, a portable C99 library implementing the
+	  Enables midi2, portable C99 infrastructure implementing the
 	  MIDI 2.0 Universal MIDI Packet (UMP) message layer plus
 	  MIDI-CI convenience responder.
 
-	  The library is transport-agnostic. Pair with the Zephyr
+	  midi2 is transport-agnostic. Pair with the Zephyr
 	  USB MIDI 2.0 device class (CONFIG_USBD_MIDI2) for USB
 	  UMP I/O, or with the Network MIDI 2.0 stack for IP-based
 	  UMP transport. Pure message-layer; no devicetree bindings
