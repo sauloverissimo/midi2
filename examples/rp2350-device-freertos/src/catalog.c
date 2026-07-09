@@ -99,7 +99,7 @@ uint8_t midi2_catalog_build(uint32_t idx, catalog_msg_t *out) {
     case 47: midi2_msg_mds_payload(w, CAT_GROUP, 1, k_mds, sizeof k_mds); out->n = 4; break;
 
     /* ---- MT 0xD Flex Data (4 words) ---- */
-    case 48: midi2_msg_tempo(w, CAT_GROUP, 50000);                 out->n = 4; break; /* 500000 us/qn = 120 BPM in 10ns units */
+    case 48: midi2_msg_tempo(w, CAT_GROUP, 50000000u);             out->n = 4; break; /* 120 BPM = 500 ms/qn = 50,000,000 units of 10 ns */
     case 49: midi2_msg_time_sig(w, CAT_GROUP, 4, 2, 8);            out->n = 4; break; /* 4/4 */
     case 50: midi2_msg_metronome(w, CAT_GROUP, 24, 4, 0, 0, 0, 0); out->n = 4; break;
     case 51: midi2_msg_key_sig(w, CAT_GROUP, 2, false);           out->n = 4; break; /* 2 sharps, major */

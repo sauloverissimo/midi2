@@ -51,28 +51,39 @@ static void usb_task(void *arg) {
     tud_task_ext(1, false);            /* 1 ms finite timeout: wakes on USB event OR timeout */
     ump_msg_t m;
     while (xQueueReceive(tx_queue, &m, 0) == pdTRUE) {
-      tud_midi2_n_ump_write(0, m.w, m.n);
+      /* n_ump_write returns words actually written; a full TX endpoint FIFO
+       * makes it write fewer than requested. Count the shortfall so drops are
+       * never masked (matches the rx_queue-full accounting). */
+      uint32_t written = tud_midi2_n_ump_write(0, m.w, m.n);
+      if (written < m.n) s_tx_drops++;
     }
   }
 }
 
-/* RX callback runs in tud_task context (i.e. inside usb_task). Frame per-message:
- * tud_midi2_n_ump_read does not respect UMP message boundaries. */
+/* RX callback runs in tud_task context (i.e. inside usb_task).
+ *
+ * tud_midi2_n_ump_read returns only WHOLE UMP packets and refuses to return a
+ * packet larger than max_words (it breaks rather than splitting), so reading
+ * with max_words=1 would return 0 for every 2+ word message and wedge the FIFO.
+ * Read up to 4 words (the largest UMP) at a time, then reframe the returned
+ * buffer into individual messages by each word's MT word-count. */
 void tud_midi2_rx_cb(uint8_t itf) {
   (void) itf;
-  for (;;) {
-    uint32_t w0;
-    if (tud_midi2_n_ump_read(0, &w0, 1) != 1) break;
-    ump_msg_t m;
-    m.n = midi2_msg_word_count(midi2_msg_get_mt(&w0));
-    if (m.n == 0 || m.n > 4) m.n = 1;
-    m.w[0] = w0;
-    m.w[1] = m.w[2] = m.w[3] = 0;
-    for (uint8_t i = 1; i < m.n; i++) {
-      if (tud_midi2_n_ump_read(0, &m.w[i], 1) != 1) { m.n = i; break; }
+  uint32_t buf[4];
+  uint32_t n;
+  while ((n = tud_midi2_n_ump_read(0, buf, 4)) > 0) {
+    uint32_t i = 0;
+    while (i < n) {
+      ump_msg_t m;
+      m.n = midi2_msg_word_count(midi2_msg_get_mt(&buf[i]));
+      if (m.n == 0 || m.n > 4) m.n = 1;
+      if (i + m.n > n) m.n = (uint8_t)(n - i);   /* driver returns whole packets; guard anyway */
+      m.w[0] = m.w[1] = m.w[2] = m.w[3] = 0;
+      for (uint8_t k = 0; k < m.n; k++) m.w[k] = buf[i + k];
+      /* rx_cb runs in tud_task (usb_task) context, not an ISR: plain send. */
+      if (xQueueSend(rx_queue, &m, 0) != pdTRUE) s_rx_drops++;
+      i += m.n;
     }
-    /* rx_cb runs in tud_task (usb_task) context, not an ISR: plain send. */
-    if (xQueueSend(rx_queue, &m, 0) != pdTRUE) s_rx_drops++;
   }
 }
 

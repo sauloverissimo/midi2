@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.14)  # FetchContent_MakeAvailable
 
-# rp2350-device-freertos — beefy USB MIDI 2.0 device example for the Raspberry
+# rp2350-device-freertos: beefy USB MIDI 2.0 device example for the Raspberry
 # Pi Pico 2 (RP2350). Pure C99 (midi2 core, no C++ wrapper) over FreeRTOS-Kernel
 # + TinyUSB upstream. Lives at midi2/examples/rp2350-device-freertos and consumes
 # the parent midi2 C99 core directly from ../../src (header-only usage).

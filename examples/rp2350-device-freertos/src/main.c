@@ -1,4 +1,4 @@
-/* rp2350-device-freertos — USB MIDI 2.0 device on the Raspberry Pi Pico 2,
+/* rp2350-device-freertos: USB MIDI 2.0 device on the Raspberry Pi Pico 2,
  * pure C99 over FreeRTOS-Kernel + TinyUSB upstream.
  *
  * main() brings up the board and USB, creates the pipeline (two static tasks

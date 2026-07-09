@@ -1,5 +1,5 @@
 /*
- * usb_descriptors.c — USB Device descriptors for rp2350-device-freertos.
+ * usb_descriptors.c: USB Device descriptors for rp2350-device-freertos.
  *
  * Identification:
  *   USB VID:PID         0xCAFE:0x407A   (TinyUSB educational VID + project PID)
@@ -78,7 +78,7 @@ static char const *string_desc_arr[] = {
     (const char[]){0x09, 0x04},   /* 0: English (0x0409)               */
     "github.com/sauloverissimo",  /* 1: Manufacturer                   */
     "RP2350FreeRTOSBench",        /* 2: Product                        */
-    NULL,                         /* 3: Serial — computed at runtime   */
+    NULL,                         /* 3: Serial, computed at runtime   */
 };
 
 static uint16_t _desc_str[32 + 1];
