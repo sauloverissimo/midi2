@@ -35,8 +35,8 @@ TinyUSB upstream           USB enumeration, descriptors, alt-setting, and the
                            Function Block / Stream Config), MIDI 2.0 device class.
 
 FreeRTOS pipeline          usb_task (high prio) is the SOLE owner of tud_midi2_*:
-  (src/pipeline.c)         it services tud_task_ext(1 ms), drains tx_queue to the
-                           device, and frames inbound words into rx_queue on
+  (src/pipeline.c)         it services tud_task_ext(0) + vTaskDelay(1), drains
+                           tx_queue to the device, and frames inbound words on
                            tud_midi2_rx_cb. midi_task (low prio) feeds inbound
                            through midi2_proc and runs the catalog cycle. Two
                            static queues decouple the two tasks; all allocation
