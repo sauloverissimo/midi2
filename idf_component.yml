@@ -13,7 +13,7 @@
 ## the file.
 
 description: "Portable MIDI 2.0 infrastructure, C99 with zero dependencies and zero allocation."
-version: "0.6.0"
+version: "0.6.1"
 url: "https://github.com/sauloverissimo/midi2"
 documentation: "https://github.com/sauloverissimo/midi2#readme"
 issues: "https://github.com/sauloverissimo/midi2/issues"

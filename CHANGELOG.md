@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.1]
+
+### Fixed
+
+- MIDI-CI responder declares Message Version 0x02 across all replies.
+- Property Exchange Get/Set replies carry a status header and match the
+  requested resource, returning 404 when it does not exist.
+
+### Added
+
+- `midi2_ci_set_capabilities` and a built-in `ResourceList` resource.
+
 ## [0.6.0]
 
 No public API signature changes.

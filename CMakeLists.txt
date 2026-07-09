@@ -50,7 +50,7 @@ if(ESP_PLATFORM)
     return()
 endif()
 
-project(midi2 VERSION 0.6.0
+project(midi2 VERSION 0.6.1
         DESCRIPTION "Portable MIDI 2.0 infrastructure: UMP and MIDI-CI core in C99"
         LANGUAGES C)
 

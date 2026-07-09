@@ -122,6 +122,12 @@ typedef struct {
   uint16_t model_id;
   uint32_t version_id;
 
+  /* Capability Inquiry Categories the convenience responder advertises in its
+   * Discovery Reply (bitmask of MIDI2_CI_CAT_*). Defaults at init to Profile
+   * Config | Property Exchange | Process Inquiry (0x1C). Configure via
+   * midi2_ci_set_capabilities. (v0.6.1+) */
+  uint8_t ci_cat;
+
   /* MUID (set at init) */
   uint32_t muid;
 
@@ -197,6 +203,13 @@ void midi2_ci_init_ex(midi2_ci_state *state, uint32_t muid_seed,
 void midi2_ci_set_identity(midi2_ci_state *state,
                              uint32_t manufacturer_id, uint16_t family_id,
                              uint16_t model_id, uint32_t version_id);
+
+/** Configure the Capability Inquiry Categories advertised in the Discovery
+ *  Reply (bitmask of MIDI2_CI_CAT_*). Overrides the init default of
+ *  Profile Config | Property Exchange | Process Inquiry (0x1C). The declared
+ *  MIDI-CI Message Version is derived from the lib's 1.2 support and is not
+ *  affected by this call. Safe to call with NULL state (no-op). (v0.6.1+) */
+void midi2_ci_set_capabilities(midi2_ci_state *state, uint8_t ci_cat);
 
 /** Set the write function (how CI sends SysEx responses).
  *  Safe to call with NULL state (no-op). */
