@@ -81,7 +81,11 @@ static void emit_catalog(uint32_t idx) {
 static void usb_task(void *arg) {
   (void) arg;
   for (;;) {
-    tud_task_ext(1, false);            /* 1 ms finite timeout: wakes on USB event OR timeout */
+    /* Process all pending USB events, non-blocking. tud_task_ext does NOT
+     * reliably sleep for its timeout under this FreeRTOS OSAL (it busy-returns),
+     * so an explicit yield is required: without it usb_task spins and starves
+     * the lower-priority midi_task on the single-core scheduler. */
+    tud_task_ext(0, false);
     ump_msg_t m;
     while (xQueueReceive(tx_queue, &m, 0) == pdTRUE) {
       /* n_ump_write returns words actually written; a full TX endpoint FIFO
@@ -90,6 +94,7 @@ static void usb_task(void *arg) {
       uint32_t written = tud_midi2_n_ump_write(0, m.w, m.n);
       if (written < m.n) s_tx_drops++;
     }
+    vTaskDelay(1);   /* yield ~1 ms: cap the poll rate and let midi_task run */
   }
 }
 
