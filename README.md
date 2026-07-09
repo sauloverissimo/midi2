@@ -11,7 +11,7 @@
 [![Zero Alloc](https://img.shields.io/badge/allocation-zero-orange.svg)]()
 [![MIDI 2.0](https://img.shields.io/badge/MIDI-2.0-blueviolet.svg)](https://midi.org/specifications/midi-2-0-specifications)
 [![ESP Component Registry](https://components.espressif.com/components/sauloverissimo/midi2/badge.svg)](https://components.espressif.com/components/sauloverissimo/midi2)
-[![Platform](https://img.shields.io/badge/Platform-Arduino%20%7C%20PlatformIO%20%7C%20ESP--IDF%20%7C%20Zephyr%20%7C%20CMake-E8B838.svg)](#integration)
+[![Platform](https://img.shields.io/badge/Platform-Arduino%20%7C%20PlatformIO%20%7C%20ESP--IDF%20%7C%20Zephyr%20%7C%20FreeRTOS%20%7C%20CMake-E8B838.svg)](#integration)
 [![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-pink.svg)](https://github.com/sponsors/sauloverissimo)
 
 ---
@@ -262,10 +262,11 @@ midi2_msg.h          Always needed. Header-only.
 
 ## Examples
 
-Pedagogical sketches and a flash-ready Zephyr hardware recipe live under [`examples/`](examples).
+Pedagogical sketches and flash-ready hardware recipes (Zephyr and FreeRTOS) live under [`examples/`](examples).
 
 - [`examples/basic-usage/`](examples/basic-usage) and [`examples/ci-discovery/`](examples/ci-discovery): Arduino sketches covering UMP construction, scaling, typed dispatch, `midi2_proc`, and MIDI-CI Discovery. Runnable on Teensy 4.x and AVR.
 - [`examples/rpi-pico-device-zephyr/`](examples/rpi-pico-device-zephyr): flash-ready Raspberry Pi Pico USB MIDI 2.0 device with a 14-scene UMP showcase and a MIDI-CI responder.
+- [`examples/rp2350-device-freertos/`](examples/rp2350-device-freertos): flash-ready Raspberry Pi Pico 2 (RP2350) USB MIDI 2.0 device on FreeRTOS-Kernel + TinyUSB upstream. A 58-entry UMP catalog covering every defined message-type category (per-note included), a MIDI-CI responder, and a stress loopback mode over a static-queue pipeline.
 
 ## Architecture
 
