@@ -54,15 +54,22 @@ target_include_directories(freertos_config INTERFACE ${CMAKE_CURRENT_LIST_DIR})
 # FreeRTOS-Kernel (RP2040/RP2350 SMP-capable port; single-core selected in config).
 include(${FREERTOS_KERNEL_PATH}/portable/ThirdParty/GCC/RP2040/FreeRTOS_Kernel_import.cmake)
 
-# midi2 C99 core headers (header-only usage: catalog + pipeline use midi2_msg.h).
+# midi2 C99 core: catalog uses midi2_msg.h (header-only); the MIDI-CI responder
+# and inbound processing compile the modular core sources directly.
 set(MIDI2_CORE "${CMAKE_CURRENT_SOURCE_DIR}/../../src")
 
 add_executable(rp2350-device-freertos
     src/main.c
     src/pipeline.c
     src/catalog.c
+    src/ci_responder.c
     src/usb_descriptors.c
     src/freertos_hooks.c
+    ${MIDI2_CORE}/midi2_proc.c
+    ${MIDI2_CORE}/midi2_dispatch.c
+    ${MIDI2_CORE}/midi2_conv.c
+    ${MIDI2_CORE}/midi2_ci.c
+    ${MIDI2_CORE}/midi2_ci_dispatch.c
 )
 target_include_directories(rp2350-device-freertos PRIVATE
     src
@@ -71,6 +78,7 @@ target_include_directories(rp2350-device-freertos PRIVATE
 )
 target_link_libraries(rp2350-device-freertos
     pico_stdlib
+    pico_rand              # get_rand_32 for the MIDI-CI MUID
     tinyusb_device
     tinyusb_board
     FreeRTOS-Kernel
