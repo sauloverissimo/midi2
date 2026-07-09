@@ -21,13 +21,13 @@ static midi2_ci_property test_props[4];
 
 /* --- Write capture --- */
 
-static uint32_t write_buf[128];
+static uint32_t write_buf[512];
 static uint32_t write_pos;
 
 static uint32_t capture_write(const uint32_t *words, uint32_t count, void *ctx) {
   uint32_t i;
   (void)ctx;
-  for (i = 0; i < count && write_pos < 128; i++) {
+  for (i = 0; i < count && write_pos < 512; i++) {
     write_buf[write_pos++] = words[i];
   }
   return count;
@@ -52,6 +52,31 @@ static uint16_t extract_sysex7_data(uint8_t *out, uint16_t max_out) {
 static void reset(void) {
   memset(write_buf, 0, sizeof(write_buf));
   write_pos = 0;
+}
+
+/* True if the byte range [hay, hay+n) contains the ASCII needle. */
+static bool blob_contains(const uint8_t *hay, uint16_t n, const char *needle) {
+  uint16_t nl = (uint16_t)strlen(needle);
+  uint16_t i;
+  if (nl == 0 || nl > n) return false;
+  for (i = 0; (uint16_t)(i + nl) <= n; i++) {
+    if (memcmp(&hay[i], needle, nl) == 0) return true;
+  }
+  return false;
+}
+
+/* PE Set setter recorder: captures the name/value the handler passes and
+ * returns a configurable result. */
+static char g_set_name[40];
+static char g_set_value[64];
+static bool g_set_return = true;
+static bool record_setter(const char *name, const char *value, void *ctx) {
+  (void)ctx;
+  g_set_name[0] = '\0';
+  g_set_value[0] = '\0';
+  if (name)  { strncpy(g_set_name,  name,  sizeof(g_set_name)  - 1); g_set_name[sizeof(g_set_name)   - 1] = '\0'; }
+  if (value) { strncpy(g_set_value, value, sizeof(g_set_value) - 1); g_set_value[sizeof(g_set_value) - 1] = '\0'; }
+  return g_set_return;
 }
 
 /* --- Init tests --- */
@@ -235,7 +260,7 @@ void test_profile_inquiry_reply(void) {
 /* --- PE Get --- */
 
 void test_pe_get_static(void) {
-  TEST("PE Get: returns static property value");
+  TEST("PE Get: returns the named static property value with status 200");
   midi2_ci_state s;
   midi2_ci_init(&s, 0x11111111, test_profiles, 8, test_props, 4);
   midi2_ci_set_identity(&s, 0x00AABB, 0x0001, 0x0002, 0x00010000);
@@ -243,33 +268,337 @@ void test_pe_get_static(void) {
   midi2_ci_add_property_static(&s, "DeviceName", "TestSynth");
   reset();
 
-  /* Build PE Get request */
-  uint8_t request[16];
-  request[0] = 0x7E;
-  request[1] = 0x7F;
-  request[2] = 0x0D;
-  request[3] = 0x34;         /* PE Get */
-  request[4] = 0x01;         /* source MUID */
-  request[5] = 0x00;
-  request[6] = 0x00;
-  request[7] = 0x00;
-  request[8] = 0x7F;         /* dest MUID */
-  request[9] = 0x7F;
-  request[10] = 0x7F;
-  request[11] = 0x7F;
-  request[12] = 0x01;        /* request ID */
-  request[13] = 0x00;
-  request[14] = 0x00;
-  request[15] = 0x00;
+  /* Build a PE Get for the registered "DeviceName" resource. */
+  const char inq[] = "{\"resource\":\"DeviceName\"}";
+  uint8_t request[64];
+  uint16_t req_len = midi2_ci_build_pe_get(request, MIDI2_CI_VERSION_2,
+      0x0000001, s.muid, 0x01, (const uint8_t *)inq, (uint16_t)(sizeof(inq) - 1));
 
-  bool handled = midi2_ci_process_sysex(&s, 0, request, 16);
+  bool handled = midi2_ci_process_sysex(&s, 0, request, req_len);
   CHECK(handled, "PE Get handled");
   CHECK(write_pos > 0, "response written");
 
   uint8_t resp[64];
   uint16_t resp_len = extract_sysex7_data(resp, 64);
-  CHECK(resp_len > 0, "response has data");
+  CHECK(resp_len > 16, "response has data");
   CHECK(resp[3] == 0x35, "PE Get Reply sub-ID");
+  uint16_t hdr_len = midi2_ci_read_14(&resp[14]);
+  CHECK(blob_contains(&resp[16], hdr_len, "\"status\":200"), "status 200 header");
+  uint16_t body_off = (uint16_t)(16 + hdr_len + 6);
+  CHECK(blob_contains(&resp[body_off], (uint16_t)(resp_len - body_off), "TestSynth"),
+        "body carries the requested property value");
+  PASS();
+}
+
+/* v0.6.1 PE conformance: every successful PE Get Reply must carry a
+ * {"status":200} header. An empty header made the Workbench NAK with
+ * "The first header property is not resource, status or command". */
+static void test_pe_get_reply_has_status_header(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x11111111, test_profiles, 8, test_props, 4);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  midi2_ci_add_property_static(&s, "DeviceInfo", "{\"manufacturer\":\"test\"}");
+  reset();
+
+  const char inq[] = "{\"resource\":\"DeviceInfo\"}";
+  uint8_t req[64];
+  uint16_t req_len = midi2_ci_build_pe_get(req, MIDI2_CI_VERSION_2,
+      0x0000001, s.muid, 0x01, (const uint8_t *)inq, (uint16_t)(sizeof(inq) - 1));
+  midi2_ci_process_sysex(&s, 0, req, req_len);
+
+  uint8_t resp[128];
+  uint16_t n = extract_sysex7_data(resp, sizeof(resp));
+  TEST("PE Get Reply carries a status:200 header");
+  CHECK(n > 16, "reply present");
+  CHECK(resp[3] == 0x35, "PE Get Reply sub-ID");
+  uint16_t hdr_len = midi2_ci_read_14(&resp[14]);
+  CHECK(hdr_len > 0, "header is not empty");
+  CHECK(blob_contains(&resp[16], hdr_len, "\"status\":200"), "header declares status 200");
+  PASS();
+}
+
+/* v0.6.1 PE conformance: the reply must match the requested resource. The
+ * DeviceInfo value comes back, not properties[0] by accident. */
+static void test_pe_get_matches_requested_resource(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x11111111, test_profiles, 8, test_props, 4);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  midi2_ci_add_property_static(&s, "ChannelList", "[{\"title\":\"ch1\"}]");
+  midi2_ci_add_property_static(&s, "DeviceInfo",  "{\"manufacturer\":\"acme\"}");
+  reset();
+
+  const char inq[] = "{\"resource\":\"DeviceInfo\"}";
+  uint8_t req[64];
+  uint16_t req_len = midi2_ci_build_pe_get(req, MIDI2_CI_VERSION_2,
+      0x0000001, s.muid, 0x01, (const uint8_t *)inq, (uint16_t)(sizeof(inq) - 1));
+  midi2_ci_process_sysex(&s, 0, req, req_len);
+
+  uint8_t resp[128];
+  uint16_t n = extract_sysex7_data(resp, sizeof(resp));
+  TEST("PE Get returns the requested resource, not properties[0]");
+  CHECK(n > 16, "reply present");
+  uint16_t hdr_len = midi2_ci_read_14(&resp[14]);
+  uint16_t body_off = (uint16_t)(16 + hdr_len + 6); /* +num_chunks,this_chunk,body_len */
+  CHECK(blob_contains(&resp[body_off], (uint16_t)(n - body_off), "acme"),
+        "body carries DeviceInfo (acme), not ChannelList");
+  PASS();
+}
+
+/* v0.6.1 PE conformance: an unknown resource is answered with status:404,
+ * never a wrong 200 body. */
+static void test_pe_get_unknown_resource_404(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x11111111, test_profiles, 8, test_props, 4);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  midi2_ci_add_property_static(&s, "DeviceInfo", "{\"manufacturer\":\"acme\"}");
+  reset();
+
+  const char inq[] = "{\"resource\":\"Nonexistent\"}";
+  uint8_t req[64];
+  uint16_t req_len = midi2_ci_build_pe_get(req, MIDI2_CI_VERSION_2,
+      0x0000001, s.muid, 0x01, (const uint8_t *)inq, (uint16_t)(sizeof(inq) - 1));
+  midi2_ci_process_sysex(&s, 0, req, req_len);
+
+  uint8_t resp[128];
+  uint16_t n = extract_sysex7_data(resp, sizeof(resp));
+  TEST("PE Get for unknown resource replies status:404");
+  CHECK(n > 16, "reply present");
+  CHECK(resp[3] == 0x35, "PE Get Reply sub-ID");
+  uint16_t hdr_len = midi2_ci_read_14(&resp[14]);
+  CHECK(blob_contains(&resp[16], hdr_len, "\"status\":404"), "header declares status 404");
+  PASS();
+}
+
+/* v0.6.1 PE conformance: the built-in ResourceList enumerates registered
+ * resources so an Initiator can discover what to GET. */
+static void test_pe_get_resource_list(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x11111111, test_profiles, 8, test_props, 4);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  midi2_ci_add_property_static(&s, "DeviceInfo",  "{\"manufacturer\":\"acme\"}");
+  midi2_ci_add_property_static(&s, "ChannelList", "[{\"title\":\"ch1\"}]");
+  reset();
+
+  const char inq[] = "{\"resource\":\"ResourceList\"}";
+  uint8_t req[64];
+  uint16_t req_len = midi2_ci_build_pe_get(req, MIDI2_CI_VERSION_2,
+      0x0000001, s.muid, 0x01, (const uint8_t *)inq, (uint16_t)(sizeof(inq) - 1));
+  midi2_ci_process_sysex(&s, 0, req, req_len);
+
+  uint8_t resp[256];
+  uint16_t n = extract_sysex7_data(resp, sizeof(resp));
+  TEST("PE Get ResourceList enumerates registered resources");
+  CHECK(n > 16, "reply present");
+  uint16_t hdr_len = midi2_ci_read_14(&resp[14]);
+  CHECK(blob_contains(&resp[16], hdr_len, "\"status\":200"), "status 200");
+  uint16_t body_off = (uint16_t)(16 + hdr_len + 6);
+  uint16_t body_n = (uint16_t)(n - body_off);
+  CHECK(blob_contains(&resp[body_off], body_n, "DeviceInfo"),  "lists DeviceInfo");
+  CHECK(blob_contains(&resp[body_off], body_n, "ChannelList"), "lists ChannelList");
+  PASS();
+}
+
+/* Review fix #4: a device that advertises PE but has zero registered
+ * properties must still answer PE Get (ResourceList -> "[]"), not drop it. */
+static void test_pe_get_zero_properties_replies(void) {
+  midi2_ci_state s;
+  midi2_ci_property props[2];
+  midi2_ci_init(&s, 0x11111111, test_profiles, 8, props, 2);  /* count stays 0 */
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  reset();
+
+  const char inq[] = "{\"resource\":\"ResourceList\"}";
+  uint8_t req[64];
+  uint16_t req_len = midi2_ci_build_pe_get(req, MIDI2_CI_VERSION_2,
+      0x0000001, s.muid, 0x01, (const uint8_t *)inq, (uint16_t)(sizeof(inq) - 1));
+  midi2_ci_process_sysex(&s, 0, req, req_len);
+
+  uint8_t resp[64];
+  uint16_t n = extract_sysex7_data(resp, sizeof(resp));
+  TEST("PE Get ResourceList with zero properties replies empty array");
+  CHECK(n > 16, "reply present (not dropped)");
+  CHECK(resp[3] == 0x35, "PE Get Reply sub-ID");
+  uint16_t hdr_len = midi2_ci_read_14(&resp[14]);
+  CHECK(blob_contains(&resp[16], hdr_len, "\"status\":200"), "status 200");
+  uint16_t body_off = (uint16_t)(16 + hdr_len + 6);
+  CHECK(blob_contains(&resp[body_off], (uint16_t)(n - body_off), "[]"), "empty resource array");
+  PASS();
+}
+
+/* Review fix #1: when the resource array overflows the body buffer it must
+ * stay valid JSON (whole entries + closing bracket), never an empty body. */
+static void test_pe_get_resource_list_overflow_valid(void) {
+  midi2_ci_state s;
+  midi2_ci_property props[16];
+  midi2_ci_init(&s, 0x11111111, test_profiles, 8, props, 16);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  /* 12 long names (~60 chars each) so the array overflows CI_PE_BODY_MAX. */
+  static const char *names[12] = {
+    "ResourceNameThatIsDeliberatelyQuiteLongToForceOverflow0001",
+    "ResourceNameThatIsDeliberatelyQuiteLongToForceOverflow0002",
+    "ResourceNameThatIsDeliberatelyQuiteLongToForceOverflow0003",
+    "ResourceNameThatIsDeliberatelyQuiteLongToForceOverflow0004",
+    "ResourceNameThatIsDeliberatelyQuiteLongToForceOverflow0005",
+    "ResourceNameThatIsDeliberatelyQuiteLongToForceOverflow0006",
+    "ResourceNameThatIsDeliberatelyQuiteLongToForceOverflow0007",
+    "ResourceNameThatIsDeliberatelyQuiteLongToForceOverflow0008",
+    "ResourceNameThatIsDeliberatelyQuiteLongToForceOverflow0009",
+    "ResourceNameThatIsDeliberatelyQuiteLongToForceOverflow0010",
+    "ResourceNameThatIsDeliberatelyQuiteLongToForceOverflow0011",
+    "ResourceNameThatIsDeliberatelyQuiteLongToForceOverflow0012",
+  };
+  int i;
+  for (i = 0; i < 12; i++) midi2_ci_add_property_static(&s, names[i], "{}");
+  reset();
+
+  const char inq[] = "{\"resource\":\"ResourceList\"}";
+  uint8_t req[64];
+  uint16_t req_len = midi2_ci_build_pe_get(req, MIDI2_CI_VERSION_2,
+      0x0000001, s.muid, 0x01, (const uint8_t *)inq, (uint16_t)(sizeof(inq) - 1));
+  midi2_ci_process_sysex(&s, 0, req, req_len);
+
+  uint8_t resp[640];
+  uint16_t n = extract_sysex7_data(resp, sizeof(resp));
+  TEST("PE Get ResourceList overflow stays valid JSON, never empty");
+  CHECK(n > 16, "reply present");
+  uint16_t hdr_len = midi2_ci_read_14(&resp[14]);
+  uint16_t body_off  = (uint16_t)(16 + hdr_len + 6);
+  uint16_t body_len  = midi2_ci_read_14(&resp[body_off - 2]);
+  CHECK(body_len >= 2, "body not empty");
+  CHECK(resp[body_off] == '[', "body starts with '['");
+  CHECK(resp[body_off + body_len - 1] == ']', "body ends with ']'");
+  PASS();
+}
+
+/* Review fix #2: PE Set matches the requested resource by name and passes the
+ * real request body value to the setter, not "" against properties[0]. */
+static void test_pe_set_matches_resource_and_value(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x11111111, test_profiles, 8, test_props, 4);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  midi2_ci_add_property_static(&s, "DeviceInfo", "{\"x\":1}");          /* no setter, first */
+  midi2_ci_add_property_dynamic(&s, "Config", NULL, record_setter);      /* settable, second */
+  g_set_return = true;
+  g_set_name[0] = g_set_value[0] = '\0';
+  reset();
+
+  const char hdr[]  = "{\"resource\":\"Config\"}";
+  const char body[] = "{\"gain\":42}";
+  uint8_t req[96];
+  uint16_t req_len = midi2_ci_build_pe_set(req, MIDI2_CI_VERSION_2,
+      0x0000001, s.muid, 0x01,
+      (const uint8_t *)hdr, (uint16_t)(sizeof(hdr) - 1), 1, 1,
+      (const uint8_t *)body, (uint16_t)(sizeof(body) - 1));
+  midi2_ci_process_sysex(&s, 0, req, req_len);
+
+  uint8_t resp[64];
+  uint16_t n = extract_sysex7_data(resp, sizeof(resp));
+  TEST("PE Set matches resource by name and passes real body value");
+  CHECK(n > 16, "reply present");
+  CHECK(resp[3] == 0x37, "PE Set Reply sub-ID");
+  CHECK(strcmp(g_set_name, "Config") == 0, "setter got the requested resource");
+  CHECK(strcmp(g_set_value, "{\"gain\":42}") == 0, "setter got the real body value");
+  uint16_t hdr_len = midi2_ci_read_14(&resp[14]);
+  CHECK(blob_contains(&resp[16], hdr_len, "\"status\":200"), "status 200 on success");
+  PASS();
+}
+
+/* Review fix #2: PE Set for an unknown resource must not claim success. */
+static void test_pe_set_unknown_resource_404(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x11111111, test_profiles, 8, test_props, 4);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  midi2_ci_add_property_dynamic(&s, "Config", NULL, record_setter);
+  reset();
+
+  const char hdr[]  = "{\"resource\":\"Missing\"}";
+  const char body[] = "{}";
+  uint8_t req[96];
+  uint16_t req_len = midi2_ci_build_pe_set(req, MIDI2_CI_VERSION_2,
+      0x0000001, s.muid, 0x01,
+      (const uint8_t *)hdr, (uint16_t)(sizeof(hdr) - 1), 1, 1,
+      (const uint8_t *)body, (uint16_t)(sizeof(body) - 1));
+  midi2_ci_process_sysex(&s, 0, req, req_len);
+
+  uint8_t resp[64];
+  uint16_t n = extract_sysex7_data(resp, sizeof(resp));
+  TEST("PE Set for unknown resource replies status:404");
+  CHECK(n > 16, "reply present");
+  CHECK(resp[3] == 0x37, "PE Set Reply sub-ID");
+  uint16_t hdr_len = midi2_ci_read_14(&resp[14]);
+  CHECK(blob_contains(&resp[16], hdr_len, "\"status\":404"), "status 404");
+  PASS();
+}
+
+/* Review fix #2: a setter returning false must not be reported as 200. */
+static void test_pe_set_setter_failure_not_200(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x11111111, test_profiles, 8, test_props, 4);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  midi2_ci_add_property_dynamic(&s, "Config", NULL, record_setter);
+  g_set_return = false;  /* setter rejects the write */
+  reset();
+
+  const char hdr[]  = "{\"resource\":\"Config\"}";
+  const char body[] = "{\"bad\":true}";
+  uint8_t req[96];
+  uint16_t req_len = midi2_ci_build_pe_set(req, MIDI2_CI_VERSION_2,
+      0x0000001, s.muid, 0x01,
+      (const uint8_t *)hdr, (uint16_t)(sizeof(hdr) - 1), 1, 1,
+      (const uint8_t *)body, (uint16_t)(sizeof(body) - 1));
+  midi2_ci_process_sysex(&s, 0, req, req_len);
+  g_set_return = true;  /* restore for other tests */
+
+  uint8_t resp[64];
+  uint16_t n = extract_sysex7_data(resp, sizeof(resp));
+  TEST("PE Set setter failure is not reported as status:200");
+  CHECK(n > 16, "reply present");
+  uint16_t hdr_len = midi2_ci_read_14(&resp[14]);
+  CHECK(!blob_contains(&resp[16], hdr_len, "\"status\":200"), "not status 200 on failure");
+  PASS();
+}
+
+/* Review follow-up: a realistic DeviceInfo (~200 bytes, with ID arrays) must
+ * round-trip through PE Get without being truncated mid-JSON. */
+static void test_pe_get_large_value_not_truncated(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x11111111, test_profiles, 8, test_props, 4);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  /* 205-byte DeviceInfo-shaped value ending in a distinctive marker. */
+  static const char big[] =
+    "{\"manufacturerId\":[125,0,0],\"familyId\":[1,0],\"modelId\":[1,0],"
+    "\"versionId\":[0,0,4,0],\"manufacturer\":\"github.com/sauloverissimo\","
+    "\"family\":\"Some Longer Family Name Here\",\"model\":\"A Model\","
+    "\"version\":\"1.0.0\",\"tail\":\"END_MARKER\"}";
+  midi2_ci_add_property_static(&s, "DeviceInfo", big);
+  reset();
+
+  const char inq[] = "{\"resource\":\"DeviceInfo\"}";
+  uint8_t req[64];
+  uint16_t req_len = midi2_ci_build_pe_get(req, MIDI2_CI_VERSION_2,
+      0x0000001, s.muid, 0x01, (const uint8_t *)inq, (uint16_t)(sizeof(inq) - 1));
+  midi2_ci_process_sysex(&s, 0, req, req_len);
+
+  uint8_t resp[400];
+  uint16_t n = extract_sysex7_data(resp, sizeof(resp));
+  TEST("PE Get does not truncate a ~200-byte DeviceInfo value");
+  CHECK(n > 16, "reply present");
+  uint16_t hdr_len  = midi2_ci_read_14(&resp[14]);
+  uint16_t body_off = (uint16_t)(16 + hdr_len + 6);
+  uint16_t body_len = midi2_ci_read_14(&resp[body_off - 2]);
+  CHECK(body_len == (uint16_t)(sizeof(big) - 1), "full value length echoed");
+  CHECK(blob_contains(&resp[body_off], body_len, "END_MARKER"), "tail marker survives");
+  CHECK(resp[body_off + body_len - 1] == '}', "body ends with closing brace");
   PASS();
 }
 
@@ -338,6 +667,85 @@ static void test_discovery_reply_ci_cat_includes_pi(void) {
   CHECK((ci_cat & 0x04) != 0, "CAT_PROFILE_CONFIG set");
   CHECK((ci_cat & 0x08) != 0, "CAT_PROPERTY_EXCHANGE set");
   CHECK((ci_cat & 0x10) != 0, "CAT_PROCESS_INQUIRY set");
+  PASS();
+}
+
+/* v0.6.1: the convenience Responder implements MIDI-CI 1.2 (Process Inquiry,
+ * PE, v2 message fields), so every reply must declare Message Version 0x02.
+ * A Discovery Reply advertising Process Inquiry (0x10) while claiming version
+ * 0x01 is invalid; the MIDI 2.0 Workbench flags it. The reply must also carry
+ * the v2 trailing fields (Output Path Id + Function Block, Table 8). */
+static void test_discovery_reply_declares_v2(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x12345678, test_profiles, 8, test_props, 4);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  reset();
+
+  uint8_t req[30] = {0};
+  req[0]=0x7E; req[1]=0x7F; req[2]=0x0D; req[3]=0x70; req[4]=0x01;
+  midi2_ci_process_sysex(&s, 0, req, 30);
+
+  uint8_t body[64];
+  uint16_t n = extract_sysex7_data(body, sizeof(body));
+  TEST("discovery reply declares version 0x02 with v2 fields");
+  CHECK(n >= 31, "reply includes v2 trailing fields (31 bytes)");
+  CHECK(body[4] == MIDI2_CI_VERSION_2, "message version == 0x02 (MIDI-CI 1.2)");
+  /* Invariant: advertising Process Inquiry requires version >= 0x02. */
+  CHECK(!(body[24] & 0x10) || body[4] >= MIDI2_CI_VERSION_2,
+        "PI advertised => version >= 0x02");
+  CHECK(body[29] == 0x00, "output path id == 0");
+  CHECK(body[30] == 0x7F, "function block == 0x7F");
+  PASS();
+}
+
+/* v0.6.1: ci_cat is configurable via midi2_ci_set_capabilities and flows into
+ * the Discovery Reply, replacing the previously hardcoded 0x1C. */
+static void test_set_capabilities_flows_to_reply(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x12345678, test_profiles, 8, test_props, 4);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  midi2_ci_set_capabilities(&s,
+      MIDI2_CI_CAT_PROFILE_CONFIG | MIDI2_CI_CAT_PROPERTY_EXCHANGE); /* 0x0C */
+  reset();
+
+  uint8_t req[30] = {0};
+  req[0]=0x7E; req[1]=0x7F; req[2]=0x0D; req[3]=0x70; req[4]=0x01;
+  midi2_ci_process_sysex(&s, 0, req, 30);
+
+  uint8_t body[64];
+  uint16_t n = extract_sysex7_data(body, sizeof(body));
+  TEST("set_capabilities flows into discovery reply ci_cat");
+  CHECK(n >= 25, "reply present");
+  CHECK(body[24] == (MIDI2_CI_CAT_PROFILE_CONFIG | MIDI2_CI_CAT_PROPERTY_EXCHANGE),
+        "ci_cat reflects configured value (0x0C)");
+  PASS();
+}
+
+/* v0.6.1: all responder replies declare the same Message Version (0x02).
+ * Mixing versions across replies makes an Initiator raise
+ * "MIDI-CI Message Format Version has Changed". Guard the Profile Inquiry
+ * Reply, which historically declared 0x01 while Discovery/NAK drifted. */
+static void test_reply_version_consistency(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x11111111, test_profiles, 8, test_props, 4);
+  midi2_ci_set_identity(&s, 0x00AABB, 0x0001, 0x0002, 0x00010000);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  uint8_t p1[] = {0x00, 0x21, 0x09, 0x00, 0x01};
+  midi2_ci_add_profile(&s, p1);
+  reset();
+
+  uint8_t request[16];
+  uint16_t req_len = midi2_ci_build_profile_inquiry(request, MIDI2_CI_VERSION_1,
+                                                        0x0000001, s.muid, 0x7F);
+  midi2_ci_process_sysex(&s, 0, request, req_len);
+
+  uint8_t resp[64];
+  uint16_t resp_len = extract_sysex7_data(resp, 64);
+  TEST("profile inquiry reply declares version 0x02 (consistency)");
+  CHECK(resp_len >= 5, "reply present");
+  CHECK(resp[4] == MIDI2_CI_VERSION_2, "profile inquiry reply version == 0x02");
   PASS();
 }
 
@@ -799,6 +1207,16 @@ int main(void) {
 
   printf("\n[Property Exchange]\n");
   test_pe_get_static();
+  test_pe_get_reply_has_status_header();
+  test_pe_get_matches_requested_resource();
+  test_pe_get_unknown_resource_404();
+  test_pe_get_resource_list();
+  test_pe_get_zero_properties_replies();
+  test_pe_get_resource_list_overflow_valid();
+  test_pe_set_matches_resource_and_value();
+  test_pe_set_unknown_resource_404();
+  test_pe_set_setter_failure_not_200();
+  test_pe_get_large_value_not_truncated();
 
   printf("\n[Edge Cases]\n");
   test_non_ci_returns_false();
@@ -806,6 +1224,9 @@ int main(void) {
 
   printf("\n[v0.2.4 compliance features]\n");
   test_discovery_reply_ci_cat_includes_pi();
+  test_discovery_reply_declares_v2();
+  test_set_capabilities_flows_to_reply();
+  test_reply_version_consistency();
   test_pe_capability_autoreply();
   test_new_muid_avoids_reserved();
   test_invalidate_muid_regen_with_rng();
