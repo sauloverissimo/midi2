@@ -84,6 +84,14 @@ target_link_libraries(rp2350-device-freertos
     FreeRTOS-Kernel
 )
 
+# Stress loopback build variant. Enable with -DSTRESS_LOOPBACK=ON. Do NOT pass
+# it via -DCMAKE_C_FLAGS="-DSTRESS_LOOPBACK": that overrides the Pico SDK's own
+# required C flags and breaks the spin-lock config (Tier 2f gotcha).
+option(STRESS_LOOPBACK "Build the stress loopback variant (suspends the catalog cycle)" OFF)
+if(STRESS_LOOPBACK)
+    target_compile_definitions(rp2350-device-freertos PRIVATE STRESS_LOOPBACK)
+endif()
+
 # USB is dedicated to MIDI 2.0: no USB CDC stdio. UART on GP0/GP1 @ 115200.
 pico_enable_stdio_usb(rp2350-device-freertos 0)
 pico_enable_stdio_uart(rp2350-device-freertos 1)
