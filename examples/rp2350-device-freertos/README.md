@@ -88,9 +88,39 @@ Flash `build/rp2350-device-freertos.uf2` onto the Pico 2 in BOOTSEL mode.
 | Pin | Use |
 |---|---|
 | USB-C | MIDI 2.0 device (the only USB function, no CDC stdio) |
-| GP0 | UART TX (debug log @ 115200 8N1) |
-| GP1 | UART RX |
+| GP0 / GP1 | UART0 stdio @ 115200 8N1 (available for debug prints) |
 | BOOTSEL | Hold while plugging USB to enter flash mode |
+
+## Memory footprint
+
+| Region | Used | Capacity | Use |
+|---|---|---|---|
+| Flash (`.text` + `.data`) | ~38 KB | 4 MB | 0.9% |
+| SRAM (`.data` + `.bss`) | ~15 KB | 520 KB | 2.9% |
+| UF2 size on disk | ~75 KB | n/a | bootloader + image |
+
+Most of the SRAM is the two static FreeRTOS task stacks and the two UMP queues.
+Ample headroom for a larger CI property table, more UMP groups, or application code.
+
+## Validation
+
+Validated on hardware (Raspberry Pi Pico 2, Linux with the `snd-usb-midi2` driver).
+
+```bash
+lsusb | grep cafe:407a                 # github.com/sauloverissimo RP2350FreeRTOSBench
+aseqdump -l | grep "RP2350"            # UMP endpoint "RP2350 FreeRTOS Bench", MIDI 2.0
+
+# Watch the catalog cycle (every defined MT category scrolls past)
+PORT=$(aseqdump -l | grep "RP2350 FreeRTOS Bench" | grep "Group" | awk '{print $1}')
+timeout 5 aseqdump -p ${PORT}
+```
+
+Confirmed: enumerates as a UMP-native MIDI 2.0 endpoint, bidirectional (`IO`);
+the full catalog flows (Utility, System, MIDI 1.0 CV, SysEx7, MIDI 2.0 CV including
+per-note, SysEx8 + MDS, Flex Data, UMP Stream); inbound triggers work (a NoteOn on
+group 15 fires one catalog entry, CC 120 / 121 on group 15 pause and resume the
+cycle). On Windows the Microsoft MIDI Services Console lists it with Native data
+format = UMP and MIDI 2.0 Protocol = True.
 
 ## Spec coverage
 

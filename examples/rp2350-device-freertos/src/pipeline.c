@@ -1,9 +1,10 @@
 /* FreeRTOS pipeline for rp2350-device-freertos.
  *
  * usb_task (high prio) is the SOLE owner of every tud_midi2_* call: it services
- * tud_task_ext with a 1 ms finite timeout, drains tx_queue to the device on
- * every wake, and on tud_midi2_rx_cb frames inbound words per-message into
- * rx_queue. midi_task (low prio) blocks on rx_queue with a scene-tick timeout,
+ * tud_task_ext non-blocking, drains tx_queue to the device, then yields with
+ * vTaskDelay so it does not starve midi_task, and on tud_midi2_rx_cb frames
+ * inbound words per-message into rx_queue. midi_task (low prio) blocks on
+ * rx_queue with a scene-tick timeout,
  * feeds inbound through midi2_proc (SysEx7 reassembly -> MIDI-CI, plain UMP ->
  * triggers), and emits the catalog cycle to tx_queue.
  *

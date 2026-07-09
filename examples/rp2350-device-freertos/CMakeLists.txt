@@ -1,11 +1,8 @@
 cmake_minimum_required(VERSION 3.14)  # FetchContent_MakeAvailable
 
-# rp2350-device-freertos: beefy USB MIDI 2.0 device example for the Raspberry
-# Pi Pico 2 (RP2350). Pure C99 (midi2 core, no C++ wrapper) over FreeRTOS-Kernel
-# + TinyUSB upstream. Lives at midi2/examples/rp2350-device-freertos and consumes
-# the parent midi2 C99 core directly from ../../src (header-only usage).
-#
-# This is the canonical Tier 2f recipe: midi2 C99 + Pico SDK + FreeRTOS + TinyUSB.
+# Full-spec USB MIDI 2.0 device example for the Raspberry Pi Pico 2 (RP2350).
+# Pure C99 (midi2 core, no C++ wrapper) over FreeRTOS-Kernel + TinyUSB upstream,
+# consuming the parent midi2 C99 core directly from ../../src.
 
 set(PICO_BOARD pico2 CACHE STRING "Board type")
 
@@ -13,7 +10,7 @@ set(PICO_BOARD pico2 CACHE STRING "Board type")
 # FREERTOS_KERNEL_PATH env var (V11.2.0+, which carries the RP2350 port in the
 # Community-Supported-Ports submodule; run `git submodule update --init` there).
 # Resolve into a CMake variable: the include() below uses ${FREERTOS_KERNEL_PATH},
-# not the env var, so an env-only value must be propagated first (Tier 2f gotcha).
+# not the env var, so an env-only value must be propagated first.
 if(NOT FREERTOS_KERNEL_PATH AND DEFINED ENV{FREERTOS_KERNEL_PATH})
     set(FREERTOS_KERNEL_PATH $ENV{FREERTOS_KERNEL_PATH})
 endif()
@@ -40,8 +37,7 @@ endif()
 
 include(pico_sdk_import.cmake)
 
-# CXX must be enabled even for pure-C firmware: the Pico SDK pulls in C++
-# components (Tier 2f gotcha).
+# CXX must be enabled even for pure-C firmware: the Pico SDK pulls in C++ components.
 project(rp2350-device-freertos C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 
@@ -86,7 +82,7 @@ target_link_libraries(rp2350-device-freertos
 
 # Stress loopback build variant. Enable with -DSTRESS_LOOPBACK=ON. Do NOT pass
 # it via -DCMAKE_C_FLAGS="-DSTRESS_LOOPBACK": that overrides the Pico SDK's own
-# required C flags and breaks the spin-lock config (Tier 2f gotcha).
+# required C flags and breaks the spin-lock config.
 option(STRESS_LOOPBACK "Build the stress loopback variant (suspends the catalog cycle)" OFF)
 if(STRESS_LOOPBACK)
     target_compile_definitions(rp2350-device-freertos PRIVATE STRESS_LOOPBACK)

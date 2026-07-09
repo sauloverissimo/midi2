@@ -17,7 +17,7 @@ extern "C" {
 
 /* Run TinyUSB under the FreeRTOS OSAL: tud_task blocks on the USB event queue.
  * The Pico SDK already sets this to OPT_OS_FREERTOS when FreeRTOS-Kernel is
- * linked, so guard to avoid a redefinition warning (Tier 2f gotcha). */
+ * linked, so guard to avoid a redefinition warning. */
 #ifndef CFG_TUSB_OS
 #define CFG_TUSB_OS           OPT_OS_FREERTOS
 #endif

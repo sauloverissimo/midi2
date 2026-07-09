@@ -45,7 +45,7 @@ driver, UMP rawmidi `/dev/snd/umpC3D0`, queue depth 64 + endpoint FIFO 256 B.
 - **Zero-loss ceiling is ~1 k UMP/s sustained** with the current sizing. This is
   the granularity of usb_task's service loop: it yields `vTaskDelay(1)` (~1 ms)
   to avoid starving midi_task on the single core (see the firmware's usb_task
-  comment and the design note), so it services USB about once per millisecond.
+  comment), so it services USB about once per millisecond.
   At 1 UMP/ms this is a clean 1:1 and loss is zero.
 - Above the ceiling, sends outpace the 1 ms service cycle, the queues and FIFO
   fill, and the **counted-drop** policy engages (`pipeline_rx_drops()` /

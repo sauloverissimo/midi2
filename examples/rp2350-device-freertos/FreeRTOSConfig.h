@@ -6,7 +6,7 @@
 #define FREERTOS_CONFIG_H
 
 /* Assertions enabled: also compiles vPortValidateInterruptPriority in the M33
- * port, which the FromISR queue paths reference (Tier 2f gotcha). */
+ * port, which the FromISR queue paths reference. */
 #define configASSERT(x) \
     if ((x) == 0) { portDISABLE_INTERRUPTS(); for (;;) { } }
 
