@@ -18,7 +18,7 @@ No TinyUSB fork: the USB MIDI 2.0 device drivers this build depends on
 | Product | `RP2350FreeRTOSBench` |
 | Manufacturer | `github.com/sauloverissimo` |
 | UMP Endpoint Name | `RP2350 FreeRTOS Bench` (`CFG_TUD_MIDI2_EP_NAME`) |
-| Function Block | 1 bidirectional, `firstGroup=0`, `numGroups=1` |
+| Function Block | 1 bidirectional (`IO`), name `Main`, `firstGroup=0`, `numGroups=1` |
 | MIDI-CI Manufacturer ID | `{0x7D, 0x00, 0x00}` (educational / non-commercial prefix) |
 | MIDI-CI Family / Model / Version | `0x0001 / 0x0001 / 0x00010000` |
 

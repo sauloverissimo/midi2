@@ -65,6 +65,30 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
 }
 
 /*--------------------------------------------------------------------+
+ * Group Terminal Block: one bidirectional Function Block over Group 0.
+ *
+ * The TinyUSB #3738 built-in Stream Discovery responder reads the Function
+ * Block Info (direction + group span) from this GTB, and the FB name from
+ * tud_midi2_fb_name_cb. Without them the host shows a generic unnamed block.
+ *--------------------------------------------------------------------*/
+static uint8_t const desc_gtb[] = {
+    TUD_MIDI2_GTB_HEADER(1),
+    TUD_MIDI2_GTB_BLOCK(/*id*/ 1, MIDI2_GTB_BIDIRECTIONAL,
+                        /*first_group*/ 0, /*num_groups*/ 1, /*stridx*/ 0),
+};
+
+uint8_t const *tud_midi2_gtb_desc_cb(uint8_t itf, uint16_t *len) {
+    (void)itf;
+    *len = (uint16_t)sizeof(desc_gtb);
+    return desc_gtb;
+}
+
+char const *tud_midi2_fb_name_cb(uint8_t itf, uint8_t fb_idx) {
+    (void)itf;
+    return (fb_idx == 0) ? "Main" : "";
+}
+
+/*--------------------------------------------------------------------+
  * String descriptors
  *--------------------------------------------------------------------*/
 enum {
