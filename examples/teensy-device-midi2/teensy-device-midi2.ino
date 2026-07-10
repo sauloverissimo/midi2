@@ -57,6 +57,39 @@ static uint32_t seed_from_hardware(void) {
     return s;
 }
 
+/* Announce the UMP Stream identity (Endpoint Info, Device Identity, Endpoint
+ * Name, Product Instance Id, Function Block Info). The Teensy core leaves UMP
+ * Stream Discovery to the application by design. A host that reads the static
+ * USB descriptors (Linux snd-ump) enumerates without this; a host that runs
+ * active UMP Endpoint Discovery (Windows MIDI Services) needs it to register a
+ * complete endpoint. */
+static void announce_stream_identity(void) {
+    uint32_t w[4];
+
+    midi2_msg_stream_endpoint_info(w, /*ump major*/ 1, /*ump minor*/ 1,
+                                   /*static_fb*/ true, /*num_fb*/ 1,
+                                   /*midi2*/ true, /*midi1*/ true,
+                                   /*rx_jr*/ false, /*tx_jr*/ false);
+    usbMIDI2.write(w, 4);
+
+    midi2_msg_stream_device_identity(w, /*manufacturer*/ 0x7D,
+                                     /*family*/ 0x0001, /*model*/ 0x0001,
+                                     /*version*/ 0x00070000);
+    usbMIDI2.write(w, 4);
+
+    midi2_msg_stream_fb_info(w, /*active*/ true, /*fb_num*/ 0,
+                             /*direction*/ 3 /*bidirectional*/,
+                             /*ui_hint*/ 3 /*bidirectional*/,
+                             /*first_group*/ 0, /*num_groups*/ 1,
+                             /*midi_ci_ver*/ 2, /*max_sysex8*/ 0,
+                             /*protocol*/ 2 /*MIDI 2.0*/);
+    usbMIDI2.write(w, 4);
+
+    midi2_proc_send_endpoint_name("Teensy 4.1 MIDI 2.0", ci_write, NULL);
+    midi2_proc_send_fb_name(0, "Main", ci_write, NULL);
+    midi2_proc_send_product_id("midi2.diy-teensy-0001", ci_write, NULL);
+}
+
 void setup() {
     usbMIDI2.begin();
 
@@ -74,6 +107,8 @@ void setup() {
 
     midi2_proc_init(&proc, sysex7_buf, sizeof(sysex7_buf), NULL, 0);
     proc.on_sysex7 = on_sysex7;
+
+    announce_stream_identity();
 }
 
 /* A one-note MIDI 2.0 demo, 16-bit velocity, once per second. */
