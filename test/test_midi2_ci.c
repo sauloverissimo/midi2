@@ -1060,6 +1060,92 @@ static bool saw_invalidate_muid_for(uint32_t target_muid) {
   return false;
 }
 
+
+/* Helper: scan captured SysEx for a Discovery inquiry (sub-id 0x70) and
+ * return its src MUID via out param. Returns true if found. */
+static bool saw_discovery_from(uint32_t *out_src_muid) {
+  uint8_t body[256];
+  uint16_t n = extract_sysex7_data(body, sizeof body);
+  uint16_t i;
+  for (i = 0; i + 13 <= n; i++) {
+    if (body[i] != 0x7E) continue;
+    if (body[i + 2] != 0x0D) continue;
+    if (body[i + 3] != 0x70 /* Discovery inquiry */) continue;
+    *out_src_muid = (uint32_t)body[i + 5]
+                  | ((uint32_t)body[i + 6] << 7)
+                  | ((uint32_t)body[i + 7] << 14)
+                  | ((uint32_t)body[i + 8] << 21);
+    return true;
+  }
+  return false;
+}
+
+/* Workbench interoperability ci1.2 (Required): "On receiving an Invalidate
+ * MUID for the devices current MUID the device will change it's MUID and
+ * initiate a new Discovery." Without the re-announce the initiator (and the
+ * Good Random Number Generator test) never learns the fresh MUID. */
+static void test_invalidate_muid_reannounces_discovery(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x00ABCDEF, NULL, 0, NULL, 0);
+  _rng_value = 0x04444444u;
+  midi2_ci_set_rng(&s, fake_rng, NULL);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  reset();
+
+  uint32_t old = s.muid;
+
+  /* Invalidate MUID (0x7E): header 13 bytes + 4-byte target MUID. */
+  uint8_t req[17];
+  req[0] = 0x7E; req[1] = 0x7F; req[2] = 0x0D; req[3] = 0x7E; req[4] = 0x02;
+  /* src = initiator */
+  req[5] = 0x11; req[6] = 0x22; req[7] = 0x33; req[8] = 0x04;
+  /* dst = broadcast */
+  req[9] = 0x7F; req[10] = 0x7F; req[11] = 0x7F; req[12] = 0x7F;
+  /* target = our current muid */
+  req[13] = old & 0x7F; req[14] = (old >> 7) & 0x7F;
+  req[15] = (old >> 14) & 0x7F; req[16] = (old >> 21) & 0x7F;
+
+  midi2_ci_process_sysex(&s, 0, req, sizeof req);
+
+  TEST("invalidate MUID regenerates the MUID");
+  CHECK(s.muid != old, "muid unchanged after invalidate");
+
+  TEST("invalidate MUID re-announces via Discovery inquiry (0x70)");
+  uint32_t announced = 0;
+  CHECK(saw_discovery_from(&announced), "no Discovery inquiry sent");
+  CHECK(announced == s.muid, "Discovery src is not the fresh MUID");
+}
+
+/* Same rationale on the collision path: after broadcasting Invalidate for
+ * the stolen MUID, re-announce with the fresh one. */
+static void test_collision_reannounces_discovery(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x00ABCDEF, NULL, 0, NULL, 0);
+  _rng_value = 0x05555555u;
+  midi2_ci_set_rng(&s, fake_rng, NULL);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  reset();
+
+  uint32_t old = s.muid;
+  /* Any CI message whose src equals our MUID triggers collision handling:
+   * use a Discovery inquiry from the "peer". */
+  uint8_t req[30] = {0};
+  req[0] = 0x7E; req[1] = 0x7F; req[2] = 0x0D; req[3] = 0x70; req[4] = 0x02;
+  req[5] = old & 0x7F; req[6] = (old >> 7) & 0x7F;
+  req[7] = (old >> 14) & 0x7F; req[8] = (old >> 21) & 0x7F;
+  req[9] = 0x7F; req[10] = 0x7F; req[11] = 0x7F; req[12] = 0x7F;
+
+  midi2_ci_process_sysex(&s, 0, req, sizeof req);
+
+  TEST("collision re-announces via Discovery inquiry (0x70)");
+  uint32_t announced = 0;
+  CHECK(s.muid != old, "muid unchanged after collision");
+  CHECK(saw_discovery_from(&announced), "no Discovery inquiry sent");
+  CHECK(announced == s.muid, "Discovery src is not the fresh MUID");
+}
+
 static void test_collision_broadcasts_invalidate_muid(void) {
   midi2_ci_state s;
   midi2_ci_init(&s, 0x00ABCDEF, NULL, 0, NULL, 0);
@@ -1403,6 +1489,8 @@ int main(void) {
   test_reply_version_consistency();
   test_pe_capability_autoreply();
   test_new_muid_avoids_reserved();
+  test_invalidate_muid_reannounces_discovery();
+  test_collision_reannounces_discovery();
   test_invalidate_muid_regen_with_rng();
   test_invalidate_muid_ignore_other_target();
   test_muid_collision_triggers_regen();

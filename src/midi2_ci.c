@@ -756,14 +756,32 @@ static void ci_handle_pe_set(midi2_ci_state *state, uint8_t group,
  * installed RNG. Without an RNG the request is silently ignored (v0.2.3
  * behavior preserved).
  *--------------------------------------------------------------------*/
+
+/*--------------------------------------------------------------------+
+ * Re-announce with a fresh MUID (M2-101 §5.9 / Workbench ci1.2)
+ *
+ * After the MUID changes (Invalidate MUID or collision), the initiator
+ * only learns the new value if the device initiates a new Discovery.
+ * Silence here strands every open transaction on a dead MUID.
+ *--------------------------------------------------------------------*/
+static void ci_reannounce_discovery(midi2_ci_state *state, uint8_t group) {
+  if (state->write_fn == NULL) return;
+  uint8_t disc[40];
+  uint16_t len = midi2_ci_build_discovery(
+      disc, CI_RESPONDER_VERSION, state->muid,
+      state->manufacturer_id, state->family_id, state->model_id,
+      state->version_id, state->ci_cat, 512, 0);
+  ci_send(state, group, disc, len);
+}
+
 static void ci_handle_invalidate_muid(midi2_ci_state *state, uint8_t group,
                                          const uint8_t *data, uint16_t length) {
-  (void)group;
   if (length < 17) return;
   if (state->rng == NULL) return;
   uint32_t target = midi2_ci_get_target_muid(data);
   if (target != state->muid) return;
   midi2_ci_new_muid(state);
+  ci_reannounce_discovery(state, group);
 }
 
 /*--------------------------------------------------------------------+
@@ -785,6 +803,7 @@ static void ci_check_muid_collision(midi2_ci_state *state, uint8_t group,
   uint16_t len = midi2_ci_build_invalidate_muid(
       buf, CI_RESPONDER_VERSION, state->muid, old);
   ci_send(state, group, buf, len);
+  ci_reannounce_discovery(state, group);
 }
 
 /*--------------------------------------------------------------------+
