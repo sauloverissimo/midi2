@@ -1,4 +1,6 @@
 # midi2
+[![Compliant with MIDI 2.0 Workbench](https://img.shields.io/badge/MIDI%202.0%20Workbench-compliant-0d9488?labelColor=17151f)](https://github.com/midi2-dev/MIDI2.0Workbench)
+
 
 ## Portable MIDI 2.0 infrastructure. Workbench Compliant MIDI 2.0. Build MIDI 2.0 platforms in any language, for any framework.
 
@@ -6,7 +8,7 @@
 
 *Compliant MIDI 2.0, C99, portable, zero-allocation, MIT.* From 8-bit MCUs to 64-bit hosts.
 
-[![Compliant with MIDI 2.0 Workbench](https://img.shields.io/badge/MIDI%202.0%20Workbench-compliant-0d9488?labelColor=17151f)](https://github.com/midi2-dev/MIDI2.0Workbench)
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Arduino%20%7C%20PlatformIO%20%7C%20ESP--IDF%20%7C%20Zephyr%20%7C%20FreeRTOS%20%7C%20CMake-E8B838.svg)](#integration)
 [![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-pink.svg)](https://github.com/sponsors/sauloverissimo)
