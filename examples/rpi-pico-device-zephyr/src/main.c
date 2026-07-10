@@ -71,17 +71,17 @@ LOG_MODULE_REGISTER(midi2_showcase, LOG_LEVEL_INF);
 
 #define MIDI2_VID            0x2FE3
 #define MIDI2_PID            0x40A0
-#define MIDI2_MFR_STR        "github.com/sauloverissimo"
-#define MIDI2_PRODUCT_STR    "midi2 RP2040 Showcase"
+#define MIDI2_MFR_STR        "midi2.diy"
+#define MIDI2_PRODUCT_STR    "Raspberry Pi Pico MIDI 2.0"
 
-static const uint8_t  kProfileId[5] = {0x7D, 0x00, 0x00, 0x01, 0x00};
+static const uint8_t  kProfileId[5] = {0x7E, 0x00, 0x00, 0x01, 0x00};
 
 /* MFR ID is the 24-bit USB MIDI / SysEx Universal-NonRealtime prefix.
  * 0x7D = educational / private use. */
 #define MIDI2_CI_MFR        0x7D0000u
 #define MIDI2_CI_FAMILY     0x0001
 #define MIDI2_CI_MODEL      0x0001
-#define MIDI2_CI_VERSION    0x00050000u
+#define MIDI2_CI_VERSION    0x00010000u
 
 /* Mutable, advertised via PE OverlayRate. Bumped each cycle. */
 static char g_overlay_rate[40] = "{\"rateHz\":50}";
@@ -140,10 +140,61 @@ static void send_ump(const uint32_t *words, uint32_t count)
 	if (!atomic_get(&g_midi_ready)) {
 		return;
 	}
-	struct midi_ump ump = {0};
-	if (count > 4) { count = 4; }
-	memcpy(ump.data, words, count * sizeof(uint32_t));
-	(void)usbd_midi_send(midi_dev, ump);
+	/* A PE reply is a burst of SysEx7 packets sent back to back; the class
+	 * TX queue fills mid-burst, so a failed send is backpressure, not an
+	 * error: yield and retry (bounded) rather than dropping the packet and
+	 * truncating the reply on the wire. Split multi-message runs by each
+	 * message's word count instead of truncating.
+	 *
+	 * The TX mutex is held for the whole SysEx run (recursive lock:
+	 * acquired per call, kept across calls between START and END), so the
+	 * CI reply thread and the scene loop can never interleave packets
+	 * inside each other's runs. Callers are threads only (the JR
+	 * heartbeat goes through the system workqueue). */
+	static struct k_mutex tx_lock;
+	static bool tx_lock_init;
+	static bool tx_run_held;
+	if (!tx_lock_init) { k_mutex_init(&tx_lock); tx_lock_init = true; }
+	k_mutex_lock(&tx_lock, K_FOREVER);
+	bool run_open = tx_run_held;
+	uint32_t i = 0;
+	while (i < count) {
+		uint32_t n = midi2_msg_word_count(midi2_msg_get_mt(&words[i]));
+		if (n == 0 || n > 4) { n = 1; }
+		if (i + n > count) { n = count - i; }
+
+		struct midi_ump ump = {0};
+		memcpy(ump.data, &words[i], n * sizeof(uint32_t));
+
+		uint8_t mt = (uint8_t)(words[i] >> 28);
+		if (mt == 0x3 || mt == 0x5) {
+			uint8_t st = (uint8_t)((words[i] >> 20) & 0x0F);
+			if (st == 0x1)                   { run_open = true; }
+			else if (st == 0x0 || st == 0x3) { run_open = false; }
+		}
+
+		for (uint16_t attempt = 0; ; attempt++) {
+			if (usbd_midi_send(midi_dev, ump) == 0) {
+				break;
+			}
+			if (attempt >= 50) {   /* ~50 ms: host gone, give up */
+				run_open = false;
+				goto out;
+			}
+			k_sleep(K_MSEC(1));
+		}
+		i += n;
+	}
+out:
+	if (run_open && !tx_run_held) {
+		tx_run_held = true;            /* keep the lock until END */
+	} else if (!run_open && tx_run_held) {
+		tx_run_held = false;
+		k_mutex_unlock(&tx_lock);      /* release the run hold */
+		k_mutex_unlock(&tx_lock);      /* release this call's lock */
+	} else {
+		k_mutex_unlock(&tx_lock);
+	}
 }
 
 /* midi2_ci write callback. Returns count on send (the proc layer
@@ -165,7 +216,7 @@ static uint8_t           g_sysex7_buf[256];
 
 static midi2_ci_state    g_ci;
 static uint8_t           g_ci_profiles[4][5];
-static midi2_ci_property g_ci_props[4];
+static midi2_ci_property g_ci_props[8];
 
 /* Forward sysex7-complete chunks to the MIDI-CI responder. */
 static void on_sysex7_complete(uint8_t group, const uint8_t *data,
@@ -203,17 +254,41 @@ static void on_program_cb(uint8_t group, uint8_t channel, uint8_t program,
 		bank_msb, bank_lsb);
 }
 
+/* Inbound UMPs are NOT processed in the rx callback: it runs on the USB
+ * stack thread, and the CI responder replies synchronously from the feed
+ * path, so any TX backpressure wait there would block the very thread that
+ * drains the TX queue (and stall further inquiries). The callback only
+ * enqueues; a dedicated thread feeds midi2_proc and sends replies, where
+ * waiting on a full TX queue is safe. */
+K_MSGQ_DEFINE(g_rx_msgq, sizeof(struct midi_ump), 64, 4);
+static uint32_t g_rx_drops;
+
 static void rx_packet_cb(const struct device *dev, const struct midi_ump ump)
 {
 	ARG_UNUSED(dev);
-	uint32_t n = UMP_NUM_WORDS(ump);
-
-	/* All inbound UMPs go through midi2_proc: it forwards plain
-	 * messages straight to dispatch and reassembles fragmented SysEx
-	 * before invoking on_sysex7_complete (which routes to the CI
-	 * responder). */
-	midi2_proc_feed(&g_proc, ump.data, n);
+	if (k_msgq_put(&g_rx_msgq, &ump, K_NO_WAIT) != 0) {
+		g_rx_drops++;   /* counted, never masked */
+	}
 }
+
+static void rx_proc_thread(void *a, void *b, void *c)
+{
+	ARG_UNUSED(a); ARG_UNUSED(b); ARG_UNUSED(c);
+	struct midi_ump ump;
+
+	for (;;) {
+		k_msgq_get(&g_rx_msgq, &ump, K_FOREVER);
+		/* All inbound UMPs go through midi2_proc: it forwards plain
+		 * messages straight to dispatch and reassembles fragmented
+		 * SysEx before invoking on_sysex7_complete (which routes to
+		 * the CI responder; replies leave via send_ump with
+		 * backpressure, safe on this thread). */
+		midi2_proc_feed(&g_proc, ump.data, UMP_NUM_WORDS(ump));
+	}
+}
+
+K_THREAD_DEFINE(rx_proc_tid, 2048, rx_proc_thread, NULL, NULL, NULL,
+		K_PRIO_PREEMPT(5), 0, 0);
 
 /*--------------------------------------------------------------------+
  * USB lifecycle
@@ -238,12 +313,22 @@ static const struct usbd_midi_ops midi_ops = {
  * JR Heartbeat
  *--------------------------------------------------------------------*/
 
-static void jr_heartbeat_handler(struct k_timer *timer)
+/* The timer fires in ISR context, where send_ump (mutex + sleep) is not
+ * allowed: defer the actual send to the system workqueue. */
+static void jr_heartbeat_work_handler(struct k_work *work)
 {
-	ARG_UNUSED(timer);
+	ARG_UNUSED(work);
 	if (!atomic_get(&g_midi_ready)) { return; }
 	uint32_t w = midi2_msg_jr_timestamp(15625u);  /* 500 ms in 1/31250s */
 	send_ump(&w, 1);
+}
+
+K_WORK_DEFINE(jr_heartbeat_work, jr_heartbeat_work_handler);
+
+static void jr_heartbeat_handler(struct k_timer *timer)
+{
+	ARG_UNUSED(timer);
+	k_work_submit(&jr_heartbeat_work);
 }
 
 K_TIMER_DEFINE(jr_heartbeat_timer, jr_heartbeat_handler, NULL);
@@ -271,7 +356,7 @@ static bool overlay_rate_set(const char *name, const char *value, void *ctx)
 static const char *channel_list_get(const char *name, void *ctx)
 {
 	ARG_UNUSED(name); ARG_UNUSED(ctx);
-	return "{\"channels\":[0,1,2,3]}";
+	return "[{\"title\":\"Channel 1\",\"channel\":1},{\"title\":\"Channel 2\",\"channel\":2},{\"title\":\"Channel 3\",\"channel\":3},{\"title\":\"Channel 4\",\"channel\":4}]";
 }
 
 static uint32_t ci_rng(void *ctx)
@@ -296,22 +381,39 @@ static void install_ci_bootstrap(void)
 	rc = midi2_ci_add_profile(&g_ci, kProfileId);
 	LOG_INF("CI addProfile rc=%d", rc);
 
+	/* App-supplied ResourceList (overrides the lib's built-in enumeration)
+	 * so the custom X-OverlayRate entry can carry its schema, as M2-105
+	 * requires for manufacturer-defined resources. */
+	rc = midi2_ci_add_property_static(&g_ci, "ResourceList",
+		"[{\"resource\":\"DeviceInfo\"},"
+		 "{\"resource\":\"ChannelList\"},"
+		 "{\"resource\":\"ProgramList\"},"
+		 "{\"resource\":\"X-OverlayRate\",\"schema\":"
+		 "{\"title\":\"Overlay Rate\",\"type\":\"object\",\"properties\":"
+		 "{\"rateHz\":{\"title\":\"Rate (Hz)\",\"type\":\"integer\"}}}}]");
+	LOG_INF("CI addPropertyStatic(ResourceList) rc=%d", rc);
+
 	rc = midi2_ci_add_property_static(&g_ci, "DeviceInfo",
-		"{\"manufacturer\":\"github.com/sauloverissimo\","
-		 "\"family\":\"rpi-pico-device-midi2\","
-		 "\"model\":\"showcase\","
-		 "\"version\":\"0.6.0\"}");
+		"{\"manufacturerId\":[125,0,0],\"familyId\":[1,0],\"modelId\":[1,0],\"versionId\":[0,0,4,0],"
+		 "\"manufacturer\":\"midi2.diy\","
+		 "\"family\":\"RP2040\","
+		 "\"model\":\"Raspberry Pi Pico MIDI 2.0\","
+		 "\"version\":\"0.0.1\"}");
 	LOG_INF("CI addPropertyStatic(DeviceInfo) rc=%d", rc);
 
 	rc = midi2_ci_add_property_dynamic(&g_ci, "ChannelList",
 					   channel_list_get, NULL);
 	LOG_INF("CI addPropertyDynamic(ChannelList ro) rc=%d", rc);
 
-	rc = midi2_ci_add_property_dynamic(&g_ci, "OverlayRate",
+	rc = midi2_ci_add_property_static(&g_ci, "ProgramList",
+		"[{\"title\":\"Default\",\"bankPC\":[0,0,0]}]");
+	LOG_INF("CI addPropertyStatic(ProgramList) rc=%d", rc);
+
+	rc = midi2_ci_add_property_dynamic(&g_ci, "X-OverlayRate",
 					   overlay_rate_get, overlay_rate_set);
 	LOG_INF("CI addPropertyDynamic(OverlayRate rw) rc=%d", rc);
 
-	rc = midi2_ci_pe_set_subscribable(&g_ci, "OverlayRate", true);
+	rc = midi2_ci_pe_set_subscribable(&g_ci, "X-OverlayRate", true);
 	LOG_INF("CI pe_set_subscribable(OverlayRate) rc=%d", rc);
 }
 
@@ -382,7 +484,7 @@ static float sin_approx(float x)
 }
 
 /*--------------------------------------------------------------------+
- * A — Flex Data Setup (MT 0xD bank 0x00)
+ * A - Flex Data Setup (MT 0xD bank 0x00)
  *--------------------------------------------------------------------*/
 
 static void scene_a_flex(struct showcase *s)
@@ -420,7 +522,7 @@ static void scene_a_flex(struct showcase *s)
 }
 
 /*--------------------------------------------------------------------+
- * B — Per-Note expression on a sustained C4
+ * B - Per-Note expression on a sustained C4
  *--------------------------------------------------------------------*/
 
 static void scene_b_per_note(struct showcase *s, uint32_t t, uint32_t now)
@@ -477,7 +579,7 @@ static void scene_b_per_note(struct showcase *s, uint32_t t, uint32_t now)
 }
 
 /*--------------------------------------------------------------------+
- * C — Resolution showcase, chromatic walk
+ * C - Resolution showcase, chromatic walk
  *--------------------------------------------------------------------*/
 
 static void scene_c_walk(struct showcase *s, uint32_t t, uint32_t now)
@@ -530,7 +632,7 @@ static void scene_c_walk(struct showcase *s, uint32_t t, uint32_t now)
 }
 
 /*--------------------------------------------------------------------+
- * D — Program Change with Bank
+ * D - Program Change with Bank
  *--------------------------------------------------------------------*/
 
 static void scene_d_program(struct showcase *s, uint32_t t)
@@ -546,7 +648,7 @@ static void scene_d_program(struct showcase *s, uint32_t t)
 }
 
 /*--------------------------------------------------------------------+
- * E — RPN / NRPN / Relative variants
+ * E - RPN / NRPN / Relative variants
  *--------------------------------------------------------------------*/
 
 static void scene_e_rpn_nrpn(struct showcase *s, uint32_t t)
@@ -579,7 +681,7 @@ static void scene_e_rpn_nrpn(struct showcase *s, uint32_t t)
 }
 
 /*--------------------------------------------------------------------+
- * F — Note Attribute pitch_7_9 (microtonal)
+ * F - Note Attribute pitch_7_9 (microtonal)
  *--------------------------------------------------------------------*/
 
 static void scene_f_attribute(struct showcase *s, uint32_t t)
@@ -603,7 +705,7 @@ static void scene_f_attribute(struct showcase *s, uint32_t t)
 }
 
 /*--------------------------------------------------------------------+
- * G — SysEx7 Universal Identity Reply (fragmented)
+ * G - SysEx7 Universal Identity Reply (fragmented)
  *--------------------------------------------------------------------*/
 
 static void scene_g_sysex7(struct showcase *s, uint32_t t)
@@ -644,7 +746,7 @@ static void scene_g_sysex7(struct showcase *s, uint32_t t)
 }
 
 /*--------------------------------------------------------------------+
- * H — Delta Clockstamp
+ * H - Delta Clockstamp
  *--------------------------------------------------------------------*/
 
 static void scene_h_dctpq(struct showcase *s, uint32_t t)
@@ -660,7 +762,7 @@ static void scene_h_dctpq(struct showcase *s, uint32_t t)
 }
 
 /*--------------------------------------------------------------------+
- * I — PE Notify
+ * I - PE Notify
  *--------------------------------------------------------------------*/
 
 static void scene_i_pe_notify(struct showcase *s, uint32_t t)
@@ -668,7 +770,7 @@ static void scene_i_pe_notify(struct showcase *s, uint32_t t)
 	if (s->i_done || t < kI_Ms) { return; }
 	(void)snprintk(g_overlay_rate, sizeof(g_overlay_rate),
 		       "{\"rateHz\":%u}", 50u + s->cycle_count);
-	(void)midi2_ci_notify_property_changed(&g_ci, "OverlayRate");
+	(void)midi2_ci_notify_property_changed(&g_ci, "X-OverlayRate");
 	LOG_INF("[I] PE Notify OverlayRate=%s subscribers=%u",
 		g_overlay_rate,
 		(unsigned)midi2_ci_get_subscriber_count(&g_ci));
@@ -676,7 +778,7 @@ static void scene_i_pe_notify(struct showcase *s, uint32_t t)
 }
 
 /*--------------------------------------------------------------------+
- * J — End of Clip
+ * J - End of Clip
  *--------------------------------------------------------------------*/
 
 static void scene_j_clip_end(struct showcase *s, uint32_t t)
@@ -690,7 +792,7 @@ static void scene_j_clip_end(struct showcase *s, uint32_t t)
 }
 
 /*--------------------------------------------------------------------+
- * K — MIDI 1.0 Channel Voice burst (MT 0x2)
+ * K - MIDI 1.0 Channel Voice burst (MT 0x2)
  *--------------------------------------------------------------------*/
 
 static void scene_k_midi1_cv(struct showcase *s, uint32_t t)
@@ -714,7 +816,7 @@ static void scene_k_midi1_cv(struct showcase *s, uint32_t t)
 }
 
 /*--------------------------------------------------------------------+
- * L — System Common / Real-Time burst (MT 0x1)
+ * L - System Common / Real-Time burst (MT 0x1)
  *--------------------------------------------------------------------*/
 
 static void scene_l_system(struct showcase *s, uint32_t t)
@@ -738,7 +840,7 @@ static void scene_l_system(struct showcase *s, uint32_t t)
 }
 
 /*--------------------------------------------------------------------+
- * M — Flex Data Metadata Text (project name + composer)
+ * M - Flex Data Metadata Text (project name + composer)
  *--------------------------------------------------------------------*/
 
 static void scene_m_metadata(struct showcase *s, uint32_t t)
@@ -773,7 +875,7 @@ static void scene_m_metadata(struct showcase *s, uint32_t t)
 }
 
 /*--------------------------------------------------------------------+
- * N — Utility additions: Noop + JR Clock (distinct from heartbeat)
+ * N - Utility additions: Noop + JR Clock (distinct from heartbeat)
  *--------------------------------------------------------------------*/
 
 static void scene_n_utility(struct showcase *s, uint32_t t)
