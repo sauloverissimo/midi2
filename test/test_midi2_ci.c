@@ -372,6 +372,52 @@ static void test_pe_get_unknown_resource_404(void) {
   PASS();
 }
 
+/* M2-105 conformance: a Get reply for a paginable list resource carries
+ * totalCount in the header (the Workbench warns without it), while an object
+ * resource such as DeviceInfo does not. */
+static void test_pe_get_list_has_totalcount(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x11111111, test_profiles, 8, test_props, 4);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  midi2_ci_add_property_static(&s, "ChannelList",
+      "[{\"title\":\"a\",\"channel\":1},{\"title\":\"b\",\"channel\":2},"
+      "{\"title\":\"c\",\"channel\":3}]");
+  midi2_ci_add_property_static(&s, "DeviceInfo", "{\"manufacturer\":\"acme\"}");
+
+  const char list_inq[] = "{\"resource\":\"ChannelList\"}";
+  uint8_t req[64];
+  uint16_t req_len;
+  uint8_t resp[256];
+  uint16_t n, hdr_len;
+
+  reset();
+  req_len = midi2_ci_build_pe_get(req, MIDI2_CI_VERSION_2, 0x0000001, s.muid,
+      0x01, (const uint8_t *)list_inq, (uint16_t)(sizeof(list_inq) - 1));
+  midi2_ci_process_sysex(&s, 0, req, req_len);
+  n = extract_sysex7_data(resp, sizeof(resp));
+  TEST("PE Get list resource header carries totalCount");
+  CHECK(n > 16, "reply present");
+  hdr_len = midi2_ci_read_14(&resp[14]);
+  CHECK(blob_contains(&resp[16], hdr_len, "\"status\":200"), "status 200");
+  CHECK(blob_contains(&resp[16], hdr_len, "\"totalCount\":3"),
+        "totalCount equals the array element count");
+  PASS();
+
+  const char obj_inq[] = "{\"resource\":\"DeviceInfo\"}";
+  reset();
+  req_len = midi2_ci_build_pe_get(req, MIDI2_CI_VERSION_2, 0x0000001, s.muid,
+      0x01, (const uint8_t *)obj_inq, (uint16_t)(sizeof(obj_inq) - 1));
+  midi2_ci_process_sysex(&s, 0, req, req_len);
+  n = extract_sysex7_data(resp, sizeof(resp));
+  TEST("PE Get object resource header omits totalCount");
+  CHECK(n > 16, "reply present");
+  hdr_len = midi2_ci_read_14(&resp[14]);
+  CHECK(!blob_contains(&resp[16], hdr_len, "totalCount"),
+        "object resource has no totalCount");
+  PASS();
+}
+
 /* v0.6.1 PE conformance: the built-in ResourceList enumerates registered
  * resources so an Initiator can discover what to GET. */
 static void test_pe_get_resource_list(void) {
@@ -564,6 +610,41 @@ static void test_pe_set_setter_failure_not_200(void) {
   CHECK(n > 16, "reply present");
   uint16_t hdr_len = midi2_ci_read_14(&resp[14]);
   CHECK(!blob_contains(&resp[16], hdr_len, "\"status\":200"), "not status 200 on failure");
+  PASS();
+}
+
+/* v0.6.1: an app-registered "ResourceList" property overrides the built-in
+ * enumeration, so devices with custom (X-) resources can publish entries
+ * that carry a schema, as M2-105 requires for manufacturer resources. */
+static void test_pe_get_resource_list_app_override(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x11111111, test_profiles, 8, test_props, 4);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  static const char custom[] =
+    "[{\"resource\":\"X-Custom\",\"schema\":{\"type\":\"object\"}}]";
+  midi2_ci_add_property_static(&s, "ResourceList", custom);
+  midi2_ci_add_property_static(&s, "DeviceInfo", "{}");
+  reset();
+
+  const char inq[] = "{\"resource\":\"ResourceList\"}";
+  uint8_t req[64];
+  uint16_t req_len = midi2_ci_build_pe_get(req, MIDI2_CI_VERSION_2,
+      0x0000001, s.muid, 0x01, (const uint8_t *)inq, (uint16_t)(sizeof(inq) - 1));
+  midi2_ci_process_sysex(&s, 0, req, req_len);
+
+  uint8_t resp[128];
+  uint16_t n = extract_sysex7_data(resp, sizeof(resp));
+  TEST("PE Get ResourceList prefers an app-registered property");
+  CHECK(n > 16, "reply present");
+  uint16_t hdr_len = midi2_ci_read_14(&resp[14]);
+  uint16_t body_off = (uint16_t)(16 + hdr_len + 6);
+  CHECK(blob_contains(&resp[body_off], (uint16_t)(n - body_off), "X-Custom"),
+        "custom entry served");
+  CHECK(blob_contains(&resp[body_off], (uint16_t)(n - body_off), "schema"),
+        "schema field survives");
+  CHECK(!blob_contains(&resp[body_off], (uint16_t)(n - body_off), "DeviceInfo"),
+        "built-in enumeration not used");
   PASS();
 }
 
@@ -1210,12 +1291,14 @@ int main(void) {
   test_pe_get_reply_has_status_header();
   test_pe_get_matches_requested_resource();
   test_pe_get_unknown_resource_404();
+  test_pe_get_list_has_totalcount();
   test_pe_get_resource_list();
   test_pe_get_zero_properties_replies();
   test_pe_get_resource_list_overflow_valid();
   test_pe_set_matches_resource_and_value();
   test_pe_set_unknown_resource_404();
   test_pe_set_setter_failure_not_200();
+  test_pe_get_resource_list_app_override();
   test_pe_get_large_value_not_truncated();
 
   printf("\n[Edge Cases]\n");

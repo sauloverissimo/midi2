@@ -29,7 +29,6 @@
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI-CI (M2-101-UM v1.2, Jun 2023)
- * Version: 0.3.0
  */
 
 #include "midi2_ci.h"
@@ -494,6 +493,21 @@ static const char *ci_pe_resource(const uint8_t *hdr, uint16_t hdr_len,
   return NULL;
 }
 
+/* Find a registered property whose name matches the requested resource. */
+static const midi2_ci_property *ci_pe_find_property(const midi2_ci_state *state,
+                                                       const char *res,
+                                                       uint16_t res_len) {
+  uint8_t i;
+  for (i = 0; i < state->property_count; i++) {
+    const char *name = state->properties[i].name;
+    if (name != NULL && (uint16_t)strlen(name) == res_len
+        && memcmp(name, res, res_len) == 0) {
+      return &state->properties[i];
+    }
+  }
+  return NULL;
+}
+
 /* Build the built-in ResourceList body: a JSON array of {"resource":"NAME"}
  * for every registered property. Emits only entries that fit whole, always
  * closing the array, so the result is valid JSON even when it overflows (a
@@ -526,12 +540,69 @@ static uint16_t ci_pe_build_resource_list(const midi2_ci_state *state,
   return p;
 }
 
+/* If body is a JSON array, count its top-level elements; returns 1 and sets
+ * *count. Returns 0 for a non-array body (e.g. the DeviceInfo object). String-
+ * and nesting-aware, so commas inside strings or nested objects/arrays are not
+ * counted. An empty array "[]" yields count 0. */
+static int ci_pe_array_count(const uint8_t *body, uint16_t len,
+                               uint16_t *count) {
+  uint16_t i = 0, n;
+  int depth = 0, in_str = 0;
+  *count = 0;
+  while (i < len && (body[i] == ' ' || body[i] == '\t'
+                     || body[i] == '\r' || body[i] == '\n')) i++;
+  if (i >= len || body[i] != '[') return 0;
+  for (i++; i < len && (body[i] == ' ' || body[i] == '\t'
+                        || body[i] == '\r' || body[i] == '\n'); i++) {}
+  if (i < len && body[i] == ']') return 1;  /* empty array -> 0 */
+  n = 1;                                     /* at least one element */
+  for (; i < len; i++) {
+    uint8_t c = body[i];
+    if (in_str) {
+      if (c == '\\') { i++; continue; }      /* skip escaped char */
+      if (c == '"') in_str = 0;
+      continue;
+    }
+    if (c == '"') in_str = 1;
+    else if (c == '{' || c == '[') depth++;
+    else if (c == '}') depth--;
+    else if (c == ']') { if (depth == 0) break; depth--; }
+    else if (c == ',' && depth == 0) n++;
+  }
+  *count = n;
+  return 1;
+}
+
+/* Build the success header: {"status":200} or, for a list resource,
+ * {"status":200,"totalCount":N}. totalCount is required by M2-105 for
+ * paginable resources (the Workbench warns without it). Returns bytes written;
+ * buf must hold at least CI_PE_OK_HDR_MAX bytes. */
+#define CI_PE_OK_HDR_MAX 40
+static uint16_t ci_pe_ok_header(uint8_t *buf, int has_count, uint16_t count) {
+  static const char HEAD[]  = "{\"status\":200";
+  static const char TOTAL[] = ",\"totalCount\":";
+  uint16_t p = 0, k;
+  for (k = 0; k < (uint16_t)(sizeof(HEAD) - 1); k++) buf[p++] = (uint8_t)HEAD[k];
+  if (has_count) {
+    uint8_t tmp[5];
+    uint8_t t = 0;
+    for (k = 0; k < (uint16_t)(sizeof(TOTAL) - 1); k++) buf[p++] = (uint8_t)TOTAL[k];
+    if (count == 0) { buf[p++] = '0'; }
+    else {
+      while (count > 0) { tmp[t++] = (uint8_t)('0' + (count % 10)); count /= 10; }
+      while (t > 0)     { buf[p++] = tmp[--t]; }
+    }
+  }
+  buf[p++] = '}';
+  return p;
+}
+
 /*--------------------------------------------------------------------+
  * PE Get handler -- uses midi2_ci_build_pe_get_reply
  *
  * Matches the requested resource by name. Built-in "ResourceList" enumerates
  * the registered resources. Unknown resource -> {"status":404}. Every reply
- * carries a non-empty header.
+ * carries a non-empty header; list resources also carry "totalCount".
  *--------------------------------------------------------------------*/
 static void ci_handle_pe_get(midi2_ci_state *state, uint8_t group,
                                const uint8_t *data, uint16_t length) {
@@ -551,13 +622,20 @@ static void ci_handle_pe_get(midi2_ci_state *state, uint8_t group,
   uint8_t reply[CI_PE_REPLY_MAX];
   uint16_t reply_len;
 
-  /* Built-in ResourceList: enumerate the registered resources. */
-  if (res != NULL && res_len == 12 && memcmp(res, "ResourceList", 12) == 0) {
+  /* Built-in ResourceList: enumerate the registered resources. An
+   * app-registered "ResourceList" property takes precedence (served by the
+   * named lookup below), so devices can publish entries that carry a schema
+   * for custom X- resources, as M2-105 requires. */
+  if (res != NULL && res_len == 12 && memcmp(res, "ResourceList", 12) == 0
+      && !ci_pe_find_property(state, res, res_len)) {
     uint8_t body[CI_PE_BODY_MAX];
     uint16_t body_len = ci_pe_build_resource_list(state, body, sizeof(body));
+    uint8_t hdr[CI_PE_OK_HDR_MAX];
+    uint16_t total = 0;
+    (void)ci_pe_array_count(body, body_len, &total);
     reply_len = midi2_ci_build_pe_get_reply(
         reply, CI_RESPONDER_VERSION, state->muid, src_muid, request_id,
-        (const uint8_t *)PE_HDR_OK, (uint16_t)(sizeof(PE_HDR_OK) - 1),
+        hdr, ci_pe_ok_header(hdr, 1, total),
         1, 1, body, body_len);
     ci_send(state, group, reply, reply_len);
     return;
@@ -578,12 +656,18 @@ static void ci_handle_pe_get(midi2_ci_state *state, uint8_t group,
           : state->properties[i].static_value;
       if (value == NULL) break;  /* resource exists but has no value -> 404 */
 
+      uint8_t hdr[CI_PE_OK_HDR_MAX];
+      uint16_t total = 0;
+      int is_list;
       val_len = (uint16_t)strlen(value);
       if (val_len > CI_PE_BODY_MAX) val_len = CI_PE_BODY_MAX;
 
+      /* List resources (array body) carry totalCount; objects (DeviceInfo) do
+       * not. Count on the possibly-truncated body so it matches what is sent. */
+      is_list = ci_pe_array_count((const uint8_t *)value, val_len, &total);
       reply_len = midi2_ci_build_pe_get_reply(
           reply, CI_RESPONDER_VERSION, state->muid, src_muid, request_id,
-          (const uint8_t *)PE_HDR_OK, (uint16_t)(sizeof(PE_HDR_OK) - 1),
+          hdr, ci_pe_ok_header(hdr, is_list, total),
           1, 1, (const uint8_t *)value, val_len);
       ci_send(state, group, reply, reply_len);
       return;
