@@ -10,8 +10,9 @@
 [![C99](https://img.shields.io/badge/standard-C99-blue.svg)]()
 [![Zero Alloc](https://img.shields.io/badge/allocation-zero-orange.svg)]()
 [![MIDI 2.0](https://img.shields.io/badge/MIDI-2.0-blueviolet.svg)](https://midi.org/specifications/midi-2-0-specifications)
+[![Compliant with MIDI 2.0 Workbench](https://img.shields.io/badge/MIDI%202.0%20Workbench-compliant-0d9488?labelColor=17151f)](https://github.com/midi2-dev/MIDI2.0Workbench)
 [![ESP Component Registry](https://components.espressif.com/components/sauloverissimo/midi2/badge.svg)](https://components.espressif.com/components/sauloverissimo/midi2)
-[![Platform](https://img.shields.io/badge/Platform-Arduino%20%7C%20PlatformIO%20%7C%20ESP--IDF%20%7C%20Zephyr%20%7C%20CMake-E8B838.svg)](#integration)
+[![Platform](https://img.shields.io/badge/Platform-Arduino%20%7C%20PlatformIO%20%7C%20ESP--IDF%20%7C%20Zephyr%20%7C%20FreeRTOS%20%7C%20CMake-E8B838.svg)](#integration)
 [![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-pink.svg)](https://github.com/sponsors/sauloverissimo)
 
 ---
@@ -180,14 +181,14 @@ Install via Library Manager (search `midi2`, click Install) or manually drop the
 #include <midi2.h>
 ```
 
-Two example sketches under `examples/` (`basic-usage`, `ci-discovery`) appear in the IDE's File > Examples menu after install. Validated on Arduino UNO (AVR) and Teensy 4.1.
+A reference sketch under `examples/teensy-device-midi2/` appears in the IDE's File > Examples menu after install: a complete USB MIDI 2.0 device for Teensy 4.x, validated against the official MIDI 2.0 Workbench.
 
 ### PlatformIO
 
 `platformio.ini`:
 
 ```ini
-lib_deps = sauloverissimo/midi2 @ ^0.6.0
+lib_deps = sauloverissimo/midi2 @ ^0.7.0
 ```
 
 Library Manager pulls the same `src/` modular layout via `library.json` (`srcDir = src`).
@@ -199,7 +200,7 @@ Published on the [ESP Component Registry](https://components.espressif.com/compo
 ```yaml
 dependencies:
   idf: ">=5.0"
-  sauloverissimo/midi2: ">=0.6.0"
+  sauloverissimo/midi2: ">=0.7.0"
 ```
 
 `idf.py reconfigure` drops the component into `managed_components/midi2/`. The `if(ESP_PLATFORM)` gate in `CMakeLists.txt` routes ESP-IDF builds to `idf_component_register` with the modular `src/midi2_*.c` set, so the same source serves IDF, Arduino, PlatformIO, and native CMake without forks.
@@ -213,7 +214,7 @@ manifest:
   projects:
     - name: midi2
       url: https://github.com/sauloverissimo/midi2
-      revision: v0.6.0
+      revision: v0.7.0
       path: modules/lib/midi2
 ```
 
@@ -262,10 +263,13 @@ midi2_msg.h          Always needed. Header-only.
 
 ## Examples
 
-Pedagogical sketches and a flash-ready Zephyr hardware recipe live under [`examples/`](examples).
+Three real USB MIDI 2.0 devices live under [`examples/`](examples), each wiring the same C99 core to a different runtime and USB stack.
 
-- [`examples/basic-usage/`](examples/basic-usage) and [`examples/ci-discovery/`](examples/ci-discovery): Arduino sketches covering UMP construction, scaling, typed dispatch, `midi2_proc`, and MIDI-CI Discovery. Runnable on Teensy 4.x and AVR.
-- [`examples/rpi-pico-device-zephyr/`](examples/rpi-pico-device-zephyr): flash-ready Raspberry Pi Pico USB MIDI 2.0 device with a 14-scene UMP showcase and a MIDI-CI responder.
+- [`examples/teensy-device-midi2/`](examples/teensy-device-midi2): Arduino sketch for Teensy 4.x over the core's native `usbMIDI2` endpoint. A bare `loop()`, no RTOS.
+- [`examples/rp2350-device-freertos/`](examples/rp2350-device-freertos): Raspberry Pi Pico 2 (RP2350) on FreeRTOS-Kernel and TinyUSB upstream, with a 58-entry UMP catalog covering every defined message-type category, a MIDI-CI responder, and a stress loopback mode.
+- [`examples/rpi-pico-device-zephyr/`](examples/rpi-pico-device-zephyr): Raspberry Pi Pico (RP2040) on Zephyr's native `usbd_midi2` class.
+
+All three are validated end to end against the official [MIDI 2.0 Workbench](https://github.com/midi2-dev/MIDI2.0Workbench) on hardware: MIDI-CI Discovery, Profile Configuration, and Property Exchange answer with zero errors and zero warnings.
 
 ## Architecture
 
