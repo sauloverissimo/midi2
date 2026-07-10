@@ -824,6 +824,88 @@ static void ci_handle_process_inquiry(midi2_ci_state *state, uint8_t group,
 }
 
 /*--------------------------------------------------------------------+
+ * Profile Set On/Off handler
+ *
+ * The responder publishes fixed, always-on profiles: a listed profile cannot
+ * be turned off. Per the Profile Configuration rules a Set Profile On for a
+ * profile that can be turned on, and a Set Profile Off for a profile that
+ * cannot be turned off while currently on, both reply with a Profile Enabled
+ * Report. A Set message for a profile the responder does not publish is NAKed.
+ *--------------------------------------------------------------------*/
+static bool ci_profile_listed(const midi2_ci_state *state,
+                                const uint8_t profile_id[5]) {
+  uint8_t i;
+  for (i = 0; i < state->profile_count; i++) {
+    if (memcmp(state->profiles[i], profile_id, 5) == 0) return true;
+  }
+  return false;
+}
+
+static void ci_handle_set_profile(midi2_ci_state *state, uint8_t group,
+                                     const uint8_t *data, uint16_t length,
+                                     bool set_on) {
+  if (length < 18) return;  /* 13-byte header + 5-byte profile id */
+
+  uint8_t        device_id  = midi2_ci_get_device_id(data);
+  const uint8_t *profile_id = data + 13;
+
+  uint8_t  reply[32];
+  uint16_t reply_len;
+
+  if (!ci_profile_listed(state, profile_id)) {
+    ci_send_nak_not_supported(state, group, data,
+                              set_on ? MIDI2_CI_SET_PROFILE_ON
+                                     : MIDI2_CI_SET_PROFILE_OFF);
+    return;
+  }
+
+  /* Listed and always-on: enabled either way. Echo the requested channel count
+   * from a Set Profile On (v2, at offset 18); a Set Profile Off carries none. */
+  uint16_t num_channels = 0;
+  if (set_on && length >= 20) {
+    num_channels = midi2_ci_read_14(&data[18]);
+  }
+  reply_len = midi2_ci_build_profile_enabled(
+      reply, CI_RESPONDER_VERSION, state->muid, device_id,
+      profile_id, num_channels);
+  ci_send(state, group, reply, reply_len);
+}
+
+/*--------------------------------------------------------------------+
+ * Process Inquiry: MIDI Message Report handler
+ *
+ * The responder keeps no live channel state, so it reports no messages: it
+ * answers with a Reply to MIDI Message Report declaring an empty set, then
+ * End of MIDI Message Report. A request addressed to a single MIDI channel the
+ * device does not use is NAKed (channel not in use); Group (0x7E) and Function
+ * Block (0x7F) requests are answered once.
+ *--------------------------------------------------------------------*/
+static void ci_handle_pi_midi_report(midi2_ci_state *state, uint8_t group,
+                                        const uint8_t *data, uint16_t length) {
+  if (length < 18) return;  /* header + MDC + 4 bitmap bytes */
+
+  uint32_t src_muid  = midi2_ci_get_src_muid(data);
+  uint8_t  device_id = midi2_ci_get_device_id(data);
+
+  if (device_id <= 0x0F && device_id != 0x00) {
+    ci_send_nak_not_supported(state, group, data, MIDI2_CI_PI_MIDI_REPORT);
+    return;
+  }
+
+  uint8_t  buf[32];
+  uint16_t len;
+
+  len = midi2_ci_build_pi_midi_report_reply(
+      buf, CI_RESPONDER_VERSION, state->muid, src_muid, device_id,
+      /*system*/ 0, /*reserved*/ 0, /*channel_ctrl*/ 0, /*note_data*/ 0);
+  ci_send(state, group, buf, len);
+
+  len = midi2_ci_build_pi_midi_report_end(
+      buf, CI_RESPONDER_VERSION, state->muid, src_muid, device_id);
+  ci_send(state, group, buf, len);
+}
+
+/*--------------------------------------------------------------------+
  * Process incoming SysEx
  *--------------------------------------------------------------------*/
 bool midi2_ci_process_sysex(midi2_ci_state *state,
@@ -848,6 +930,14 @@ bool midi2_ci_process_sysex(midi2_ci_state *state,
       ci_handle_profile_inquiry(state, group, data, length);
       return true;
 
+    case MIDI2_CI_SET_PROFILE_ON:
+      ci_handle_set_profile(state, group, data, length, true);
+      return true;
+
+    case MIDI2_CI_SET_PROFILE_OFF:
+      ci_handle_set_profile(state, group, data, length, false);
+      return true;
+
     case MIDI2_CI_PE_CAPABILITY:
       ci_handle_pe_capability(state, group, data, length);
       return true;
@@ -862,6 +952,10 @@ bool midi2_ci_process_sysex(midi2_ci_state *state,
 
     case MIDI2_CI_PI_CAPABILITY:
       ci_handle_process_inquiry(state, group, data, length);
+      return true;
+
+    case MIDI2_CI_PI_MIDI_REPORT:
+      ci_handle_pi_midi_report(state, group, data, length);
       return true;
 
     default:

@@ -418,6 +418,94 @@ static void test_pe_get_list_has_totalcount(void) {
   PASS();
 }
 
+/* Profile Configuration: the responder publishes fixed always-on profiles. A
+ * Set Profile On or Off for a listed profile returns Profile Enabled (it cannot
+ * be turned off); a Set for an unlisted profile is NAKed. */
+static const uint8_t kProfileUnderTest[5] = {0x7E, 0x00, 0x00, 0x01, 0x00};
+
+static void test_set_profile_listed_returns_enabled(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x11111111, test_profiles, 8, test_props, 4);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  midi2_ci_add_profile(&s, kProfileUnderTest);
+
+  uint8_t req[32];
+  uint16_t req_len;
+  uint8_t resp[64];
+  uint16_t n;
+
+  reset();
+  req_len = midi2_ci_build_set_profile_on(req, MIDI2_CI_VERSION_2, 0x0000001,
+      s.muid, 0x7F, kProfileUnderTest, /*num_channels*/ 1);
+  midi2_ci_process_sysex(&s, 0, req, req_len);
+  n = extract_sysex7_data(resp, sizeof(resp));
+  TEST("Set Profile On (listed) returns Profile Enabled");
+  CHECK(n >= 18, "reply present");
+  CHECK(midi2_ci_get_sub_id(resp) == MIDI2_CI_PROFILE_ENABLED, "Profile Enabled");
+  CHECK(memcmp(&resp[13], kProfileUnderTest, 5) == 0, "same profile id");
+  PASS();
+
+  reset();
+  req_len = midi2_ci_build_set_profile_off(req, MIDI2_CI_VERSION_2, 0x0000001,
+      s.muid, 0x7F, kProfileUnderTest);
+  midi2_ci_process_sysex(&s, 0, req, req_len);
+  n = extract_sysex7_data(resp, sizeof(resp));
+  TEST("Set Profile Off (listed, always-on) stays Profile Enabled");
+  CHECK(n >= 18, "reply present");
+  CHECK(midi2_ci_get_sub_id(resp) == MIDI2_CI_PROFILE_ENABLED,
+        "always-on profile cannot be turned off");
+  PASS();
+}
+
+static void test_set_profile_unlisted_returns_nak(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x11111111, test_profiles, 8, test_props, 4);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  midi2_ci_set_nak_on_unknown(&s, true);
+  midi2_ci_add_profile(&s, kProfileUnderTest);
+  reset();
+
+  const uint8_t unlisted[5] = {0x7E, 0x00, 0x00, 0x02, 0x00};
+  uint8_t req[32];
+  uint16_t req_len = midi2_ci_build_set_profile_on(req, MIDI2_CI_VERSION_2,
+      0x0000001, s.muid, 0x7F, unlisted, 1);
+  midi2_ci_process_sysex(&s, 0, req, req_len);
+
+  uint8_t resp[64];
+  uint16_t n = extract_sysex7_data(resp, sizeof(resp));
+  TEST("Set Profile On (unlisted) returns NAK");
+  CHECK(n >= 13, "reply present");
+  CHECK(midi2_ci_get_sub_id(resp) == MIDI2_CI_NAK, "NAK sub-ID");
+  PASS();
+}
+
+/* Process Inquiry: a device with no live channel state answers a MIDI Message
+ * Report with Reply (0x43) then End (0x44) and nothing in between. */
+static void test_pi_midi_report_begin_end(void) {
+  midi2_ci_state s;
+  midi2_ci_init(&s, 0x11111111, test_profiles, 8, test_props, 4);
+  midi2_ci_set_identity(&s, 0x7D, 1, 1, 1);
+  midi2_ci_set_write_fn(&s, capture_write, NULL);
+  reset();
+
+  uint8_t req[32];
+  uint16_t req_len = midi2_ci_build_pi_midi_report(req, MIDI2_CI_VERSION_2,
+      0x0000001, s.muid, /*device_id*/ 0x7F, /*MDC*/ 0x7F,
+      /*system*/ 0x01, /*reserved*/ 0, /*channel_ctrl*/ 0x3F, /*note_data*/ 0x03);
+  midi2_ci_process_sysex(&s, 0, req, req_len);
+
+  uint8_t resp[64];
+  uint16_t n = extract_sysex7_data(resp, sizeof(resp));
+  TEST("MIDI Message Report answers Reply then End, no data between");
+  CHECK(n >= 30, "two messages (17-byte reply + 13-byte end)");
+  CHECK(resp[3] == MIDI2_CI_PI_MIDI_REPORT_REPLY, "first is Reply to MIDI Message Report");
+  CHECK(resp[17] == 0x7E && resp[20] == MIDI2_CI_PI_MIDI_REPORT_END,
+        "second is End of MIDI Message Report");
+  PASS();
+}
+
 /* v0.6.1 PE conformance: the built-in ResourceList enumerates registered
  * resources so an Initiator can discover what to GET. */
 static void test_pe_get_resource_list(void) {
@@ -448,7 +536,7 @@ static void test_pe_get_resource_list(void) {
   PASS();
 }
 
-/* Review fix #4: a device that advertises PE but has zero registered
+/* PE conformance: a device that advertises PE but has zero registered
  * properties must still answer PE Get (ResourceList -> "[]"), not drop it. */
 static void test_pe_get_zero_properties_replies(void) {
   midi2_ci_state s;
@@ -476,7 +564,7 @@ static void test_pe_get_zero_properties_replies(void) {
   PASS();
 }
 
-/* Review fix #1: when the resource array overflows the body buffer it must
+/* PE conformance: when the resource array overflows the body buffer it must
  * stay valid JSON (whole entries + closing bracket), never an empty body. */
 static void test_pe_get_resource_list_overflow_valid(void) {
   midi2_ci_state s;
@@ -522,7 +610,7 @@ static void test_pe_get_resource_list_overflow_valid(void) {
   PASS();
 }
 
-/* Review fix #2: PE Set matches the requested resource by name and passes the
+/* PE conformance: PE Set matches the requested resource by name and passes the
  * real request body value to the setter, not "" against properties[0]. */
 static void test_pe_set_matches_resource_and_value(void) {
   midi2_ci_state s;
@@ -556,7 +644,7 @@ static void test_pe_set_matches_resource_and_value(void) {
   PASS();
 }
 
-/* Review fix #2: PE Set for an unknown resource must not claim success. */
+/* PE conformance: PE Set for an unknown resource must not claim success. */
 static void test_pe_set_unknown_resource_404(void) {
   midi2_ci_state s;
   midi2_ci_init(&s, 0x11111111, test_profiles, 8, test_props, 4);
@@ -584,7 +672,7 @@ static void test_pe_set_unknown_resource_404(void) {
   PASS();
 }
 
-/* Review fix #2: a setter returning false must not be reported as 200. */
+/* PE conformance: a setter returning false must not be reported as 200. */
 static void test_pe_set_setter_failure_not_200(void) {
   midi2_ci_state s;
   midi2_ci_init(&s, 0x11111111, test_profiles, 8, test_props, 4);
@@ -1292,6 +1380,9 @@ int main(void) {
   test_pe_get_matches_requested_resource();
   test_pe_get_unknown_resource_404();
   test_pe_get_list_has_totalcount();
+  test_set_profile_listed_returns_enabled();
+  test_set_profile_unlisted_returns_nak();
+  test_pi_midi_report_begin_end();
   test_pe_get_resource_list();
   test_pe_get_zero_properties_replies();
   test_pe_get_resource_list_overflow_valid();
