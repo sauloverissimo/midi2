@@ -159,18 +159,6 @@ static void on_sysex7(uint8_t group, const uint8_t *data, uint16_t len, void *ct
  *--------------------------------------------------------------------*/
 static void midi_task(void *arg) {
   (void) arg;
-#ifdef STRESS_LOOPBACK
-  /* Stress mode (build-time): the catalog cycle is suspended; every inbound
-   * UMP is echoed back verbatim so the host harness can measure gaps, ordering
-   * and throughput through the static-queue pipeline. The sequence number the
-   * harness stamps into the packet rides through unchanged. */
-  for (;;) {
-    ump_msg_t in;
-    if (xQueueReceive(rx_queue, &in, portMAX_DELAY) == pdTRUE) {
-      pipeline_tx(&in);
-    }
-  }
-#else
   uint32_t tick = 0;
   for (;;) {
     ump_msg_t in;
@@ -191,7 +179,6 @@ static void midi_task(void *arg) {
     emit_catalog(s_cycle_idx);
     s_cycle_idx = (s_cycle_idx + 1) % midi2_catalog_count();
   }
-#endif
 }
 
 void pipeline_start(void) {
