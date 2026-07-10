@@ -1,34 +1,29 @@
 # [midi2](../..) | Device MIDI 2.0
 ## Raspberry Pi Pico (RP2040), Zephyr
 
+[![Compliant with MIDI 2.0 Workbench](https://img.shields.io/badge/MIDI%202.0%20Workbench-compliant-0d9488?labelColor=17151f)](https://github.com/midi2-dev/MIDI2.0Workbench)
+
 Full-spec USB MIDI 2.0 device on the **Raspberry Pi Pico (RP2040)** under Zephyr v4.4+. Headless 14-scene cycle demonstrates every MIDI 2.0 message category beyond MIDI 1.0, plus a MIDI-CI Discovery + Profile + Property Exchange responder, all running on top of Zephyr's `usbd_midi2` device class.
 
-![rpi-pico-device-midi2 banner](monitor/banner.png)
+![Windows MIDI Services Console listing the Pico as a native MIDI 2.0 endpoint](board/properties.jpg)
 
 ## USB identity
 
 | Field | Value |
 |---|---|
 | VID:PID | `2FE3:40A0` (Zephyr project VID, development only) |
-| Product | `midi2 RP2040 Showcase` |
-| Manufacturer | `github.com/sauloverissimo` |
-| UMP Endpoint Name | `midi2 RP2040 Showcase` |
+| Product | `Raspberry Pi Pico MIDI 2.0` |
+| Manufacturer | `midi2.diy` |
+| UMP Endpoint Name | `Raspberry Pi Pico MIDI 2.0` |
 | Function Block | 1 bidirectional, `firstGroup=0`, `numGroups=1`, name `Main` |
 
 ## Layering
 
-```
-Zephyr usbd_midi2          USB enumeration, descriptors, alt-setting
-                           CONFIG_MIDI2_UMP_STREAM_RESPONDER handles
-                           UMP Stream (MT 0xF) Endpoint Discovery from
-                           the zephyr,midi2-device devicetree node.
-
-midi2 (C99)                Typed dispatch, message construction,
-                           SysEx7 reassembly, MIDI-CI responder.
-
-src/main.c                 Scene orchestration, JR Heartbeat,
-                           identity bootstrap.
-```
+| Layer | Owns |
+|---|---|
+| Zephyr `usbd_midi2` | enumeration, descriptors, alt-setting, UMP Stream Endpoint Discovery from the `zephyr,midi2-device` devicetree node |
+| midi2 C99 core ([`../../src`](../../src)) | typed dispatch, message construction, SysEx7 reassembly, MIDI-CI responder |
+| `src/main.c` | scene orchestration, JR Heartbeat, identity bootstrap, dedicated RX processing thread |
 
 ## Build
 
@@ -42,7 +37,7 @@ Requires:
 # West manifest entry, see ../../README.md "Zephyr (west module)"
 #   - name: midi2
 #     url: https://github.com/sauloverissimo/midi2
-#     revision: v0.6.0
+#     revision: v0.7.0
 #     path: modules/lib/midi2
 
 cd examples/rpi-pico-device-zephyr
@@ -66,7 +61,7 @@ Hold BOOTSEL on the Pico, plug USB, drag `build/zephyr/zephyr.uf2` to the mounte
 picotool load build/zephyr/zephyr.uf2 -fx
 ```
 
-After reset the same USB-C reappears as `midi2 RP2040 Showcase` (USB MIDI 2.0 device).
+After reset the same USB-C reappears as `Raspberry Pi Pico MIDI 2.0` (USB MIDI 2.0 device).
 
 ## Hardware
 
@@ -98,15 +93,18 @@ lsusb | grep 2fe3:40a0
 amidi -l
 # I/O  hw:N,1,0  Group 1 (Main)
 
-PORT=$(aseqdump -l | grep "midi2 RP2040" | awk '{print $1}' | tr -d ':')
+PORT=$(aseqdump -l | grep "Pico MIDI 2.0" | awk '{print $1}' | tr -d ':')
 timeout 60 aseqdump -p ${PORT}
 ```
 
-Microsoft MIDI Services Console (Windows): `midi enumerate midi-services-endpoints -i` lists the device with Native data format = UMP, MIDI 2.0 Protocol = True. macOS Audio MIDI Setup shows it as a UMP endpoint.
+Validated on hardware against the official
+[MIDI 2.0 Workbench](https://github.com/midi2-dev/MIDI2.0Workbench): MIDI-CI
+Discovery (Message Version 0x02), Profile Configuration and Property Exchange
+complete, zero errors and zero warnings. On Windows the MIDI Services Console
+lists it with Native data format = UMP and both protocols declared; macOS
+Audio MIDI Setup shows it as a UMP endpoint.
 
-![bench monitor capturing the showcase cycle](monitor/monitor.png)
-
-![CI Property Exchange surface visible to the host](monitor/properties.png)
+![Windows MIDI Services endpoint properties for the Pico](board/properties_details.jpg)
 
 ## Spec coverage
 
