@@ -306,8 +306,10 @@ installed and `nak_on_unknown` is enabled:
 
 - Discovery Reply advertising Profile + PE + Process Inquiry
 - Profile Inquiry Reply
-- PE Capability Reply + PE Get/Set
+- Set Profile On/Off -> Profile Enabled Report for listed always-on profiles, NAK for unlisted (v0.7.0)
+- PE Capability Reply + PE Get/Set (list resources carry `totalCount` since v0.7.0)
 - Process Inquiry Capability Reply
+- MIDI Message Report -> Reply + End, NAK for channels not in use (v0.7.0)
 - Invalidate MUID -> regenerate state->muid via installed RNG
 - MUID collision detection -> regenerate and broadcast Invalidate
 - NAK (Sub-ID#2 0x7F, status NOT_SUPPORTED) for unsupported sub-ids

@@ -29,7 +29,6 @@
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
- * Version: 0.3.0
  */
 
 #ifndef MIDI2_MSG_H
@@ -685,7 +684,7 @@ static inline void midi2_msg_sysex7_packet(uint32_t *w, uint8_t group,
  *
  * Word: [MT:4][reserved:4][status:4][reserved:4][timestamp:16]
  *
- * Utility messages are Groupless in spec v1.1.2 — the former Group
+ * Utility messages are Groupless in spec v1.1.2; the former Group
  * field (bits [27:24]) is now Reserved and shall be zero.
  *
  * NOOP        status = 0x0, timestamp = 0

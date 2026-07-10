@@ -11,7 +11,7 @@ arduino-cli lib update-index
 arduino-cli lib install midi2
 ```
 
-In the IDE, search `midi2` in the Library Manager and click Install. Two reference sketches appear under **File > Examples > midi2**: `basic-usage` and `ci-discovery`. Sketch include:
+In the IDE, search `midi2` in the Library Manager and click Install. A reference sketch appears under **File > Examples > midi2**: `teensy-device-midi2`, a complete USB MIDI 2.0 device for Teensy 4.x. Sketch include:
 
 ```cpp
 #include <midi2.h>
@@ -20,7 +20,7 @@ In the IDE, search `midi2` in the Library Manager and click Install. Two referen
 ## PlatformIO
 
 ```ini
-lib_deps = sauloverissimo/midi2 @ ^0.6.0
+lib_deps = sauloverissimo/midi2 @ ^0.7.0
 ```
 
 The Registry resolves the modular `src/*.c` layout via `library.json` (`srcDir = src`).
@@ -32,7 +32,7 @@ The Registry resolves the modular `src/*.c` layout via `library.json` (`srcDir =
 ```yaml
 dependencies:
   idf: ">=5.0"
-  sauloverissimo/midi2: ">=0.6.0"
+  sauloverissimo/midi2: ">=0.7.0"
 ```
 
 `idf.py reconfigure` drops the component into `managed_components/midi2/`. ESP-IDF picks the directory up as a regular component because the top-level `CMakeLists.txt` detects `ESP_PLATFORM` and routes to `idf_component_register` with the modular `src/midi2_*.c` set.
@@ -46,7 +46,7 @@ manifest:
   projects:
     - name: midi2
       url: https://github.com/sauloverissimo/midi2
-      revision: v0.6.0
+      revision: v0.7.0
       path: modules/lib/midi2
 ```
 
@@ -62,12 +62,12 @@ CONFIG_MIDI2=y
 
 ```cmake
 if(NOT TARGET midi2)
-  find_package(midi2 0.6.0 QUIET CONFIG)
+  find_package(midi2 0.7.0 QUIET CONFIG)
   if(NOT midi2_FOUND)
     include(FetchContent)
     FetchContent_Declare(midi2
       GIT_REPOSITORY https://github.com/sauloverissimo/midi2.git
-      GIT_TAG        v0.6.0)
+      GIT_TAG        v0.7.0)
     FetchContent_MakeAvailable(midi2)
   endif()
 endif()
@@ -125,7 +125,7 @@ midi2/
   dist/     Amalgamated midi2.{h,c} (single-header / vendor pair / CMake target)
   zephyr/   west module manifest (module.yml, CMakeLists.txt, Kconfig)
   tools/    amalgamate.sh (regenerates dist/ from src/)
-  test/     350 tests across 8 suites
+  test/     379 tests across 8 suites
 ```
 
 ## Which modules to include

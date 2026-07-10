@@ -15,10 +15,10 @@ The fastest path depends on the build system. See the [Integration Guide](Integr
 |---|---|
 | Arduino IDE | Library Manager, search `midi2`, click Install |
 | arduino-cli | `arduino-cli lib install midi2` |
-| PlatformIO | `lib_deps = sauloverissimo/midi2 @ ^0.6.0` |
-| ESP-IDF | `sauloverissimo/midi2: ">=0.6.0"` in `idf_component.yml` |
+| PlatformIO | `lib_deps = sauloverissimo/midi2 @ ^0.7.0` |
+| ESP-IDF | `sauloverissimo/midi2: ">=0.7.0"` in `idf_component.yml` |
 | Zephyr | west manifest entry + `CONFIG_MIDI2=y` (see Integration Guide) |
-| CMake | `FetchContent_Declare(midi2 GIT_TAG v0.6.0)` |
+| CMake | `FetchContent_Declare(midi2 GIT_TAG v0.7.0)` |
 | Manual vendor | drop `dist/midi2.{h,c}` from a release into your tree |
 
 For local development:
@@ -29,7 +29,7 @@ cd midi2
 make test
 ```
 
-This compiles and runs all 350 tests under `-Wall -Wextra -Wpedantic`. Switch compilers or enable sanitizers as needed:
+This compiles and runs all 379 tests under `-Wall -Wextra -Wpedantic`. Switch compilers or enable sanitizers as needed:
 
 ```bash
 make CC=clang test                                              # clang

@@ -17,7 +17,7 @@
 #       include(FetchContent)
 #       FetchContent_Declare(midi2
 #         GIT_REPOSITORY https://github.com/sauloverissimo/midi2.git
-#         GIT_TAG        v0.6.0)
+#         GIT_TAG        v0.7.0)
 #       FetchContent_MakeAvailable(midi2)
 #     endif()
 #   endif()
@@ -50,13 +50,13 @@ if(ESP_PLATFORM)
     return()
 endif()
 
-project(midi2 VERSION 0.6.1
+project(midi2 VERSION 0.7.0
         DESCRIPTION "Portable MIDI 2.0 infrastructure: UMP and MIDI-CI core in C99"
         LANGUAGES C)
 
 # GNUInstallDirs has to come before target_include_directories so that
 # $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}> evaluates to the real
-# "include" relative path inside the exported config — without it, the
+# "include" relative path inside the exported config; without it, the
 # generator expression collapses to empty and downstream
 # find_package(midi2) consumers see a target with no include path.
 include(GNUInstallDirs)

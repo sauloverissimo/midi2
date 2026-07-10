@@ -29,7 +29,6 @@
  * https://github.com/sauloverissimo/midi2
  *
  * Spec: MIDI 2.0 UMP (M2-104-UM v1.1.2, Nov 2024)
- * Version: 0.3.0
  */
 
 #ifndef MIDI2_CONV_H

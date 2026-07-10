@@ -26,8 +26,8 @@ Portable MIDI 2.0 infrastructure: C99, zero dependencies, zero allocation. Runs 
 ## Quick links
 
 - **Repository:** [github.com/sauloverissimo/midi2](https://github.com/sauloverissimo/midi2)
-- **Latest release:** [v0.6.0](https://github.com/sauloverissimo/midi2/releases/latest)
+- **Latest release:** [v0.7.0](https://github.com/sauloverissimo/midi2/releases/latest)
 - **License:** MIT
 - **Distribution:** Arduino Library Manager, PlatformIO Registry, ESP-IDF Component Manager, Zephyr west module, CMake `find_package` / `FetchContent`
-- **Tests:** 350 passing across 8 suites, 12 CI jobs (gcc / clang / MSVC / Apple clang / x86 32-bit / ASan + UBSan / ARM Cortex-M / Cortex-A / RISC-V / AVR / ESP32 / Zephyr native_sim) plus a CMake matrix on Linux + macOS + Windows
+- **Tests:** 379 passing across 8 suites, 12 CI jobs (gcc / clang / MSVC / Apple clang / x86 32-bit / ASan + UBSan / ARM Cortex-M / Cortex-A / RISC-V / AVR / ESP32 / Zephyr native_sim) plus a CMake matrix on Linux + macOS + Windows
 - **Spec coverage:** M2-104-UM v1.1.2 (UMP) 100%, M2-101-UM v1.2 (MIDI-CI) 100%
