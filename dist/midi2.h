@@ -4029,15 +4029,19 @@ void midi2_proc_send_sysex7(uint8_t group, const uint8_t *data, uint16_t length,
     return;
   }
 
+  /* A short write means the sink is full; stop rather than continue and
+   * leave a gap in the middle of the message. The receiver resynchronizes
+   * on the next Start packet. */
+
   /* Start */
   midi2_msg_sysex7_packet(w, group, MIDI2_SYSEX7_START, data, 6);
-  write_fn(w, 2, context);
+  if (write_fn(w, 2, context) < 2) return;
   offset = 6;
 
   /* Continue */
   while (offset + 6 < length) {
     midi2_msg_sysex7_packet(w, group, MIDI2_SYSEX7_CONTINUE, data + offset, 6);
-    write_fn(w, 2, context);
+    if (write_fn(w, 2, context) < 2) return;
     offset += 6;
   }
 
@@ -4113,7 +4117,7 @@ void midi2_proc_send_fb_name(uint8_t fb_idx, const char *name,
       uint8_t shift = (uint8_t)(24u - ((i - 1u) % 4u) * 8u);
       msg[widx] |= ((uint32_t)p[i] << shift);
     }
-    write_fn(msg, 4, context);
+    if (write_fn(msg, 4, context) < 4) return;   /* sink full: stop, no gaps */
     offset += n;
   }
 }
@@ -4153,7 +4157,7 @@ static void stream_text_emit(stream_text_builder_fn builder,
     uint8_t form = midi2_proc_stream_form(is_first, is_last);
     uint32_t msg[4];
     builder(msg, form, (const uint8_t *)(text + offset), n);
-    write_fn(msg, 4, context);
+    if (write_fn(msg, 4, context) < 4) return;   /* sink full: stop, no gaps */
     offset += n;
   }
 }
@@ -4217,7 +4221,7 @@ void midi2_proc_send_sysex8(uint8_t group, uint8_t stream_id,
     uint32_t msg[4];
     midi2_msg_sysex8_packet(msg, group, status, stream_id,
                              data + offset, n);
-    write_fn(msg, 4, context);
+    if (write_fn(msg, 4, context) < 4) return;   /* sink full: stop, no gaps */
     offset += n;
   }
 }
