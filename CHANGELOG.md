@@ -2,6 +2,16 @@
 
 Format based on Keep a Changelog. This project follows Semantic Versioning.
 
+## [Unreleased]
+
+### Fixed
+
+- Multi-packet senders (`midi2_proc_send_sysex7`, `midi2_proc_send_sysex8`,
+  `midi2_proc_send_fb_name`, endpoint name and product id) stop at the first
+  short write instead of continuing past it, so a full transport sink can no
+  longer leave a gap in the middle of a message. The receiver resynchronizes
+  on the next Start packet.
+
 ## [0.7.0]
 
 Validated end to end against the official MIDI 2.0 Workbench on hardware

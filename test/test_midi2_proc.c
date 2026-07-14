@@ -724,6 +724,55 @@ void test_send_sysex7_null_safe(void) {
   PASS();
 }
 
+/* --- Short-write abort (TX ring full) --- */
+
+static uint32_t fail_after;        /* accept this many calls, then fail */
+static uint32_t fail_call_count;
+
+static uint32_t failing_write_fn(const uint32_t *words, uint32_t count, void *ctx) {
+  (void)words; (void)ctx;
+  fail_call_count++;
+  if (fail_call_count > fail_after) return 0;
+  return count;
+}
+
+void test_send_sysex7_abort_on_short_write(void) {
+  TEST("send sysex7: aborts after a short write");
+  reset_state();
+  uint8_t data[15];
+  int i;
+  for (i = 0; i < 15; i++) data[i] = (uint8_t)(i + 1);
+  fail_call_count = 0;
+  fail_after = 1;                  /* start lands, continue is refused */
+  midi2_proc_send_sysex7(0, data, 15, failing_write_fn, NULL);
+  CHECK(fail_call_count == 2, "no packet sent after the refused one");
+  PASS();
+}
+
+void test_send_endpoint_name_abort_on_short_write(void) {
+  TEST("send endpoint name: aborts after a short write");
+  reset_state();
+  fail_call_count = 0;
+  fail_after = 1;                  /* 30 chars = 3 UMPs; second is refused */
+  midi2_proc_send_endpoint_name("123456789012345678901234567890",
+                                 failing_write_fn, NULL);
+  CHECK(fail_call_count == 2, "no packet sent after the refused one");
+  PASS();
+}
+
+void test_send_sysex8_abort_on_short_write(void) {
+  TEST("send sysex8: aborts after a short write");
+  reset_state();
+  uint8_t data[40];
+  int i;
+  for (i = 0; i < 40; i++) data[i] = (uint8_t)i;
+  fail_call_count = 0;
+  fail_after = 1;                  /* 40 bytes = 4 UMPs; second is refused */
+  midi2_proc_send_sysex8(0, 0, data, 40, failing_write_fn, NULL);
+  CHECK(fail_call_count == 2, "no packet sent after the refused one");
+  PASS();
+}
+
 /* --- Main --- */
 
 int main(void) {
@@ -762,6 +811,9 @@ int main(void) {
   test_send_sysex7_long();
   test_send_sysex7_exact_6();
   test_send_sysex7_exact_12();
+  test_send_sysex7_abort_on_short_write();
+  test_send_endpoint_name_abort_on_short_write();
+  test_send_sysex8_abort_on_short_write();
   test_send_fb_name_short();
   test_send_fb_name_long();
   test_send_fb_name_exact_13();
