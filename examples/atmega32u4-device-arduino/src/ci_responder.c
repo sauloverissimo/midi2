@@ -43,9 +43,15 @@ static uint32_t ci_rng(void *ctx) {
 
 static uint32_t ci_write_fn(const uint32_t *words, uint32_t count, void *ctx) {
     (void)ctx;
-    /* Queue the whole SysEx7 packet atomically: a partial write would leave
-     * half a UMP at the head of the ring and corrupt the USB output. */
-    return midi2duino_write(words, (uint8_t)count) ? count : 0;
+    /* Whole packet or nothing: a split would leave half a UMP in the ring and
+     * corrupt the USB output. Pump the transport while the ring is full, with
+     * a bound so a host that stops reading cannot hang the responder. */
+    for (uint16_t tries = 0; tries < 1000; tries++) {
+        if (midi2duino_write(words, (uint8_t)count))
+            return count;
+        midi2duino_task();
+    }
+    return 0;
 }
 
 void ci_responder_init(void) {
