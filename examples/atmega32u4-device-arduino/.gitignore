@@ -1,0 +1,9 @@
+# arduino-cli builds into ~/.cache/arduino by default; these appear only if
+# you compile with --build-path . or export locally.
+/build/
+*.elf
+*.hex
+*.bin
+*.eep
+*.lss
+*.map

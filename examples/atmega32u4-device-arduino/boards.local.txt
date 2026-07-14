@@ -1,0 +1,29 @@
+# USB identity override for the atmega32u4-device-arduino recipe.
+#
+# The Arduino AVR core takes the USB descriptor VID / PID / strings from these
+# build properties. Copy this file next to the core's boards.txt to make the
+# Arduino IDE (and arduino-cli) build the device with the midi2.diy identity:
+#
+#   ~/.arduino15/packages/arduino/hardware/avr/<version>/boards.local.txt
+#   (Linux; adjust the path on macOS/Windows)
+#
+# arduino-cli users can skip the copy and pass the same values inline instead:
+#
+#   --build-property build.vid=0xCAFE --build-property build.pid=0x40D1 \
+#   --build-property 'build.usb_product="ATmega32U4 MIDI 2.0"' \
+#   --build-property 'build.usb_manufacturer="midi2.diy"'
+#
+# Without the override the device still works and still reports "ATmega32U4
+# MIDI 2.0" as its UMP Endpoint Name and MIDI-CI identity (that lives in the
+# firmware); only the raw USB descriptor VID/PID/strings fall back to the
+# board's Arduino defaults.
+
+leonardo.build.vid=0xCAFE
+leonardo.build.pid=0x40D1
+leonardo.build.usb_product="ATmega32U4 MIDI 2.0"
+leonardo.build.usb_manufacturer="midi2.diy"
+
+micro.build.vid=0xCAFE
+micro.build.pid=0x40D1
+micro.build.usb_product="ATmega32U4 MIDI 2.0"
+micro.build.usb_manufacturer="midi2.diy"
