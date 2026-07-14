@@ -43,10 +43,9 @@ static uint32_t ci_rng(void *ctx) {
 
 static uint32_t ci_write_fn(const uint32_t *words, uint32_t count, void *ctx) {
     (void)ctx;
-    for (uint32_t i = 0; i < count; i++)
-        if (!midi2duino_write_word(words[i]))
-            return i;                 /* ring full: partial write reported */
-    return count;
+    /* Queue the whole SysEx7 packet atomically: a partial write would leave
+     * half a UMP at the head of the ring and corrupt the USB output. */
+    return midi2duino_write(words, (uint8_t)count) ? count : 0;
 }
 
 void ci_responder_init(void) {

@@ -56,13 +56,19 @@ void Midi2Usb::task() {
                 return;
             have = 1;
         }
-        uint8_t need = midi2_msg_word_count((uint8_t)(msg[0] >> 28));
+        uint8_t mt   = (uint8_t)(msg[0] >> 28);
+        uint8_t need = midi2_msg_word_count(mt);
         while (have < need) {
             if (!midi2duino_read(&w))
                 return;                 /* rest of the message next round */
             msg[have++] = w;
         }
-        midi2_proc_feed(&g_proc, msg, need);
+        /* Data128 (SysEx8 / MDS) is echoed raw: midi2_proc consumes MT 0x5 for
+         * reassembly, which is off here, so it never reaches on_ump. */
+        if (mt == 0x5)
+            midi2duino_write(msg, need);
+        else
+            midi2_proc_feed(&g_proc, msg, need);
         have = 0;
     }
 }
