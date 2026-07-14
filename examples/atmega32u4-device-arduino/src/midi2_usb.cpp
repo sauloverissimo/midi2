@@ -17,12 +17,12 @@ static midi2_dispatch   g_dp;
 static midi2_proc_state g_proc;
 static uint8_t          g_sysex7_buf[160];   /* MIDI-CI reassembly */
 
-/* Stream messages (MT 0xF) drive the responder; everything else echoes back.
+/* Stream messages drive the responder; everything else echoes back.
  * SysEx7 never lands here: the processor reassembles it and delivers it
  * through on_sysex7 to the MIDI-CI responder. */
 static void on_ump(const uint32_t *words, uint8_t word_count, void *ctx) {
     (void)ctx;
-    if ((words[0] >> 28) == 0xF)
+    if (midi2_msg_get_mt(words) == MIDI2_MT_STREAM)
         midi2_dispatch_feed(words, word_count, &g_dp);
     else
         midi2duino_write(words, word_count);
@@ -56,13 +56,19 @@ void Midi2Usb::task() {
                 return;
             have = 1;
         }
-        uint8_t need = midi2_msg_word_count((uint8_t)(msg[0] >> 28));
+        uint8_t mt   = midi2_msg_get_mt(msg);
+        uint8_t need = midi2_msg_word_count(mt);
         while (have < need) {
             if (!midi2duino_read(&w))
                 return;                 /* rest of the message next round */
             msg[have++] = w;
         }
-        midi2_proc_feed(&g_proc, msg, need);
+        /* Data128 (SysEx8 / MDS) is echoed raw: midi2_proc consumes it for
+         * reassembly, which is off here, so it never reaches on_ump. */
+        if (mt == MIDI2_MT_DATA128)
+            midi2duino_write(msg, need);
+        else
+            midi2_proc_feed(&g_proc, msg, need);
         have = 0;
     }
 }

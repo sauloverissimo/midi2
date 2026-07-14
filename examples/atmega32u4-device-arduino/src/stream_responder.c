@@ -11,8 +11,15 @@
 #define IDENT_VERSION       0x00010000UL   /* 1.0 */
 #define FB_NUM_MAIN         0
 
+/* A dropped Stream reply breaks host discovery, so pump the transport until
+ * the packet fits. Bounded so a host that stops reading cannot hang the loop
+ * (the pump only moves rings to endpoints; it never re-enters the processor). */
 static void send4(const uint32_t *w) {
-    midi2duino_write(w, 4);
+    for (uint16_t tries = 0; tries < 1000; tries++) {
+        if (midi2duino_write(w, 4))
+            return;
+        midi2duino_task();
+    }
 }
 
 /* multi-packet text notification, 14 bytes per UMP (13 for FB name) */
