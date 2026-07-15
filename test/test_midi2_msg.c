@@ -428,9 +428,16 @@ void test_stream_endpoint_info(void) {
 void test_stream_device_identity(void) {
   TEST("Stream: Device Identity");
   uint32_t w[4];
-  midi2_msg_stream_device_identity(w, 0x00AABB, 0x1234, 0x5678, 0xDEADBEEF);
+  /* M2-104 Figure 14: id bytes in w[1] low 3 bytes, version 28-bit sent
+   * as 4x7 bits LSB-first. */
+  midi2_msg_stream_device_identity(w, 0x7D0000, 0x1234, 0x0678, 0x0DEADBEu);
   CHECK(((w[0] >> 16) & 0x3FF) == 0x002, "status=device identity");
-  CHECK(w[3] == 0xDEADBEEF, "version");
+  CHECK(w[1] == 0x007D0000u, "manufacturer id1 at bits [22:16]");
+  CHECK(w[3] == (((0x0DEADBEu & 0x7F) << 24) |
+                 (((0x0DEADBEu >> 7) & 0x7F) << 16) |
+                 (((0x0DEADBEu >> 14) & 0x7F) << 8) |
+                  ((0x0DEADBEu >> 21) & 0x7F)),
+        "version");
   PASS();
 }
 

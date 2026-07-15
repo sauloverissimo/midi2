@@ -538,11 +538,21 @@ void test_send_device_identity(void) {
   uint32_t w0 = write_buf[0];
   CHECK(((w0 >> 28) & 0x0F) == 0x0F, "MT == Stream");
   CHECK(((w0 >> 16) & 0x3FF) == 0x002, "status == Device Identity");
-  CHECK((write_buf[1] & 0xFFFFFF00u) == (0x00123456u << 8),
-        "w[1] carries manufacturer << 8");
-  CHECK(write_buf[2] == (((uint32_t)0x0123 << 16) | (uint32_t)0x04FE),
-        "w[2] = family<<16 | model");
-  CHECK(write_buf[3] == 0x12345678u, "w[3] = version");
+  /* M2-104 Figure 14: w[1] top byte reserved, sysex id bytes 1..3 in the
+   * low 3 bytes; family/model as 7-bit LSB/MSB pairs; version as 4x7 bits
+   * LSB-first. Same byte order as the MIDI 1.0 Device Inquiry reply. */
+  CHECK(write_buf[1] == 0x00123456u,
+        "w[1] = id bytes 1..3 in low 3 bytes, top byte reserved");
+  CHECK(write_buf[2] == (((uint32_t)(0x0123 & 0x7F) << 24) |
+                         ((uint32_t)((0x0123 >> 7) & 0x7F) << 16) |
+                         ((uint32_t)(0x04FE & 0x7F) << 8) |
+                          (uint32_t)((0x04FE >> 7) & 0x7F)),
+        "w[2] = family LSB,MSB | model LSB,MSB (7-bit pairs)");
+  CHECK(write_buf[3] == (((0x12345678u & 0x7F) << 24) |
+                         (((0x12345678u >> 7) & 0x7F) << 16) |
+                         (((0x12345678u >> 14) & 0x7F) << 8) |
+                          ((0x12345678u >> 21) & 0x7F)),
+        "w[3] = version 4x7 bits, LSB-first");
   PASS();
 }
 

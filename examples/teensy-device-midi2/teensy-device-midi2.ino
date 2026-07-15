@@ -96,7 +96,7 @@ void setup() {
     midi2_ci_init(&ci, seed_from_hardware(),
                   ci_profiles, 2, ci_props, 4);
     midi2_ci_set_write_fn(&ci, ci_write, NULL);
-    midi2_ci_set_identity(&ci, /*manufacturer*/ 0x7D, /*family*/ 0x0001,
+    midi2_ci_set_identity(&ci, /*manufacturer*/ 0x7D0000, /*family*/ 0x0001,
                           /*model*/ 0x0001, /*sw_rev*/ 0x00070000);
     midi2_ci_set_nak_on_unknown(&ci, true);
 

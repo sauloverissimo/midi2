@@ -243,12 +243,15 @@ static inline void midi2_ci_write_28(uint8_t *p, uint32_t v) {
  *--------------------------------------------------------------------*/
 
 /* Discovery / Discovery Reply: device identification fields at offset 13.
- * Manufacturer ID: 3 bytes, literal SysEx ID bytes (all <= 0x7F).
+ * Manufacturer ID: 3 bytes on the wire in SysEx ID order, id byte 1 first
+ * (all <= 0x7F). Packed form is id1<<16 | id2<<8 | id3; the educational
+ * prefix 0x7D packs as 0x7D0000. Same convention across the library
+ * (see midi2_msg_stream_device_identity).
  * Family/Model: 2 bytes each, 7-bit LSB-first (14-bit value).
  * SW Revision: 4 bytes, 7-bit LSB-first (28-bit value).
  * These match the "Device Inquiry" Universal SysEx format (section 5.5.1). */
 static inline uint32_t midi2_ci_get_mfr_id(const uint8_t *d) {
-  return (uint32_t)d[13] | ((uint32_t)d[14] << 8) | ((uint32_t)d[15] << 16);
+  return ((uint32_t)d[13] << 16) | ((uint32_t)d[14] << 8) | (uint32_t)d[15];
 }
 static inline uint16_t midi2_ci_get_family(const uint8_t *d) {
   return midi2_ci_read_14(&d[16]);
@@ -309,10 +312,12 @@ static inline uint16_t midi2_ci_build_discovery(
     uint8_t ci_category, uint32_t max_sysex, uint8_t output_path_id) {
   uint16_t p = midi2_ci_build_header(buf, 0x7F, MIDI2_CI_DISCOVERY, version,
                                         src_muid, MIDI2_CI_BROADCAST_MUID);
-  /* Device Manufacturer (3 bytes SysEx ID) */
-  buf[p++] = (uint8_t)((mfr_id >> 0) & 0x7F);
-  buf[p++] = (uint8_t)((mfr_id >> 8) & 0x7F);
+  /* Device Manufacturer: 3 SysEx ID bytes on the wire in ID order
+   * (id byte 1 first). Packed form is id1<<16 | id2<<8 | id3, the same
+   * convention as midi2_msg_stream_device_identity. */
   buf[p++] = (uint8_t)((mfr_id >> 16) & 0x7F);
+  buf[p++] = (uint8_t)((mfr_id >> 8) & 0x7F);
+  buf[p++] = (uint8_t)((mfr_id >> 0) & 0x7F);
   /* Device Family (2 bytes LSB first) */
   buf[p++] = (uint8_t)(family & 0x7F);
   buf[p++] = (uint8_t)((family >> 7) & 0x7F);
@@ -342,9 +347,9 @@ static inline uint16_t midi2_ci_build_discovery_reply(
     uint8_t output_path_id, uint8_t function_block) {
   uint16_t p = midi2_ci_build_header(buf, 0x7F, MIDI2_CI_DISCOVERY_REPLY, version,
                                         src_muid, dst_muid);
-  buf[p++] = (uint8_t)((mfr_id >> 0) & 0x7F);
-  buf[p++] = (uint8_t)((mfr_id >> 8) & 0x7F);
   buf[p++] = (uint8_t)((mfr_id >> 16) & 0x7F);
+  buf[p++] = (uint8_t)((mfr_id >> 8) & 0x7F);
+  buf[p++] = (uint8_t)((mfr_id >> 0) & 0x7F);
   buf[p++] = (uint8_t)(family & 0x7F);
   buf[p++] = (uint8_t)((family >> 7) & 0x7F);
   buf[p++] = (uint8_t)(model & 0x7F);

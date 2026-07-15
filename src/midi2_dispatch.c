@@ -459,10 +459,17 @@ static void dispatch_stream(midi2_dispatch *dp, const uint32_t *w) {
 
     case MIDI2_STREAM_DEVICE_IDENTITY:
       if (dp->on_device_identity) {
-        uint32_t mfr    = (w[1] >> 8) & 0x00FFFFFF;
-        uint16_t family = (uint16_t)(w[2] >> 16);
-        uint16_t model  = (uint16_t)(w[2] & 0xFFFF);
-        uint32_t ver    = w[3];
+        /* M2-104 Figure 14: id bytes in w[1] low 3 bytes, family/model as
+         * 7-bit LSB/MSB pairs, version as 4x7 bits LSB-first. */
+        uint32_t mfr    = w[1] & 0x007F7F7F;
+        uint16_t family = (uint16_t)(((w[2] >> 24) & 0x7F)
+                        | (((w[2] >> 16) & 0x7F) << 7));
+        uint16_t model  = (uint16_t)(((w[2] >> 8) & 0x7F)
+                        | ((w[2] & 0x7F) << 7));
+        uint32_t ver    = ((w[3] >> 24) & 0x7F)
+                        | (((w[3] >> 16) & 0x7F) << 7)
+                        | (((w[3] >> 8) & 0x7F) << 14)
+                        | ((w[3] & 0x7F) << 21);
         dp->on_device_identity(mfr, family, model, ver, dp->context);
       }
       break;

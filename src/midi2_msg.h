@@ -811,7 +811,11 @@ static inline void midi2_msg_stream_endpoint_info(uint32_t *w,
        | MIDI2_BIT_IF(tx_jr, 0);
 }
 
-/* Device Identity Notification */
+/* Device Identity Notification (M2-104 Figure 14). Same field encoding as
+ * the MIDI 1.0 Device Inquiry reply: manufacturer_id packs the 3 SysEx id
+ * bytes as id1<<16|id2<<8|id3 (w[1] top byte reserved), family and model
+ * are 14-bit values sent as 7-bit LSB/MSB pairs, version is 28 bits sent
+ * as 4x7 bits LSB-first. */
 static inline void midi2_msg_stream_device_identity(uint32_t *w,
                                                       uint32_t manufacturer_id,
                                                       uint16_t family_id,
@@ -819,9 +823,15 @@ static inline void midi2_msg_stream_device_identity(uint32_t *w,
                                                       uint32_t version_id) {
   memset(w, 0, 16);
   w[0] = midi2_msg_build_stream_w0(0, MIDI2_STREAM_DEVICE_IDENTITY);
-  w[1] = (manufacturer_id & 0x00FFFFFF) << 8;
-  w[2] = ((uint32_t)family_id << 16) | (uint32_t)model_id;
-  w[3] = version_id;
+  w[1] = manufacturer_id & 0x007F7F7F;
+  w[2] = (((uint32_t)family_id & 0x7F) << 24)
+       | ((((uint32_t)family_id >> 7) & 0x7F) << 16)
+       | (((uint32_t)model_id & 0x7F) << 8)
+       |  (((uint32_t)model_id >> 7) & 0x7F);
+  w[3] = ((version_id & 0x7F) << 24)
+       | (((version_id >> 7) & 0x7F) << 16)
+       | (((version_id >> 14) & 0x7F) << 8)
+       |  ((version_id >> 21) & 0x7F);
 }
 
 /* Stream Configuration Request (status 0x05).

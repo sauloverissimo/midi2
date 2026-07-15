@@ -198,7 +198,10 @@ void midi2_ci_init_ex(midi2_ci_state *state, uint32_t muid_seed,
                        midi2_ci_property *properties, uint8_t max_properties,
                        midi2_ci_subscriber *subscribers, uint8_t max_subscribers);
 
-/** Configure device identity. Safe to call with NULL state (no-op). */
+/** Configure device identity. manufacturer_id packs the 3 SysEx ID bytes
+ *  as id1<<16 | id2<<8 | id3 (educational prefix 0x7D packs as 0x7D0000),
+ *  the same convention used by midi2_msg_stream_device_identity.
+ *  Safe to call with NULL state (no-op). */
 void midi2_ci_set_identity(midi2_ci_state *state,
                              uint32_t manufacturer_id, uint16_t family_id,
                              uint16_t model_id, uint32_t version_id);

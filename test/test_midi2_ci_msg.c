@@ -97,6 +97,10 @@ void test_discovery_build(void) {
   CHECK(midi2_ci_get_sub_id(buf) == MIDI2_CI_DISCOVERY, "sub_id");
   CHECK(midi2_ci_get_dst_muid(buf) == MIDI2_CI_BROADCAST_MUID, "dst = broadcast");
   CHECK(midi2_ci_get_mfr_id(buf) == 0x002109, "mfr_id");
+  /* M2-101: Device Manufacturer bytes go on the wire in SysEx ID order,
+   * id byte 1 first. Packed 0x002109 = ID {0x00, 0x21, 0x09}. */
+  CHECK(buf[13] == 0x00 && buf[14] == 0x21 && buf[15] == 0x09,
+        "mfr wire order = id1, id2, id3");
   CHECK(midi2_ci_get_family(buf) == 0x0001, "family");
   CHECK(midi2_ci_get_model(buf) == 0x0002, "model");
   CHECK(midi2_ci_get_sw_rev(buf) == 0x00010000, "sw_rev");

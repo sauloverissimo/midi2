@@ -688,17 +688,40 @@ void test_dp_endpoint_info(void) {
 }
 
 void test_dp_device_identity(void) {
-  TEST("dispatch: Device Identity mfr=0xAABB ver=0xDEAD");
+  TEST("dispatch: Device Identity roundtrip (7-bit safe fields)");
   midi2_dispatch dp = make_dp();
   reset_ctx();
   uint32_t w[4];
-  midi2_msg_stream_device_identity(w, 0x00AABB, 0x1234, 0x5678, 0xDEADBEEF);
+  /* sysex id bytes, family/model (14-bit) and version (28-bit) inside
+   * their 7-bit-per-byte wire ranges so encode->decode is lossless */
+  midi2_msg_stream_device_identity(w, 0x7D0000, 0x1234, 0x0678, 0x0DEADBEu);
   midi2_dispatch_feed(w, 4, &dp);
   CHECK(ctx.called, "callback fired");
-  CHECK(ctx.mfr_id == 0x00AABB, "mfr_id");
+  CHECK(ctx.mfr_id == 0x7D0000, "mfr_id");
   CHECK(ctx.family_id == 0x1234, "family");
-  CHECK(ctx.model_id == 0x5678, "model");
-  CHECK(ctx.version_id == 0xDEADBEEF, "version");
+  CHECK(ctx.model_id == 0x0678, "model");
+  CHECK(ctx.version_id == 0x0DEADBEu, "version");
+  PASS();
+}
+
+void test_dp_device_identity_wire(void) {
+  TEST("dispatch: Device Identity wire layout (educational id 0x7D)");
+  midi2_dispatch dp = make_dp();
+  reset_ctx();
+  /* Hand-built per M2-104 Figure 14: id1=0x7D at w[1] bits [22:16],
+   * family 1 LSB at w[2] bits [30:24], model 3 LSB at w[2] bits [14:8],
+   * version 0x00010000 as 4x7 LSB-first (only (v>>14)&0x7F == 4 set). */
+  uint32_t w[4];
+  w[0] = (UINT32_C(0xF) << 28) | (UINT32_C(0x002) << 16);
+  w[1] = UINT32_C(0x7D) << 16;
+  w[2] = (UINT32_C(0x01) << 24) | (UINT32_C(0x03) << 8);
+  w[3] = UINT32_C(0x04) << 8;
+  midi2_dispatch_feed(w, 4, &dp);
+  CHECK(ctx.called, "callback fired");
+  CHECK(ctx.mfr_id == 0x7D0000, "id1 = 0x7D, id bytes 2..3 zero");
+  CHECK(ctx.family_id == 0x0001, "family 1");
+  CHECK(ctx.model_id == 0x0003, "model 3");
+  CHECK(ctx.version_id == 0x00010000u, "version 0x00010000");
   PASS();
 }
 
@@ -1372,6 +1395,7 @@ int main(void) {
   test_dp_endpoint_discovery();
   test_dp_endpoint_info();
   test_dp_device_identity();
+  test_dp_device_identity_wire();
   test_dp_endpoint_name();
   test_dp_product_id();
   test_dp_config_request();
