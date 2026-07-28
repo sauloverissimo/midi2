@@ -25,7 +25,7 @@ The library implements 100% of the UMP format (M2-104-UM v1.1.2) and 100% of MID
 
 midi2 is the C99 core. Higher-level wrappers build on it and add language-specific ergonomics for each platform target.
 
-The first published wrapper is [**midi2cpp**](https://github.com/sauloverissimo/midi2cpp): a C++17 Arduino-friendly wrapper with `m2device`, `m2host`, `m2bridge` and `m2ci` classes, distributed through the Arduino Library Manager, the PlatformIO Registry and the [ESP Component Registry](https://components.espressif.com/components/sauloverissimo/midi2cpp). It ships **20 platform recipes** under [`midi2cpp/examples/`](https://github.com/sauloverissimo/midi2cpp/tree/main/examples), one per role (device, host, bridge), covering RP2040, RP2350, ESP32-S3, ESP32-P4, ESP32-C6, nRF52840 and SAMD21 boards via Pico SDK / TinyUSB native CMake / ESP-IDF / PlatformIO build paths.
+The first published wrapper is [**midi2cpp**](https://github.com/sauloverissimo/midi2cpp): a C++17 Arduino-friendly wrapper with `m2device`, `m2host`, `m2bridge` and `m2ci` classes, distributed through the Arduino Library Manager, the PlatformIO Registry and the [ESP Component Registry](https://components.espressif.com/components/sauloverissimo/midi2cpp). It ships **28 platform recipes** under [`midi2cpp/examples/`](https://github.com/sauloverissimo/midi2cpp/tree/main/examples), one per role (device, host, bridge), covering RP2040, RP2350, ESP32-S3, ESP32-P4, ESP32-C6, Teensy 4.1, Daisy Seed, nRF52840, SAMD21, RA4M1 and STM32F411 boards via Pico SDK / TinyUSB native CMake / ESP-IDF / PlatformIO build paths.
 
 ## Contents
 
@@ -144,7 +144,7 @@ if (rc == MIDI2_CI_ERR_FULL) {
 
 ## Continuous integration
 
-350 assertions across 8 suites compile clean with `-Wall -Wextra -Wpedantic`. CI runs 12 jobs on every push:
+383 tests across 8 suites compile clean with `-Wall -Wextra -Wpedantic`. CI runs 17 jobs on every push:
 
 | Target | Type |
 |--------|------|
@@ -159,6 +159,9 @@ if (rc == MIDI2_CI_ERR_FULL) {
 | RISC-V 64 | Cross-compile |
 | ESP32 (ESP-IDF component) | Cross-compile |
 | AVR ATmega328P | Cross-compile (header-only) |
+| AVR ATmega32U4 (LUFA example firmware) | Cross-compile |
+| C++ header (g++ c++17 / c++20) | Compile |
+| CMake (build, FetchContent consumer, sanitizers) | Compile and run |
 | Zephyr (native_sim/native/64) | Compile and run |
 
 ## Build and test locally
@@ -180,14 +183,14 @@ Install via Library Manager (search `midi2`, click Install) or manually drop the
 #include <midi2.h>
 ```
 
-A reference sketch under `examples/teensy-device-midi2/` appears in the IDE's File > Examples menu after install: a complete USB MIDI 2.0 device for Teensy 4.x, validated against the official MIDI 2.0 Workbench.
+Reference sketches appear in the IDE's File > Examples menu after install: `teensy-device-midi2`, a complete USB MIDI 2.0 device for Teensy 4.x, and `atmega32u4-device-arduino`, the same device role on the Arduino Leonardo over the midi2duino transport. Both are validated against the official MIDI 2.0 Workbench.
 
 ### PlatformIO
 
 `platformio.ini`:
 
 ```ini
-lib_deps = sauloverissimo/midi2 @ ^0.7.0
+lib_deps = sauloverissimo/midi2 @ ^0.8.0
 ```
 
 Library Manager pulls the same `src/` modular layout via `library.json` (`srcDir = src`).
@@ -199,7 +202,7 @@ Published on the [ESP Component Registry](https://components.espressif.com/compo
 ```yaml
 dependencies:
   idf: ">=5.0"
-  sauloverissimo/midi2: ">=0.7.0"
+  sauloverissimo/midi2: ">=0.8.0"
 ```
 
 `idf.py reconfigure` drops the component into `managed_components/midi2/`. The `if(ESP_PLATFORM)` gate in `CMakeLists.txt` routes ESP-IDF builds to `idf_component_register` with the modular `src/midi2_*.c` set, so the same source serves IDF, Arduino, PlatformIO, and native CMake without forks.
@@ -213,7 +216,7 @@ manifest:
   projects:
     - name: midi2
       url: https://github.com/sauloverissimo/midi2
-      revision: v0.7.0
+      revision: v0.8.0
       path: modules/lib/midi2
 ```
 
@@ -262,13 +265,15 @@ midi2_msg.h          Always needed. Header-only.
 
 ## Examples
 
-Three real USB MIDI 2.0 devices live under [`examples/`](examples), each wiring the same C99 core to a different runtime and USB stack.
+Five real USB MIDI 2.0 devices live under [`examples/`](examples), each wiring the same C99 core to a different runtime and USB stack.
 
 - [`examples/teensy-device-midi2/`](examples/teensy-device-midi2): Arduino sketch for Teensy 4.x over the core's native `usbMIDI2` endpoint. A bare `loop()`, no RTOS.
 - [`examples/rp2350-device-freertos/`](examples/rp2350-device-freertos): Raspberry Pi Pico 2 (RP2350) on FreeRTOS-Kernel and TinyUSB upstream, with a 58-entry UMP catalog covering every defined message-type category, a MIDI-CI responder, and a stress loopback mode.
 - [`examples/rpi-pico-device-zephyr/`](examples/rpi-pico-device-zephyr): Raspberry Pi Pico (RP2040) on Zephyr's native `usbd_midi2` class.
+- [`examples/atmega32u4-device-arduino/`](examples/atmega32u4-device-arduino): Arduino Leonardo over the [midi2duino](https://github.com/sauloverissimo/midi2duino) transport (PluggableUSB, stock Arduino core).
+- [`examples/atmega32u4-device-baremetal/`](examples/atmega32u4-device-baremetal): Arduino Pro Micro, bare metal C99 over the [midi2lufa](https://github.com/sauloverissimo/midi2lufa) transport (LUFA), one super-loop at 16 MHz.
 
-All three are validated end to end against the official [MIDI 2.0 Workbench](https://github.com/midi2-dev/MIDI2.0Workbench) on hardware: MIDI-CI Discovery, Profile Configuration, and Property Exchange answer with zero errors and zero warnings.
+All five are validated on hardware against the official [MIDI 2.0 Workbench](https://github.com/midi2-dev/MIDI2.0Workbench): MIDI-CI Discovery, Profile Configuration, and Property Exchange answer with zero errors and zero warnings.
 
 ## Architecture
 

@@ -4,8 +4,35 @@ Format based on Keep a Changelog. This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.8.0]
+
+### Added
+
+- Example `atmega32u4-device-arduino`: USB MIDI 2.0 device on the Arduino
+  Leonardo over the midi2duino transport, with UMP Stream and MIDI-CI
+  responders. MIDI-CI replies are queued atomically and inbound Data128 is
+  echoed directly, so a full TX ring cannot corrupt USB output.
+- Example `atmega32u4-device-baremetal`: USB MIDI 2.0 device on the Arduino
+  Pro Micro, bare metal C99 over the midi2lufa transport, with the 58-entry
+  M2-104 catalog, UMP Stream and MIDI-CI responders, and a MIDI 1.0
+  fallback riff. Validated on hardware (Linux ALSA UMP, echo, per-boot MUID).
+
+### Changed
+
+- Device identity field byte order in the Stream and MIDI-CI builders now
+  follows M2-104 Figure 14 and the MIDI-CI Discovery tables: the packed
+  `manufacturer_id` is `id1<<16 | id2<<8 | id3` (the educational prefix
+  0x7D packs as 0x7D0000), family and model are 14-bit values sent as
+  7-bit LSB/MSB pairs, and the version is 28 bits sent as four 7-bit
+  bytes LSB first. Callers that passed the manufacturer id in the
+  previous packed form must update; the wire layout is cross-checked
+  against the MIDI 2.0 Workbench, the Linux kernel UMP driver and
+  Windows MIDI Services.
+
 ### Fixed
 
+- MIDI-CI responder re-announces via Discovery after receiving an Invalidate
+  MUID or detecting a MUID collision (Workbench ci1.2).
 - Multi-packet senders (`midi2_proc_send_sysex7`, `midi2_proc_send_sysex8`,
   `midi2_proc_send_fb_name`, endpoint name and product id) stop at the first
   short write instead of continuing past it, so a full transport sink can no

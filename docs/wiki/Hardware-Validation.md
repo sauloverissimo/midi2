@@ -6,7 +6,7 @@ Validated integration of midi2 on real hardware platforms.
 
 [![Compliant with MIDI 2.0 Workbench](https://img.shields.io/badge/MIDI%202.0%20Workbench-compliant-0d9488?labelColor=17151f)](https://github.com/midi2-dev/MIDI2.0Workbench)
 
-The three bundled examples are validated end to end against the official
+The five bundled examples are validated end to end against the official
 [MIDI 2.0 Workbench](https://github.com/midi2-dev/MIDI2.0Workbench) on
 hardware: MIDI-CI Discovery (Message Version 0x02), Profile Configuration and
 Property Exchange answer with zero errors and zero warnings.
@@ -16,6 +16,8 @@ Property Exchange answer with zero errors and zero warnings.
 | `teensy-device-midi2` | Teensy 4.1 | Arduino loop, Teensy cores fork |
 | `rp2350-device-freertos` | Raspberry Pi Pico 2 | FreeRTOS-Kernel + TinyUSB upstream |
 | `rpi-pico-device-zephyr` | Raspberry Pi Pico | Zephyr native `usbd_midi2` |
+| `atmega32u4-device-arduino` | Arduino Leonardo | Arduino AVR core + midi2duino (PluggableUSB) |
+| `atmega32u4-device-baremetal` | Arduino Pro Micro | bare metal super-loop + midi2lufa (LUFA) |
 
 ## Validation Results
 
@@ -36,6 +38,8 @@ Property Exchange answer with zero errors and zero warnings.
 | ESP32-C6 | ESP32-C6 | TinyUSB, BLE | ✅ | -- |
 | Nordic nRF52840 | nRF52840 | TinyUSB, BLE | ✅ | -- |
 | Xiao SAMD21 | SAMD21 | TinyUSB | ✅ | -- |
+| Arduino Leonardo | ATmega32U4 | PluggableUSB (midi2duino) | ✅ | -- |
+| Arduino Pro Micro | ATmega32U4 | LUFA (midi2lufa) | ✅ | -- |
 | Windows | x86_64 | MSVC build + tests | ✅ | -- |
 | Linux | x86_64 | gcc/clang build + tests | ✅ | -- |
 

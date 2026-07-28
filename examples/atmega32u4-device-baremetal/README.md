@@ -109,6 +109,5 @@ inbound by the core (`midi2_proc`) for MIDI-CI.
 
 ## License
 
-MIT, inherits the parent [midi2 LICENSE](../../LICENSE). LUFA and midi2lufa are distributed separately under their own MIT-style licenses.
-
-MIDI and MIDI 2.0 are trademarks of the MIDI Manufacturers Association / MIDI Association. This project is an independent implementation and is not affiliated with or endorsed by them.
+MIT, inherits the parent midi2 library. LUFA and midi2lufa are distributed
+separately under their own MIT-style licenses.

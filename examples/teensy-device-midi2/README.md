@@ -22,7 +22,7 @@ emits a one-note MIDI 2.0 demo so a host sees live traffic.
 | Product Instance ID | `midi2.diy-teensy-0001` |
 | FB 0 | `Main` (Bidirectional, 1 group, MIDI 1.0 + 2.0 protocols) |
 | MIDI-CI Manufacturer ID | `{0x7D, 0x00, 0x00}` (non-commercial prefix) |
-| MIDI-CI Family / Model / SW rev | `0x0001 / 0x0001 / 0x00070000` |
+| MIDI-CI Family / Model / SW rev | `0x0001 / 0x0001 / 0x00080000` |
 | Profile | `{0x7E, 0x00, 0x00, 0x01, 0x00}`, always on |
 | Property Exchange | `DeviceInfo`, `ChannelList`, `ProgramList` |
 
