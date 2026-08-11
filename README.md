@@ -109,7 +109,7 @@ The amalgam (`dist/midi2.h` + `dist/midi2.c`) is the recommended path. For finer
 | `midi2_msg` | `.h` | Stateless | UMP construction, parsing, value scaling. All MTs. MT 0x2 / MT 0x4 protocol translation. USB MIDI 1.0 cable event to UMP. |
 | `midi2_dispatch` | `.h` `.c` | Caller-allocated | Typed UMP dispatch (49 callbacks). Optional MT 0x2 to MT 0x4 upscale. |
 | `midi2_proc` | `.h` `.c` | Caller-allocated | Group filtering and remap, SysEx7/8 reassembly, UMP Stream and SysEx8 fragmenting senders. |
-| `midi2_conv` | `.h` `.c` | Caller-allocated | MIDI 1.0 byte stream to UMP (Running Status, streaming SysEx, MT 0x2 to MT 0x4 translation). |
+| `midi2_conv` | `.h` `.c` | Caller-allocated | MIDI 1.0 byte stream to UMP (Running Status, streaming SysEx, M2-104 7.7.1 interspersing, MT 0x2 to MT 0x4 translation). |
 | `midi2_ci_msg` | `.h` | Stateless | MIDI-CI message construction and parsing. All 32 messages. |
 | `midi2_ci_dispatch` | `.h` `.c` | Caller-allocated | Typed CI dispatch (33 callbacks). |
 | `midi2_ci` | `.h` `.c` | Caller-allocated | Convenience CI responder: Discovery, Profiles, PE (Subscribe/Notify), Process Inquiry, MUID collision detection, optional NAK-on-unknown. Appendix E complete. |
@@ -144,7 +144,7 @@ if (rc == MIDI2_CI_ERR_FULL) {
 
 ## Continuous integration
 
-383 tests across 8 suites compile clean with `-Wall -Wextra -Wpedantic`. CI runs 17 jobs on every push:
+406 tests across 8 suites compile clean with `-Wall -Wextra -Wpedantic`. CI runs 17 jobs on every push:
 
 | Target | Type |
 |--------|------|
@@ -190,7 +190,7 @@ Reference sketches appear in the IDE's File > Examples menu after install: `teen
 `platformio.ini`:
 
 ```ini
-lib_deps = sauloverissimo/midi2 @ ^0.8.0
+lib_deps = sauloverissimo/midi2 @ ^0.9.0
 ```
 
 Library Manager pulls the same `src/` modular layout via `library.json` (`srcDir = src`).
@@ -202,7 +202,7 @@ Published on the [ESP Component Registry](https://components.espressif.com/compo
 ```yaml
 dependencies:
   idf: ">=5.0"
-  sauloverissimo/midi2: ">=0.8.0"
+  sauloverissimo/midi2: ">=0.9.0"
 ```
 
 `idf.py reconfigure` drops the component into `managed_components/midi2/`. The `if(ESP_PLATFORM)` gate in `CMakeLists.txt` routes ESP-IDF builds to `idf_component_register` with the modular `src/midi2_*.c` set, so the same source serves IDF, Arduino, PlatformIO, and native CMake without forks.
@@ -216,7 +216,7 @@ manifest:
   projects:
     - name: midi2
       url: https://github.com/sauloverissimo/midi2
-      revision: v0.8.0
+      revision: v0.9.0
       path: modules/lib/midi2
 ```
 

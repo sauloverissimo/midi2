@@ -23,7 +23,7 @@ static const char kDeviceInfo[] =
     "{\"manufacturerId\":[125,0,0],\"familyId\":[1,0],\"modelId\":[1,0],"
     "\"versionId\":[0,0,8,0],\"manufacturer\":\"midi2.diy\","
     "\"family\":\"Teensy 4.x\",\"model\":\"Teensy 4.1 MIDI 2.0\","
-    "\"version\":\"0.8.0\"}";
+    "\"version\":\"0.9.0\"}";
 static const char kChannelList[] = "[{\"title\":\"Main\",\"channel\":1}]";
 static const char kProgramList[] = "[{\"title\":\"Default\",\"bankPC\":[0,0,0]}]";
 

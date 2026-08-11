@@ -207,6 +207,8 @@ midi2_proc_send_sysex8(group, stream_id, data, len, write_fn, ctx);             
 
 Converts MIDI 1.0 byte stream (Serial DIN, UART) to UMP. Handles Running Status, System Common, Real-Time interleaving, and streaming SysEx (any length, emitted as UMP SysEx7 packets: START/CONTINUE/END).
 
+One fed byte can complete up to two UMP messages (v0.9.0, per M2-104-UM 7.7.1: a Real-Time byte interleaved in a SysEx is delivered after the partial packet holding the bytes that preceded it, and any other status terminates the SysEx with a closing packet). Drain with `midi2_conv_next()`:
+
 ```c
 midi2_conv_state conv;
 midi2_conv_init(&conv, 0);  /* group 0, no external buffer needed */
@@ -214,10 +216,14 @@ midi2_conv_init(&conv, 0);  /* group 0, no external buffer needed */
 while (serial_available()) {
     uint8_t byte = serial_read();
     if (midi2_conv_feed(&conv, byte)) {
-        process_ump(conv.ump, conv.ump_words);
+        do {
+            process_ump(conv.ump, conv.ump_words);
+        } while (midi2_conv_next(&conv));
     }
 }
 ```
+
+For ordinary bytes the loop body runs once and `midi2_conv_next()` returns false immediately.
 
 ### Protocol translation (MT 0x2 <-> MT 0x4)
 

@@ -4,6 +4,8 @@ Format based on Keep a Changelog. This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.9.0]
+
 ### Added
 
 - `midi2_conv_next()`: drains the additional message a single MIDI 1.0 byte
