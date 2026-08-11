@@ -143,6 +143,37 @@ void test_pitch_bend(void) {
 /* Cross-checked against the library's own constructors: the converter reaching
  * the same word by a different route is stronger than a literal alone. */
 
+/* MIDI 1.0: Running Status applies to Channel Voice messages only. A System
+ * Common status is consumed by its own message and establishes nothing, so
+ * data bytes arriving after it completes are orphans -- they must not
+ * fabricate a second System Common message. */
+void test_system_common_no_running_status(void) {
+  TEST("SysCom F2/F1: no Running Status after completion");
+  midi2_conv_state s;
+  midi2_conv_init(&s, 0);
+
+  midi2_conv_feed(&s, 0xF2);
+  midi2_conv_feed(&s, 0x40);
+  CHECK(midi2_conv_feed(&s, 0x20), "Song Position completes");
+  CHECK(!midi2_conv_feed(&s, 0x41), "next data byte: orphan, no repeat");
+  CHECK(s.ump_words == 0, "no fabricated second F2");
+  CHECK(!midi2_conv_feed(&s, 0x21), "still orphan");
+
+  midi2_conv_feed(&s, 0xF1);
+  CHECK(midi2_conv_feed(&s, 0x25), "MTC Quarter Frame completes");
+  CHECK(!midi2_conv_feed(&s, 0x26), "data byte after F1: orphan");
+  CHECK(s.ump_words == 0, "no fabricated second F1");
+
+  /* Channel Voice Running Status still works after the orphans */
+  midi2_conv_feed(&s, 0x90);
+  midi2_conv_feed(&s, 0x3C);
+  CHECK(midi2_conv_feed(&s, 0x7F), "note on");
+  CHECK(!midi2_conv_feed(&s, 0x3E), "running status: first byte");
+  CHECK(midi2_conv_feed(&s, 0x00), "running status: completes");
+  CHECK(s.ump[0] == 0x20903E00, "CV Running Status unaffected");
+  PASS();
+}
+
 void test_mtc_quarter_frame(void) {
   TEST("MTC Quarter Frame: F1 + 1 data byte");
   midi2_conv_state s;
@@ -870,6 +901,7 @@ int main(void) {
   test_song_position_pointer();
   test_mtc_quarter_frame();
   test_song_select();
+  test_system_common_no_running_status();
 
   printf("\n[SysEx]\n");
   test_sysex_short();

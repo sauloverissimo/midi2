@@ -14,6 +14,13 @@ Format based on Keep a Changelog. This project follows Semantic Versioning.
   For ordinary bytes the loop body runs once. Debug builds assert if a queued
   message is left undrained; release builds drop it.
 
+### Fixed
+
+- `midi2_conv`: a completed System Common message (F1-F3) no longer leaves
+  its status as Running Status. Data bytes arriving after Song Position,
+  Song Select or MTC Quarter Frame are orphans per MIDI 1.0 -- previously
+  every further data-byte pair fabricated another copy of the message.
+
 ### Changed
 
 - `midi2_conv` now applies the M2-104-UM 7.7.1 interspersing rules:

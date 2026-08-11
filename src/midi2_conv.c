@@ -249,6 +249,12 @@ static bool midi2_conv_feed_inner(midi2_conv_state *state, uint8_t byte) {
     state->data_pos = 0;  /* Reset for Running Status (next data bytes reuse status) */
     state->data[0] = 0;
     state->data[1] = 0;
+    /* Running Status applies to Channel Voice only (MIDI 1.0): a System
+     * Common status is consumed by its own message and establishes nothing,
+     * so data bytes after it are orphans. */
+    if (state->running_status >= 0xF1) {
+      state->running_status = 0;
+    }
     return true;
   }
 
