@@ -4,6 +4,32 @@ Format based on Keep a Changelog. This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- `midi2_conv_next()`: drains the additional message a single MIDI 1.0 byte
+  can produce. Per M2-104-UM 7.7.1, System Real-Time may interleave inside a
+  SysEx and any other status terminates it, so one byte can yield two UMP
+  messages; the canonical consumption loop is now
+  `if (midi2_conv_feed(...)) do { ... } while (midi2_conv_next(...));`.
+  For ordinary bytes the loop body runs once. Debug builds assert if a queued
+  message is left undrained; release builds drop it.
+
+### Changed
+
+- `midi2_conv` now applies the M2-104-UM 7.7.1 interspersing rules:
+  - A Real-Time byte inside a SysEx is emitted after the partial packet
+    holding the bytes that preceded it on the wire, preserving its timing
+    position (previously it was emitted first, reordering it ahead of data
+    it followed).
+  - A status byte inside a SysEx closes the message with a COMPLETE or END
+    packet carrying the bytes received (previously the buffered bytes were
+    dropped and an already-emitted START was left unterminated).
+  - A SysEx Start while another SysEx is open closes the previous message
+    the same way before starting the new one.
+  Verified against the byte vectors from AM_MIDI2.0Lib issues #16, #23 and
+  #24; the first packets for the #24 vector now match that issue's expected
+  words exactly.
+
 ## [0.8.0]
 
 ### Added

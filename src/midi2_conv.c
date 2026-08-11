@@ -117,6 +117,31 @@ static bool emit_sysex_packet(midi2_conv_state *state, bool is_end) {
   return true;
 }
 
+/* Take a status byte (0x80-0xF6) as the new Running Status. Returns the
+ * complete UMP word for statuses that carry no data bytes (F4, F5, F6) and 0
+ * when the status waits for data bytes. 0 is never a valid System or Channel
+ * Voice word, so it is safe as the "nothing produced" sentinel. */
+static uint32_t conv_take_status(midi2_conv_state *state, uint8_t byte) {
+  state->running_status = byte;
+  state->data_byte_count = expected_data_bytes(byte);
+  state->data_pos = 0;
+
+  /* System Common (F1-F6) cancel Running Status */
+  if (byte >= 0xF1 && byte <= 0xF6) {
+    if (state->data_byte_count == 0) {
+      /* F4/F5/F6 -- no data bytes, complete immediately */
+      state->running_status = 0;
+      return midi2_msg_system(state->group, byte);
+    }
+    return 0;
+  }
+
+  /* Channel Voice status */
+  state->data[0] = 0;
+  state->data[1] = 0;
+  return 0;
+}
+
 /* Inner body; assumes non-NULL state. The public wrapper enforces the
  * single-context contract via the in_feed guard around this call. Wrapping
  * (rather than touching each of the many return paths) keeps the set/clear in
@@ -124,8 +149,18 @@ static bool emit_sysex_packet(midi2_conv_state *state, bool is_end) {
 static bool midi2_conv_feed_inner(midi2_conv_state *state, uint8_t byte) {
   state->ump_words = 0;
 
-  /* Real-Time messages (F8-FF) can appear anywhere, even mid-message */
+  /* Real-Time messages (F8-FF) can appear anywhere, even mid-message. Inside
+   * a SysEx with bytes accumulated, the partial packet goes out first so the
+   * Real-Time message keeps its wire position (M2-104-UM 7.7.1 allows it
+   * there "in order to maintain timing synchronization"); it queues behind
+   * and is drained via midi2_conv_next(). */
   if (byte >= 0xF8) {
+    if (state->in_sysex && state->sysex_len > 0) {
+      emit_sysex_packet(state, false);
+      state->pending[0] = midi2_msg_system(state->group, byte);
+      state->pending_words = 1;
+      return true;
+    }
     state->ump[0] = midi2_msg_system(state->group, byte);
     state->ump_words = 1;
     return true;
@@ -133,12 +168,18 @@ static bool midi2_conv_feed_inner(midi2_conv_state *state, uint8_t byte) {
 
   /* SysEx handling */
   if (byte == 0xF0) {
-    /* SysEx Start */
+    /* SysEx Start. A new Start while one is open terminates the previous
+     * message (M2-104-UM 7.7.1): close it carrying the bytes received so
+     * far rather than dropping them and leaving an unterminated stream. */
+    bool closed = false;
+    if (state->in_sysex && (state->sysex_len > 0 || state->sysex_started)) {
+      closed = emit_sysex_packet(state, true);
+    }
     state->in_sysex = true;
     state->sysex_started = false;
     state->sysex_len = 0;
     state->running_status = 0;  /* SysEx cancels Running Status */
-    return false;
+    return closed;
   }
 
   if (byte == 0xF7) {
@@ -150,46 +191,49 @@ static bool midi2_conv_feed_inner(midi2_conv_state *state, uint8_t byte) {
   }
 
   if (state->in_sysex) {
-    /* A non-Real-Time status byte during SysEx terminates it implicitly */
+    /* Any status other than Real-Time or F7 terminates the SysEx
+     * (M2-104-UM 7.7.1). Close it with the bytes received -- COMPLETE if no
+     * packet went out yet, END otherwise, so no START is left dangling --
+     * then take the byte as the new status; if that status completes a
+     * message on its own (F4/F5/F6), it queues behind the closing packet. */
     if (byte >= 0x80) {
-      state->in_sysex = false;
-      state->sysex_started = false;
-      state->sysex_len = 0;
-      /* Fall through to process as new status byte */
-    } else {
-      /* Accumulate SysEx data byte */
-      state->sysex_buf[state->sysex_len++] = byte;
-      if (state->sysex_len == 6) {
-        /* Buffer full: emit START or CONTINUE packet */
-        return emit_sysex_packet(state, false);
+      bool closed = false;
+      uint32_t word;
+      if (state->sysex_len > 0 || state->sysex_started) {
+        closed = emit_sysex_packet(state, true);
+      } else {
+        state->in_sysex = false;
       }
-      return false;
+      word = conv_take_status(state, byte);
+      if (word != 0) {
+        if (closed) {
+          state->pending[0] = word;
+          state->pending_words = 1;
+        } else {
+          state->ump[0] = word;
+          state->ump_words = 1;
+          return true;
+        }
+      }
+      return closed;
     }
+    /* Accumulate SysEx data byte */
+    state->sysex_buf[state->sysex_len++] = byte;
+    if (state->sysex_len == 6) {
+      /* Buffer full: emit START or CONTINUE packet */
+      return emit_sysex_packet(state, false);
+    }
+    return false;
   }
 
   /* Status byte */
   if (byte >= 0x80) {
-    /* System Common (F1-F6) cancel Running Status */
-    if (byte >= 0xF1 && byte <= 0xF6) {
-      state->running_status = byte;
-      state->data_byte_count = expected_data_bytes(byte);
-      state->data_pos = 0;
-      if (state->data_byte_count == 0) {
-        /* Tune Request (F6) -- no data bytes */
-        state->ump[0] = midi2_msg_system(state->group, byte);
-        state->ump_words = 1;
-        state->running_status = 0;
-        return true;
-      }
-      return false;
+    uint32_t word = conv_take_status(state, byte);
+    if (word != 0) {
+      state->ump[0] = word;
+      state->ump_words = 1;
+      return true;
     }
-
-    /* Channel Voice status */
-    state->running_status = byte;
-    state->data_byte_count = expected_data_bytes(byte);
-    state->data_pos = 0;
-    state->data[0] = 0;
-    state->data[1] = 0;
     return false;
   }
 
@@ -218,8 +262,24 @@ bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte) {
    * Caught in debug builds; the set/clear lives only here so no inner return
    * path can leak the flag. */
   MIDI2_ASSERT(!state->in_feed);
+  /* Drain contract: messages queued by the previous byte must be consumed
+   * with midi2_conv_next() before the next byte is fed. Debug builds catch
+   * violations here; release builds drop the undrained message. */
+  MIDI2_ASSERT(state->pending_words == 0);
+  state->pending_words = 0;
   state->in_feed = true;
   r = midi2_conv_feed_inner(state, byte);
   state->in_feed = false;
   return r;
+}
+
+bool midi2_conv_next(midi2_conv_state *state) {
+  if (state == NULL) return false;
+  state->ump_words = 0;
+  if (state->pending_words == 0) return false;
+  state->ump[0] = state->pending[0];
+  state->ump[1] = state->pending[1];
+  state->ump_words = state->pending_words;
+  state->pending_words = 0;
+  return true;
 }

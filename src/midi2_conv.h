@@ -59,10 +59,17 @@ extern "C" {
  *
  *   // For each incoming byte:
  *   if (midi2_conv_feed(&conv, byte)) {
- *     // conv.ump[] contains the completed UMP message
- *     // conv.ump_words tells how many words (1 or 2)
- *     process(conv.ump, conv.ump_words);
+ *     do {
+ *       // conv.ump[] contains a completed UMP message
+ *       // conv.ump_words tells how many words (1 or 2)
+ *       process(conv.ump, conv.ump_words);
+ *     } while (midi2_conv_next(&conv));
  *   }
+ *
+ * One fed byte usually produces one message, but can produce two: the UMP
+ * spec (M2-104-UM 7.7.1) lets System Real-Time interleave inside a SysEx and
+ * makes any other status terminate that SysEx, so the byte's own message can
+ * queue behind the SysEx packet it displaced. The do/while drains both.
  *--------------------------------------------------------------------*/
 
 typedef struct {
@@ -85,6 +92,12 @@ typedef struct {
   uint32_t ump[4];
   uint8_t  ump_words;
 
+  /** Second message produced by the same fed byte (M2-104-UM 7.7.1
+   *  interspersing), drained via midi2_conv_next(). Holds at most one
+   *  System message word today; sized for one full 64-bit message. */
+  uint32_t pending[2];
+  uint8_t  pending_words;
+
   /** Debug-only reentrancy guard (see the single-context contract on
    *  midi2_conv_feed). Always present so the struct size matches between debug
    *  and release builds. */
@@ -102,13 +115,38 @@ void midi2_conv_init(midi2_conv_state *state, uint8_t group);
  * NULL (safe to call with NULL state).
  *
  * SysEx of any length is fully supported via streaming UMP SysEx7 packets.
- * Each call produces at most one UMP message (1 or 2 words).
+ *
+ * A fed byte can produce up to TWO messages (see midi2_conv_next): after
+ * feed() returns true, drain with next() before feeding the next byte.
+ * Debug builds assert if a queued message is left undrained; release builds
+ * drop it.
  *
  * Single-context: feed each state instance from one execution context at a
  * time. Do not re-enter feed on the same instance from a callback or another
  * context (e.g. an ISR). Violations are caught by a debug-build assertion
  * (compiled out under NDEBUG). */
 bool midi2_conv_feed(midi2_conv_state *state, uint8_t byte);
+
+/* Advance to the next message produced by the last fed byte.
+ *
+ * One byte can yield two UMP messages (M2-104-UM 7.7.1): a System Real-Time
+ * byte landing inside a SysEx is emitted after the partial packet holding the
+ * bytes that preceded it, and any other status byte terminates the SysEx --
+ * the closing packet comes first, the interrupting byte's own message (F4,
+ * F5, F6) queues behind it. The canonical consumption loop is therefore:
+ *
+ *   if (midi2_conv_feed(&conv, byte)) {
+ *     do {
+ *       process(conv.ump, conv.ump_words);
+ *     } while (midi2_conv_next(&conv));
+ *   }
+ *
+ * Returns true when another message was moved into state->ump[]; false when
+ * nothing is pending (ump_words is set to 0) or state is NULL. For ordinary
+ * bytes the loop body runs once and next() returns false immediately.
+ *
+ * Same single-context contract as midi2_conv_feed. */
+bool midi2_conv_next(midi2_conv_state *state);
 
 #ifdef __cplusplus
 }
