@@ -234,6 +234,21 @@ static inline void midi2_ci_write_28(uint8_t *p, uint32_t v) {
   midi2_ci_write_muid(p, v);
 }
 
+/* Software Revision Level: four data bytes in wire order, meaning defined by
+ * the manufacturer (M2-101 5.5, schema M2-105). Not a number, so it does not
+ * go through the 28-bit MUID packing used for counts like max_sysex. */
+static inline uint32_t midi2_ci_read_bytes4(const uint8_t *p) {
+  return ((uint32_t)(p[0] & 0x7F) << 24) | ((uint32_t)(p[1] & 0x7F) << 16)
+       | ((uint32_t)(p[2] & 0x7F) << 8)  |  (uint32_t)(p[3] & 0x7F);
+}
+
+static inline void midi2_ci_write_bytes4(uint8_t *p, uint32_t v) {
+  p[0] = (uint8_t)((v >> 24) & 0x7F);
+  p[1] = (uint8_t)((v >> 16) & 0x7F);
+  p[2] = (uint8_t)((v >> 8)  & 0x7F);
+  p[3] = (uint8_t)( v        & 0x7F);
+}
+
 /*--------------------------------------------------------------------+
  * Parse helpers for common message fields
  *
@@ -260,7 +275,7 @@ static inline uint16_t midi2_ci_get_model(const uint8_t *d) {
   return midi2_ci_read_14(&d[18]);
 }
 static inline uint32_t midi2_ci_get_sw_rev(const uint8_t *d) {
-  return midi2_ci_read_28(&d[20]);
+  return midi2_ci_read_bytes4(&d[20]);
 }
 static inline uint8_t midi2_ci_get_ci_category(const uint8_t *d) {
   return d[24];
@@ -325,7 +340,7 @@ static inline uint16_t midi2_ci_build_discovery(
   buf[p++] = (uint8_t)(model & 0x7F);
   buf[p++] = (uint8_t)((model >> 7) & 0x7F);
   /* Software Revision (4 bytes) */
-  midi2_ci_write_28(&buf[p], sw_rev); p += 4;
+  midi2_ci_write_bytes4(&buf[p], sw_rev); p += 4;
   /* Capability Inquiry Category Supported */
   buf[p++] = ci_category;
   /* Receivable Maximum SysEx Size (4 bytes LSB first) */
@@ -354,7 +369,7 @@ static inline uint16_t midi2_ci_build_discovery_reply(
   buf[p++] = (uint8_t)((family >> 7) & 0x7F);
   buf[p++] = (uint8_t)(model & 0x7F);
   buf[p++] = (uint8_t)((model >> 7) & 0x7F);
-  midi2_ci_write_28(&buf[p], sw_rev); p += 4;
+  midi2_ci_write_bytes4(&buf[p], sw_rev); p += 4;
   buf[p++] = ci_category;
   midi2_ci_write_28(&buf[p], max_sysex); p += 4;
   if (version >= MIDI2_CI_VERSION_2) {

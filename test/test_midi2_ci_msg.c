@@ -104,6 +104,10 @@ void test_discovery_build(void) {
   CHECK(midi2_ci_get_family(buf) == 0x0001, "family");
   CHECK(midi2_ci_get_model(buf) == 0x0002, "model");
   CHECK(midi2_ci_get_sw_rev(buf) == 0x00010000, "sw_rev");
+  /* M2-101 5.5 / schema M2-105: Software Revision Level is 4 data bytes in
+   * wire order, not a 28-bit number. 0x00010000 = bytes {0x00,0x01,0x00,0x00}. */
+  CHECK(buf[20] == 0x00 && buf[21] == 0x01 && buf[22] == 0x00 && buf[23] == 0x00,
+        "sw_rev wire order = the four declared bytes");
   CHECK(midi2_ci_get_ci_category(buf) == 0x0C, "ci_category");
   CHECK(midi2_ci_get_max_sysex(buf) == 512, "max_sysex=512");
   PASS();

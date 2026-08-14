@@ -4,11 +4,10 @@
 #include "midi2lufa.h"
 #include "midi2_ci.h"
 
-/* Same educational identity as the stream responder. NOTE: the CI builder
- * serializes the manufacturer LSB-first (wire Byte 1 = value bits 0..7),
- * the OPPOSITE of midi2_msg_stream_device_identity. 0x7D must sit in the
- * low byte here to reach wire Byte 1. */
-#define CI_MFR      0x0000007DUL   /* wire: {0x7D, 0x00, 0x00} */
+/* Same educational identity as the stream responder: the CI builder packs the
+ * manufacturer id as id1<<16|id2<<8|id3, the same convention as
+ * midi2_msg_stream_device_identity. */
+#define CI_MFR      0x007D0000UL   /* wire: {0x7D, 0x00, 0x00} */
 #define CI_FAMILY   0x0001
 #define CI_MODEL    0x0001
 #define CI_VERSION  0x00010000UL

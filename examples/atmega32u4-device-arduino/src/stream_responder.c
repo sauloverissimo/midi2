@@ -56,8 +56,7 @@ static void send_fb_info(void) {
     midi2_msg_stream_fb_info(w, true, FB_NUM_MAIN,
                              0x03 /* bidir */, 0x03 /* ui: both */,
                              0, 1,
-                             2 /* CI 1.2 */, 1 /* sysex8: catalog emits */,
-                             0x03 /* both protocols */);
+                             2 /* CI 1.2 */, 1 /* sysex8: catalog emits */);
     send4(w);
 }
 

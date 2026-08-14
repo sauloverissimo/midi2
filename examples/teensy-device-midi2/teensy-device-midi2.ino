@@ -21,9 +21,9 @@ static const uint8_t  kProfile[5] = {0x7E, 0x00, 0x00, 0x01, 0x00};
 
 static const char kDeviceInfo[] =
     "{\"manufacturerId\":[125,0,0],\"familyId\":[1,0],\"modelId\":[1,0],"
-    "\"versionId\":[0,0,8,0],\"manufacturer\":\"midi2.diy\","
+    "\"versionId\":[0,0,10,0],\"manufacturer\":\"midi2.diy\","
     "\"family\":\"Teensy 4.x\",\"model\":\"Teensy 4.1 MIDI 2.0\","
-    "\"version\":\"0.9.0\"}";
+    "\"version\":\"0.10.0\"}";
 static const char kChannelList[] = "[{\"title\":\"Main\",\"channel\":1}]";
 static const char kProgramList[] = "[{\"title\":\"Default\",\"bankPC\":[0,0,0]}]";
 
@@ -72,17 +72,17 @@ static void announce_stream_identity(void) {
                                    /*rx_jr*/ false, /*tx_jr*/ false);
     usbMIDI2.write(w, 4);
 
-    midi2_msg_stream_device_identity(w, /*manufacturer*/ 0x7D,
+    /* SysEx id in the first of the three manufacturer bytes: {0x7D,0x00,0x00} */
+    midi2_msg_stream_device_identity(w, /*manufacturer*/ 0x7D0000,
                                      /*family*/ 0x0001, /*model*/ 0x0001,
-                                     /*version*/ 0x00080000);
+                                     /*version*/ 0x00000A00);
     usbMIDI2.write(w, 4);
 
     midi2_msg_stream_fb_info(w, /*active*/ true, /*fb_num*/ 0,
                              /*direction*/ 3 /*bidirectional*/,
                              /*ui_hint*/ 3 /*bidirectional*/,
                              /*first_group*/ 0, /*num_groups*/ 1,
-                             /*midi_ci_ver*/ 2, /*max_sysex8*/ 0,
-                             /*protocol*/ 2 /*MIDI 2.0*/);
+                             /*midi_ci_ver*/ 2, /*max_sysex8*/ 0);
     usbMIDI2.write(w, 4);
 
     midi2_proc_send_endpoint_name("Teensy 4.1 MIDI 2.0", ci_write, NULL);
@@ -97,7 +97,7 @@ void setup() {
                   ci_profiles, 2, ci_props, 4);
     midi2_ci_set_write_fn(&ci, ci_write, NULL);
     midi2_ci_set_identity(&ci, /*manufacturer*/ 0x7D0000, /*family*/ 0x0001,
-                          /*model*/ 0x0001, /*sw_rev*/ 0x00080000);
+                          /*model*/ 0x0001, /*sw_rev*/ 0x00000A00);
     midi2_ci_set_nak_on_unknown(&ci, true);
 
     midi2_ci_add_profile(&ci, kProfile);

@@ -548,11 +548,8 @@ void test_send_device_identity(void) {
                          ((uint32_t)(0x04FE & 0x7F) << 8) |
                           (uint32_t)((0x04FE >> 7) & 0x7F)),
         "w[2] = family LSB,MSB | model LSB,MSB (7-bit pairs)");
-  CHECK(write_buf[3] == (((0x12345678u & 0x7F) << 24) |
-                         (((0x12345678u >> 7) & 0x7F) << 16) |
-                         (((0x12345678u >> 14) & 0x7F) << 8) |
-                          ((0x12345678u >> 21) & 0x7F)),
-        "w[3] = version 4x7 bits, LSB-first");
+  CHECK(write_buf[3] == (0x12345678u & 0x7F7F7F7Fu),
+        "w[3] = software revision, four 7-bit bytes");
   PASS();
 }
 
