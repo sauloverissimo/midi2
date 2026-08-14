@@ -459,17 +459,14 @@ static void dispatch_stream(midi2_dispatch *dp, const uint32_t *w) {
 
     case MIDI2_STREAM_DEVICE_IDENTITY:
       if (dp->on_device_identity) {
-        /* M2-104 Figure 14: id bytes in w[1] low 3 bytes, family/model as
-         * 7-bit LSB/MSB pairs, version as 4x7 bits LSB-first. */
+        /* M2-104 7.1.3: id bytes in w[1] low 3 bytes, family/model as 7-bit
+         * LSB/MSB pairs, software revision as four manufacturer defined bytes. */
         uint32_t mfr    = w[1] & 0x007F7F7F;
         uint16_t family = (uint16_t)(((w[2] >> 24) & 0x7F)
                         | (((w[2] >> 16) & 0x7F) << 7));
         uint16_t model  = (uint16_t)(((w[2] >> 8) & 0x7F)
                         | ((w[2] & 0x7F) << 7));
-        uint32_t ver    = ((w[3] >> 24) & 0x7F)
-                        | (((w[3] >> 16) & 0x7F) << 7)
-                        | (((w[3] >> 8) & 0x7F) << 14)
-                        | ((w[3] & 0x7F) << 21);
+        uint32_t ver    = w[3] & 0x7F7F7F7F;
         dp->on_device_identity(mfr, family, model, ver, dp->context);
       }
       break;
@@ -549,13 +546,13 @@ static void dispatch_stream(midi2_dispatch *dp, const uint32_t *w) {
         uint8_t fb_num  = (uint8_t)((w[0] >> 8) & 0x7F);
         uint8_t ui_hint = (uint8_t)((w[0] >> 4) & 0x03);
         uint8_t dir     = (uint8_t)(w[0] & 0x03);
-        uint8_t first   = (uint8_t)((w[1] >> 24) & 0x0F);
-        uint8_t ngrp    = (uint8_t)((w[1] >> 16) & 0x0F);
+        /* M2-104 7.1.8: word 1 is four byte-wide fields, no protocol field. */
+        uint8_t first   = (uint8_t)((w[1] >> 24) & 0xFF);
+        uint8_t ngrp    = (uint8_t)((w[1] >> 16) & 0xFF);
         uint8_t ci_ver  = (uint8_t)((w[1] >> 8) & 0xFF);
-        uint8_t s8str   = (uint8_t)((w[1] >> 2) & 0x3F);
-        uint8_t proto   = (uint8_t)(w[1] & 0x03);
+        uint8_t s8str   = (uint8_t)(w[1] & 0xFF);
         dp->on_fb_info(active, fb_num, dir, ui_hint, first, ngrp, ci_ver,
-                       s8str, proto, dp->context);
+                       s8str, dp->context);
       }
       break;
 

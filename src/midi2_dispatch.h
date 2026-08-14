@@ -197,7 +197,7 @@ typedef void (*midi2_dp_fb_info_cb)(bool active, uint8_t fb_num,
                                       uint8_t direction, uint8_t ui_hint,
                                       uint8_t first_group, uint8_t num_groups,
                                       uint8_t midi_ci_ver, uint8_t max_sysex8_streams,
-                                      uint8_t protocol, void *context);
+                                      void *context);
 typedef void (*midi2_dp_clip_cb)(bool start, void *context);
 
 /*--------------------------------------------------------------------+

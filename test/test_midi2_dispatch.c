@@ -50,7 +50,7 @@ static struct {
   uint8_t proto;
   /* FB */
   bool fb_active;
-  uint8_t fb_num, fb_dir, fb_ui_hint, fb_first, fb_ngrp;
+  uint8_t fb_num, fb_dir, fb_ui_hint, fb_first, fb_ngrp, fb_ci_ver, fb_s8;
   /* Clip */
   bool clip_start;
   /* MDS */
@@ -237,11 +237,12 @@ static void cb_fb_discovery(uint8_t fb, uint8_t filter, void *c) {
 }
 static void cb_fb_info(bool act, uint8_t fb, uint8_t dir, uint8_t ui_hint,
                           uint8_t first, uint8_t ngrp,
-                          uint8_t ci, uint8_t s8, uint8_t proto, void *c) {
-  (void)c; (void)ci; (void)s8;
+                          uint8_t ci, uint8_t s8, void *c) {
+  (void)c;
   ctx.called = 1; ctx.fb_active = act; ctx.fb_num = fb;
   ctx.fb_dir = dir; ctx.fb_ui_hint = ui_hint;
-  ctx.fb_first = first; ctx.fb_ngrp = ngrp; ctx.proto = proto;
+  ctx.fb_first = first; ctx.fb_ngrp = ngrp;
+  ctx.fb_ci_ver = ci; ctx.fb_s8 = s8;
 }
 static void cb_clip(bool start, void *c) { (void)c; ctx.called = 1; ctx.clip_start = start; }
 static void cb_unknown(const uint32_t *w, uint8_t wc, void *c) {
@@ -692,15 +693,15 @@ void test_dp_device_identity(void) {
   midi2_dispatch dp = make_dp();
   reset_ctx();
   uint32_t w[4];
-  /* sysex id bytes, family/model (14-bit) and version (28-bit) inside
-   * their 7-bit-per-byte wire ranges so encode->decode is lossless */
-  midi2_msg_stream_device_identity(w, 0x7D0000, 0x1234, 0x0678, 0x0DEADBEu);
+  /* sysex id bytes, family/model (14-bit) and the four revision bytes all
+   * inside their 7-bit wire ranges, so encode->decode is lossless */
+  midi2_msg_stream_device_identity(w, 0x7D0000, 0x1234, 0x0678, 0x01020304u);
   midi2_dispatch_feed(w, 4, &dp);
   CHECK(ctx.called, "callback fired");
   CHECK(ctx.mfr_id == 0x7D0000, "mfr_id");
   CHECK(ctx.family_id == 0x1234, "family");
   CHECK(ctx.model_id == 0x0678, "model");
-  CHECK(ctx.version_id == 0x0DEADBEu, "version");
+  CHECK(ctx.version_id == 0x01020304u, "version");
   PASS();
 }
 
@@ -708,14 +709,14 @@ void test_dp_device_identity_wire(void) {
   TEST("dispatch: Device Identity wire layout (educational id 0x7D)");
   midi2_dispatch dp = make_dp();
   reset_ctx();
-  /* Hand-built per M2-104 Figure 14: id1=0x7D at w[1] bits [22:16],
-   * family 1 LSB at w[2] bits [30:24], model 3 LSB at w[2] bits [14:8],
-   * version 0x00010000 as 4x7 LSB-first (only (v>>14)&0x7F == 4 set). */
+  /* Hand-built per M2-104 7.1.3: id1=0x7D at w[1] bits [22:16], family 1 LSB
+   * at w[2] bits [30:24], model 3 LSB at w[2] bits [14:8], software revision
+   * as four bytes 00 01 00 00. */
   uint32_t w[4];
   w[0] = (UINT32_C(0xF) << 28) | (UINT32_C(0x002) << 16);
   w[1] = UINT32_C(0x7D) << 16;
   w[2] = (UINT32_C(0x01) << 24) | (UINT32_C(0x03) << 8);
-  w[3] = UINT32_C(0x04) << 8;
+  w[3] = UINT32_C(0x00010000);
   midi2_dispatch_feed(w, 4, &dp);
   CHECK(ctx.called, "callback fired");
   CHECK(ctx.mfr_id == 0x7D0000, "id1 = 0x7D, id bytes 2..3 zero");
@@ -772,7 +773,7 @@ void test_dp_fb_info(void) {
   reset_ctx();
   uint32_t w[4];
   midi2_msg_stream_fb_info(w, true, 0, /*direction*/ 0x02, /*ui_hint*/ 0x03,
-                           0, 4, 2, /*max_sysex8_streams*/ 0, 0x02);
+                           0, 4, /*midi_ci_ver*/ 2, /*max_sysex8_streams*/ 3);
   midi2_dispatch_feed(w, 4, &dp);
   CHECK(ctx.called, "callback fired");
   CHECK(ctx.fb_active, "active");
@@ -781,6 +782,8 @@ void test_dp_fb_info(void) {
   CHECK(ctx.fb_ui_hint == 0x03, "ui_hint=Sender+Receiver");
   CHECK(ctx.fb_first == 0, "first_group");
   CHECK(ctx.fb_ngrp == 4, "num_groups");
+  CHECK(ctx.fb_ci_ver == 2, "midi_ci_ver round-trips");
+  CHECK(ctx.fb_s8 == 3, "max_sysex8_streams round-trips");
   PASS();
 }
 

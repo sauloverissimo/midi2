@@ -811,11 +811,12 @@ static inline void midi2_msg_stream_endpoint_info(uint32_t *w,
        | MIDI2_BIT_IF(tx_jr, 0);
 }
 
-/* Device Identity Notification (M2-104 Figure 14). Same field encoding as
- * the MIDI 1.0 Device Inquiry reply: manufacturer_id packs the 3 SysEx id
- * bytes as id1<<16|id2<<8|id3 (w[1] top byte reserved), family and model
- * are 14-bit values sent as 7-bit LSB/MSB pairs, version is 28 bits sent
- * as 4x7 bits LSB-first. */
+/* Device Identity Notification (M2-104 7.1.3). Same field encoding as the
+ * MIDI 1.0 Device Inquiry reply: manufacturer_id packs the 3 SysEx id bytes
+ * as id1<<16|id2<<8|id3 (w[1] top byte reserved), family and model are 14-bit
+ * values sent as 7-bit LSB/MSB pairs, and version_id is the 4-byte Software
+ * Revision Level, whose meaning is manufacturer defined. Every byte is 7-bit
+ * on the wire. */
 static inline void midi2_msg_stream_device_identity(uint32_t *w,
                                                       uint32_t manufacturer_id,
                                                       uint16_t family_id,
@@ -828,10 +829,10 @@ static inline void midi2_msg_stream_device_identity(uint32_t *w,
        | ((((uint32_t)family_id >> 7) & 0x7F) << 16)
        | (((uint32_t)model_id & 0x7F) << 8)
        |  (((uint32_t)model_id >> 7) & 0x7F);
-  w[3] = ((version_id & 0x7F) << 24)
-       | (((version_id >> 7) & 0x7F) << 16)
-       | (((version_id >> 14) & 0x7F) << 8)
-       |  ((version_id >> 21) & 0x7F);
+  w[3] = (((version_id >> 24) & 0x7F) << 24)
+       | (((version_id >> 16) & 0x7F) << 16)
+       | (((version_id >>  8) & 0x7F) << 8)
+       |   (version_id        & 0x7F);
 }
 
 /* Stream Configuration Request (status 0x05).
@@ -880,27 +881,25 @@ static inline void midi2_msg_stream_fb_discovery(uint32_t *w, uint8_t fb_num, ui
  * ui_hint: 0x00=Undeclared, 0x01=Receiver, 0x02=Sender, 0x03=Sender+Receiver
  * first_group: first group in this FB
  * num_groups: number of groups
- * midi_ci_ver: MIDI-CI version support (0=none, 1=1.1, 2=1.2)
- * max_sysex8_streams: 0 = SysEx8 not supported, 1..63 = max concurrent streams
- * protocol: 0x00=unknown, 0x01=MIDI1, 0x02=MIDI2, 0x03=both */
+ * midi_ci_ver: MIDI-CI version support (0=none or unknown, 1 or higher per MIDI-CI)
+ * max_sysex8_streams: 0 = SysEx8 not supported, 1 = single, 2..255 = simultaneous
+ * Word 1 holds four byte-wide fields (M2-104 7.1.8); there is no protocol field. */
 static inline void midi2_msg_stream_fb_info(uint32_t *w,
                                               bool active, uint8_t fb_num,
                                               uint8_t direction, uint8_t ui_hint,
                                               uint8_t first_group, uint8_t num_groups,
                                               uint8_t midi_ci_ver,
-                                              uint8_t max_sysex8_streams,
-                                              uint8_t protocol) {
+                                              uint8_t max_sysex8_streams) {
   memset(w, 0, 16);
   w[0] = midi2_msg_build_stream_w0(0, MIDI2_STREAM_FB_INFO)
        | (active ? (UINT32_C(1) << 15) : 0)
        | ((uint32_t)(fb_num & 0x7F) << 8)
        | ((uint32_t)(ui_hint & 0x03) << 4)
        | (uint32_t)(direction & 0x03);
-  w[1] = ((uint32_t)(first_group & 0x0F) << 24)
-       | ((uint32_t)(num_groups & 0x0F) << 16)
-       | ((uint32_t)(midi_ci_ver & 0x03) << 8)
-       | ((uint32_t)(max_sysex8_streams & 0x3F) << 2)
-       | (uint32_t)(protocol & 0x03);
+  w[1] = ((uint32_t)first_group << 24)
+       | ((uint32_t)num_groups << 16)
+       | ((uint32_t)midi_ci_ver << 8)
+       | (uint32_t)max_sysex8_streams;
 }
 
 /* Endpoint Name Notification (multi-packet text, up to 14 bytes per UMP).

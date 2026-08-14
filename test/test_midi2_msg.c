@@ -428,16 +428,16 @@ void test_stream_endpoint_info(void) {
 void test_stream_device_identity(void) {
   TEST("Stream: Device Identity");
   uint32_t w[4];
-  /* M2-104 Figure 14: id bytes in w[1] low 3 bytes, version 28-bit sent
-   * as 4x7 bits LSB-first. */
-  midi2_msg_stream_device_identity(w, 0x7D0000, 0x1234, 0x0678, 0x0DEADBEu);
+  /* M2-104 7.1.3: four byte-wide fields, same data as the MIDI 1.0 Device
+   * Inquiry reply. Software Revision is 4 bytes chosen by the manufacturer. */
+  midi2_msg_stream_device_identity(w, 0x7D0000, 0x1234, 0x0678, 0x01020304u);
   CHECK(((w[0] >> 16) & 0x3FF) == 0x002, "status=device identity");
   CHECK(w[1] == 0x007D0000u, "manufacturer id1 at bits [22:16]");
-  CHECK(w[3] == (((0x0DEADBEu & 0x7F) << 24) |
-                 (((0x0DEADBEu >> 7) & 0x7F) << 16) |
-                 (((0x0DEADBEu >> 14) & 0x7F) << 8) |
-                  ((0x0DEADBEu >> 21) & 0x7F)),
-        "version");
+  CHECK(w[3] == 0x01020304u, "software revision keeps its four bytes");
+
+  /* Every byte is 7-bit on the wire: a high bit is masked off, not carried. */
+  midi2_msg_stream_device_identity(w, 0x7D0000, 0x0001, 0x0004, 0xFF010000u);
+  CHECK(w[3] == 0x7F010000u, "revision bytes masked to 7 bits");
   PASS();
 }
 
@@ -496,16 +496,17 @@ void test_stream_fb_info(void) {
   TEST("Stream: FB Info bidirectional, no SysEx8");
   uint32_t w[4];
   midi2_msg_stream_fb_info(w, true, 0, /*direction*/ 0x02, /*ui_hint*/ 0x00,
-                           0, 4, 2, /*max_sysex8_streams*/ 0, 0x02);
+                           0, 4, 2, /*max_sysex8_streams*/ 0);
   CHECK(((w[0] >> 16) & 0x3FF) == 0x011, "status=FB info");
   CHECK(w[0] & (1u << 15), "active");
   CHECK(((w[0] >> 8) & 0x7F) == 0, "fb_num=0");
   CHECK((w[0] & 0x03) == 0x02, "direction=bidir");
   CHECK(((w[0] >> 4) & 0x03) == 0x00, "ui_hint=undeclared");
-  CHECK(((w[1] >> 24) & 0x0F) == 0, "first_group=0");
-  CHECK(((w[1] >> 16) & 0x0F) == 4, "num_groups=4");
-  CHECK(((w[1] >> 2) & 0x3F) == 0, "max_sysex8_streams=0");
-  CHECK((w[1] & 0x03) == 0x02, "protocol=MIDI2");
+  /* M2-104 7.1.8: word 1 carries four byte-wide fields. */
+  CHECK(((w[1] >> 24) & 0xFF) == 0, "first_group=0");
+  CHECK(((w[1] >> 16) & 0xFF) == 4, "num_groups=4");
+  CHECK(((w[1] >> 8) & 0xFF) == 2, "midi_ci_ver=2");
+  CHECK((w[1] & 0xFF) == 0, "max_sysex8_streams=0");
   PASS();
 }
 
@@ -513,13 +514,13 @@ void test_stream_fb_info_ui_hint(void) {
   TEST("Stream: FB Info with UI Hint Sender+Receiver");
   uint32_t w[4];
   midi2_msg_stream_fb_info(w, true, 0, /*direction*/ 0x03, /*ui_hint*/ 0x03,
-                           0, 1, 2, 0, 0x02);
+                           0, 1, 2, 0);
   CHECK((w[0] & 0x03) == 0x03, "direction=bidirectional");
   CHECK(((w[0] >> 4) & 0x03) == 0x03, "ui_hint=Sender+Receiver");
 
   // Validate ui_hint and direction live in independent bit lanes.
   midi2_msg_stream_fb_info(w, true, 0, /*direction*/ 0x01, /*ui_hint*/ 0x02,
-                           0, 1, 2, 0, 0x02);
+                           0, 1, 2, 0);
   CHECK((w[0] & 0x03) == 0x01, "direction=Receiver");
   CHECK(((w[0] >> 4) & 0x03) == 0x02, "ui_hint=Sender");
   PASS();
@@ -529,12 +530,16 @@ void test_stream_fb_info_sysex8_streams(void) {
   TEST("Stream: FB Info max_sysex8_streams full range");
   uint32_t w[4];
   midi2_msg_stream_fb_info(w, true, 0, 0x02, 0x03, 0, 1, 2,
-                           /*max_sysex8_streams*/ 0x3F, 0x02);
-  CHECK(((w[1] >> 2) & 0x3F) == 0x3F, "max=63");
+                           /*max_sysex8_streams*/ 0xFF);
+  CHECK((w[1] & 0xFF) == 0xFF, "max=255");
 
   midi2_msg_stream_fb_info(w, true, 0, 0x02, 0x03, 0, 1, 2,
-                           /*max_sysex8_streams*/ 1, 0x02);
-  CHECK(((w[1] >> 2) & 0x3F) == 1, "max=1");
+                           /*max_sysex8_streams*/ 1);
+  CHECK((w[1] & 0xFF) == 1, "max=1");
+
+  /* 16 groups spanned is the spec maximum and needs the full byte. */
+  midi2_msg_stream_fb_info(w, true, 0, 0x03, 0x03, 0, 16, 2, 1);
+  CHECK(((w[1] >> 16) & 0xFF) == 16, "num_groups=16");
   PASS();
 }
 
