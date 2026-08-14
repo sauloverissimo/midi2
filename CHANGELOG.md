@@ -4,6 +4,32 @@ Format based on Keep a Changelog. This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.10.0]
+
+### Changed
+
+- `midi2_msg_stream_fb_info()` and the `on_fb_info` dispatch callback drop
+  their `protocol` parameter. Word 1 of a Function Block Info Notification
+  carries four byte-wide fields (M2-104-UM 7.1.8) and no protocol field.
+  Callers pass one argument less.
+- Software Revision Level is carried as four manufacturer defined bytes,
+  replacing the 28-bit packing used since 0.8.0. Both M2-104-UM 7.1.3 and
+  M2-101-UM 5.5 describe the field as four bytes whose format is device
+  specific, and the M2-105 DeviceInfo schema types it as a four item byte
+  array. The change covers the UMP Stream Device Identity Notification and
+  MIDI-CI Discovery, so a device declaring `0x00010000` now puts
+  `00 01 00 00` on the wire in both.
+
+### Fixed
+
+- Function Block Info encodes and decodes the layout the spec defines: Max
+  Number of SysEx8 Streams occupies the low byte and covers its documented
+  0-255 range, MIDI-CI Message Version is a byte, and Number of Groups
+  Spanned fits the maximum of 16.
+- The `atmega32u4-device-baremetal` example packs its manufacturer id the
+  way the CI builder expects, and the `teensy-device-midi2` example declares
+  the same identity across Property Exchange, UMP Stream and MIDI-CI.
+
 ## [0.9.0]
 
 ### Added

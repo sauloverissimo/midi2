@@ -20,7 +20,7 @@ In the IDE, search `midi2` in the Library Manager and click Install. Reference s
 ## PlatformIO
 
 ```ini
-lib_deps = sauloverissimo/midi2 @ ^0.9.0
+lib_deps = sauloverissimo/midi2 @ ^0.10.0
 ```
 
 The Registry resolves the modular `src/*.c` layout via `library.json` (`srcDir = src`).
@@ -32,7 +32,7 @@ The Registry resolves the modular `src/*.c` layout via `library.json` (`srcDir =
 ```yaml
 dependencies:
   idf: ">=5.0"
-  sauloverissimo/midi2: ">=0.9.0"
+  sauloverissimo/midi2: ">=0.10.0"
 ```
 
 `idf.py reconfigure` drops the component into `managed_components/midi2/`. ESP-IDF picks the directory up as a regular component because the top-level `CMakeLists.txt` detects `ESP_PLATFORM` and routes to `idf_component_register` with the modular `src/midi2_*.c` set.
@@ -46,7 +46,7 @@ manifest:
   projects:
     - name: midi2
       url: https://github.com/sauloverissimo/midi2
-      revision: v0.9.0
+      revision: v0.10.0
       path: modules/lib/midi2
 ```
 
@@ -62,12 +62,12 @@ CONFIG_MIDI2=y
 
 ```cmake
 if(NOT TARGET midi2)
-  find_package(midi2 0.9.0 QUIET CONFIG)
+  find_package(midi2 0.10.0 QUIET CONFIG)
   if(NOT midi2_FOUND)
     include(FetchContent)
     FetchContent_Declare(midi2
       GIT_REPOSITORY https://github.com/sauloverissimo/midi2.git
-      GIT_TAG        v0.9.0)
+      GIT_TAG        v0.10.0)
     FetchContent_MakeAvailable(midi2)
   endif()
 endif()

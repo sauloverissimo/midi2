@@ -17,7 +17,7 @@
 #       include(FetchContent)
 #       FetchContent_Declare(midi2
 #         GIT_REPOSITORY https://github.com/sauloverissimo/midi2.git
-#         GIT_TAG        v0.9.0)
+#         GIT_TAG        v0.10.0)
 #       FetchContent_MakeAvailable(midi2)
 #     endif()
 #   endif()
@@ -50,7 +50,7 @@ if(ESP_PLATFORM)
     return()
 endif()
 
-project(midi2 VERSION 0.9.0
+project(midi2 VERSION 0.10.0
         DESCRIPTION "Portable MIDI 2.0 infrastructure: UMP and MIDI-CI core in C99"
         LANGUAGES C)
 

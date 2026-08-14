@@ -81,7 +81,8 @@ midi2_msg_stream_product_id(w, format, id, len);
 midi2_msg_stream_config_request(w, protocol);
 midi2_msg_stream_config_notify(w, protocol);
 midi2_msg_stream_fb_discovery(w, fb_num, filter);
-midi2_msg_stream_fb_info(w, active, fb_num, direction, ...);
+midi2_msg_stream_fb_info(w, active, fb_num, direction, ui_hint,
+                         first_group, num_groups, midi_ci_ver, max_sysex8_streams);
 midi2_msg_stream_fb_name(w, format, fb_num, name, len);
 midi2_msg_stream_start_of_clip(w);
 midi2_msg_stream_end_of_clip(w);
