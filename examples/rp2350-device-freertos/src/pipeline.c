@@ -70,15 +70,35 @@ void pipeline_tx_words(const uint32_t *words, uint32_t count) {
   }
 }
 
-/* Build catalog entry `idx` and enqueue it. */
-static void emit_catalog(uint32_t idx) {
-  catalog_msg_t c;
-  if (midi2_catalog_build(idx, &c)) {
+/* Emit catalog entry `idx`. A SysEx7 Start opens a run that M2-104-UM 7.7.1
+ * forbids interrupting on the same Group, so the following entries are sent
+ * in the same pass until the End: the whole message reaches the queue before
+ * anything else can be interleaved. Returns the last index emitted. */
+static uint32_t emit_catalog(uint32_t idx) {
+  const uint32_t count = midi2_catalog_count();
+  bool run_open = false;
+
+  for (;;) {
+    catalog_msg_t c;
+    if (!midi2_catalog_build(idx, &c)) break;
+
     ump_msg_t m;
     m.n = c.n;
     for (uint8_t i = 0; i < c.n; i++) m.w[i] = c.w[i];
     pipeline_tx(&m);
+
+    if (midi2_msg_get_mt(c.w) == MIDI2_MT_SYSEX7) {
+      /* midi2_msg.h defines the status already shifted into the high
+       * nibble of the status byte (START = 0x10), so compare it there. */
+      uint8_t status = (uint8_t)(midi2_msg_get_status(c.w) & 0xF0);
+      if (status == MIDI2_SYSEX7_START)    { run_open = true; }
+      else if (status == MIDI2_SYSEX7_END) { run_open = false; }
+    }
+    if (!run_open) break;
+
+    idx = (idx + 1u) % count;
   }
+  return idx;
 }
 
 /*--------------------------------------------------------------------+
@@ -155,7 +175,7 @@ static void on_ump(const uint32_t *words, uint8_t word_count, void *ctx) {
   uint8_t status = (uint8_t)(midi2_msg_get_status(words) & 0xF0);
   uint8_t index  = midi2_msg_get_note(words);   /* note field = note number / CC index */
   if (status == MIDI2_STATUS_NOTE_ON) {
-    emit_catalog(index % midi2_catalog_count());
+    (void) emit_catalog(index % midi2_catalog_count());
   } else if (status == MIDI2_STATUS_CC) {
     if (index == 120) s_cycle_paused = true;
     else if (index == 121) s_cycle_paused = false;
@@ -190,7 +210,7 @@ static void midi_task(void *arg) {
       pipeline_tx(&hb);
     }
 
-    emit_catalog(s_cycle_idx);
+    s_cycle_idx = emit_catalog(s_cycle_idx);
     s_cycle_idx = (s_cycle_idx + 1) % midi2_catalog_count();
   }
 }

@@ -27,7 +27,7 @@ responder. Two tasks, two static queues, zero heap.
 | Layer | Owns |
 |---|---|
 | TinyUSB upstream | enumeration, MIDI 2.0 descriptors, built-in UMP Stream Discovery responder |
-| `src/pipeline.c` (FreeRTOS) | `usb_task` is the sole owner of `tud_midi2_*`; `midi_task` runs the midi2 core; two static queues decouple them so multi-packet SysEx7 never interleaves |
+| `src/pipeline.c` (FreeRTOS) | `usb_task` is the sole owner of `tud_midi2_*`; `midi_task` runs the midi2 core; two static queues decouple them, and a SysEx7 run is emitted in one pass so nothing lands between its Start and End (M2-104-UM 7.7.1) |
 | midi2 C99 core ([`../../src`](../../src)) | typed dispatch, UMP construction, SysEx7 reassembly, MIDI-CI responder |
 | `src/catalog.c` / `src/ci_responder.c` | the 58-entry UMP catalog (host-unit-tested) and the device identity |
 
@@ -75,7 +75,8 @@ lists it with Native data format = UMP and both protocols declared.
 
 MIDI-CI: Discovery, one Profile, Property Exchange (`DeviceInfo`,
 `ChannelList`, `ProgramList`). Inbound control: NoteOn on group 15 fires a
-single catalog entry; CC 120/121 pause and resume the cycle.
+single catalog entry, or the whole run when the entry opens a SysEx7;
+CC 120/121 pause and resume the cycle.
 
 ## License
 
