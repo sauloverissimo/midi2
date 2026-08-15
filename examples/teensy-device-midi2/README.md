@@ -48,13 +48,15 @@ In the Arduino IDE: Tools > USB Type > "MIDI 2.0" before pressing Upload.
 |---|---|
 | Teensy cores fork | enumeration, MIDI 2.0 descriptors (alt 0 = MIDI 1.0, alt 1 = UMP), wire-level endpoint (`usbMIDI2.read/write`) |
 | midi2 C99 core ([`../../src`](../../src)) | SysEx7 reassembly (`midi2_proc`), MIDI-CI responder (`midi2_ci`), UMP Stream and Channel Voice builders (`midi2_msg`) |
-| this sketch | identity, UMP Stream announcement, one Profile, three Property Exchange resources, the read/feed loop, the demo note |
+| this sketch | identity, the UMP Stream responder plus its boot announcement, one Profile, three Property Exchange resources, the read/feed loop, the demo note |
 
 The UMP Stream identity (Endpoint Info, Device Identity, Endpoint Name,
-Product Instance ID, Function Block Info) is announced from `setup()`. Hosts
-that read only the static USB descriptors (Linux `snd-usb-midi2`) enumerate
-without it; hosts that run active UMP Endpoint Discovery (Windows MIDI
-Services) need these in-band notifications to register a complete endpoint.
+Product Instance ID, Function Block Info) is answered on Endpoint and
+Function Block Discovery, and also announced once from `setup()`. The cores
+fork is transport only, so the sketch owns the responder: hosts that read
+only the static USB descriptors (Linux `snd-usb-midi2`) enumerate without it,
+and hosts that ask over UMP Stream (Windows MIDI Services, the MIDI 2.0
+Workbench) get the reply from here.
 
 ## Validation
 
@@ -79,7 +81,7 @@ over native UMP.
 |---|---|---|
 | 0x3 SysEx7 | M2-104-UM 7.7 | inbound reassembly via `midi2_proc`, outbound MIDI-CI replies |
 | 0x4 MIDI 2.0 CV | M2-104-UM 7.4 | demo Note On/Off, 16-bit velocity |
-| 0xF UMP Stream | M2-104-UM 7.1 | Endpoint Info, Device Identity, Endpoint Name, Product Instance ID, FB Info (app-announced) |
+| 0xF UMP Stream | M2-104-UM 7.1 | Endpoint Info, Device Identity, Endpoint Name, Product Instance ID, FB Info, FB Name (answered on Discovery, plus a boot announcement) |
 | MIDI-CI Discovery | M2-101-UM | Message Version 0x02, Function Block addressing |
 | Profile Configuration | M2-101-UM | inquiry + Set Profile On/Off with Profile Enabled report |
 | Property Exchange | M2-105-UM | `DeviceInfo` (ID arrays + strings), `ChannelList`, `ProgramList`, built-in `ResourceList`, `totalCount` on list resources |
