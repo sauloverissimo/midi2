@@ -100,10 +100,29 @@ static uint8_t  cat_idx;
 static bool     cat_paused;
 static uint8_t  burst_sweeps;
 
-static void catalog_emit(uint8_t idx) {
-    catalog_msg_t m;
-    if (midi2_catalog_build(idx, &m))
-        midi2lufa_write(m.w, m.n);
+/* Emit catalog entry `idx`. A SysEx7 Start opens a run that M2-104-UM 7.7.1
+ * forbids interrupting on the same Group, so the following entries go out in
+ * the same call until the End. Returns the last index emitted. */
+static uint8_t catalog_emit(uint8_t idx) {
+    const uint8_t count = (uint8_t)midi2_catalog_count();
+    bool run_open = false;
+
+    for (;;) {
+        catalog_msg_t m;
+        if (!midi2_catalog_build(idx, &m)) break;
+        if (!midi2lufa_write(m.w, m.n)) break;   /* ring full: stop here */
+
+        if (midi2_msg_get_mt(m.w) == MIDI2_MT_SYSEX7) {
+            /* midi2_msg.h keeps the status in the high nibble (START = 0x10). */
+            uint8_t st = (uint8_t)(midi2_msg_get_status(m.w) & 0xF0);
+            if (st == MIDI2_SYSEX7_START)    { run_open = true; }
+            else if (st == MIDI2_SYSEX7_END) { run_open = false; }
+        }
+        if (!run_open) break;
+
+        idx = (uint8_t)((idx + 1u) % count);
+    }
+    return idx;
 }
 
 static void catalog_task(void) {
@@ -120,7 +139,7 @@ static void catalog_task(void) {
     if (cat_paused)
         return;
     if ((uint16_t)(g_ms - cat_last) >= 500) {
-        catalog_emit(cat_idx);
+        cat_idx = catalog_emit(cat_idx);
         cat_idx = (uint8_t)((cat_idx + 1u) % midi2_catalog_count());
         cat_last = g_ms;
         LED_TOGGLE();
@@ -138,7 +157,7 @@ static bool control_surface(const uint32_t *w) {
     uint8_t index  = (uint8_t)((w[0] >> 8) & 0x7F);
 
     if (status == 0x90) {
-        catalog_emit((uint8_t)(index % midi2_catalog_count()));
+        (void) catalog_emit((uint8_t)(index % midi2_catalog_count()));
     } else if (status == 0xB0) {
         uint8_t v7 = (mt == MIDI2_MT_MIDI2_CV) ? (uint8_t)((w[1] >> 25) & 0x7F)
                                                : (uint8_t)(w[0] & 0x7F);

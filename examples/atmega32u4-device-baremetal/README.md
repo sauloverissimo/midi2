@@ -43,7 +43,7 @@ real products must replace both `idVendor` and `idProduct`.
 | midi2lufa (external, `MIDI2LUFA_PATH`) | transport: dual-alt descriptors, GTB, endpoint pump, word rings |
 | midi2 C99 core ([`../../src`](../../src)) | typed dispatch, SysEx7 reassembly, MIDI-CI responder |
 | `src/stream_responder.c` / `src/ci_responder.c` / `src/main.c` | device identity and the super-loop application |
-| `src/catalog.c` | the 58-entry M2-104 catalog (host-unit-tested, shared design with `rp2350-device-freertos`) |
+| `src/catalog.c` | the 58-entry M2-104 catalog (host-unit-tested, shared design with `rp2350-device-freertos`); a SysEx7 run leaves in one pass, so nothing lands between its Start and End (M2-104-UM 7.7.1) |
 
 ## Control surface (group 15)
 
@@ -52,7 +52,7 @@ sentinel control channel, identical to the RP2350 bench:
 
 | Message on group 15 | Action |
 |---|---|
-| Note On, note N | emit catalog entry `N % 58` immediately |
+| Note On, note N | emit catalog entry `N % 58` immediately, or its whole SysEx7 run |
 | CC 120 | pause the 500 ms catalog cycle |
 | CC 121 | resume |
 | CC 119, value V | burst: V+1 full catalog sweeps back to back, paced only by the TX ring (the honest 16 MHz throughput test) |
