@@ -56,6 +56,7 @@
 #include <zephyr/random/random.h>
 #include <zephyr/usb/usbd.h>
 #include <zephyr/usb/class/usbd_midi2.h>
+#include <ump_stream_responder.h>
 
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(midi2_showcase, LOG_LEVEL_INF);
@@ -92,6 +93,27 @@ static char g_overlay_rate[40] = "{\"rateHz\":50}";
 
 static const struct device *const midi_dev = DEVICE_DT_GET(DT_NODELABEL(usb_midi));
 static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET_OR(DT_ALIAS(led0), gpios, {0});
+
+/* One TX gate for every sender: the run lock lives here so the CI thread,
+ * the scene loop and the Discovery responder cannot interleave packets. */
+K_MUTEX_DEFINE(tx_lock);
+static uint32_t send_ump(const uint32_t *words, uint32_t count);
+
+/* UMP Stream responder from the Zephyr MIDI 2.0 library. The class does not
+ * answer Discovery on its own: the application routes MT 0xF to it, with the
+ * endpoint and Function Block names coming from the devicetree node. Replies
+ * go through send_ump so they get the same retry and ordering as the rest. */
+static void responder_send(const void *dev, const struct midi_ump ump)
+{
+	ARG_UNUSED(dev);
+	send_ump(ump.data, UMP_NUM_WORDS(ump));
+}
+
+static const struct ump_endpoint_dt_spec ump_ep_dt =
+	UMP_ENDPOINT_DT_SPEC_GET(DT_NODELABEL(usb_midi));
+
+static const struct ump_stream_responder_cfg responder_cfg =
+	UMP_STREAM_RESPONDER(midi_dev, responder_send, &ump_ep_dt);
 
 /*--------------------------------------------------------------------+
  * USB device context (inline minimal init)
@@ -135,11 +157,8 @@ static int midi2_usbd_setup(void)
 
 static atomic_t g_midi_ready;
 
-static void send_ump(const uint32_t *words, uint32_t count)
+static uint32_t send_ump(const uint32_t *words, uint32_t count)
 {
-	if (!atomic_get(&g_midi_ready)) {
-		return;
-	}
 	/* A PE reply is a burst of SysEx7 packets sent back to back; the class
 	 * TX queue fills mid-burst, so a failed send is backpressure, not an
 	 * error: yield and retry (bounded) rather than dropping the packet and
@@ -151,17 +170,18 @@ static void send_ump(const uint32_t *words, uint32_t count)
 	 * CI reply thread and the scene loop can never interleave packets
 	 * inside each other's runs. Callers are threads only (the JR
 	 * heartbeat goes through the system workqueue). */
-	static struct k_mutex tx_lock;
-	static bool tx_lock_init;
 	static bool tx_run_held;
-	if (!tx_lock_init) { k_mutex_init(&tx_lock); tx_lock_init = true; }
 	k_mutex_lock(&tx_lock, K_FOREVER);
 	bool run_open = tx_run_held;
 	uint32_t i = 0;
+	if (!atomic_get(&g_midi_ready)) {
+		run_open = false;   /* host gone: close the run, never strand the lock */
+		goto out;
+	}
 	while (i < count) {
 		uint32_t n = midi2_msg_word_count(midi2_msg_get_mt(&words[i]));
 		if (n == 0 || n > 4) { n = 1; }
-		if (i + n > count) { n = count - i; }
+		if (i + n > count) { break; }   /* partial message: report what left */
 
 		struct midi_ump ump = {0};
 		memcpy(ump.data, &words[i], n * sizeof(uint32_t));
@@ -179,7 +199,7 @@ static void send_ump(const uint32_t *words, uint32_t count)
 			}
 			if (attempt >= 50) {   /* ~50 ms: host gone, give up */
 				run_open = false;
-				goto out;
+				goto out;      /* i words made it out */
 			}
 			k_sleep(K_MSEC(1));
 		}
@@ -195,15 +215,16 @@ out:
 	} else {
 		k_mutex_unlock(&tx_lock);
 	}
+	return i;
 }
 
-/* midi2_ci write callback. Returns count on send (the proc layer
- * treats nonzero as "accepted"). */
+/* midi2_ci write callback. Returns the words the transport accepted: the
+ * core stops a multi-packet reply at the first short write rather than
+ * leaving a gap in the middle of a message. */
 static uint32_t ci_write_fn(const uint32_t *words, uint32_t count, void *ctx)
 {
 	ARG_UNUSED(ctx);
-	send_ump(words, count);
-	return count;
+	return send_ump(words, count);
 }
 
 /*--------------------------------------------------------------------+
@@ -278,6 +299,12 @@ static void rx_proc_thread(void *a, void *b, void *c)
 
 	for (;;) {
 		k_msgq_get(&g_rx_msgq, &ump, K_FOREVER);
+		/* UMP Stream Discovery is answered by the Zephyr responder.
+		 * The packet still reaches midi2 below, so an app that
+		 * registers on_endpoint_info or on_device_identity sees it. */
+		if (UMP_MT(ump) == UMP_MT_UMP_STREAM) {
+			ump_stream_respond(&responder_cfg, ump);
+		}
 		/* All inbound UMPs go through midi2_proc: it forwards plain
 		 * messages straight to dispatch and reassembles fragmented
 		 * SysEx before invoking on_sysex7_complete (which routes to

@@ -20,7 +20,7 @@
 
 		fb_main: main_fb@0 {
 			reg = <0 1>;
-			protocol = "midi1-up-to-128b";
+			protocol = "midi2";
 			terminal-type = "bidirectional";
 			label = "Main";
 		};

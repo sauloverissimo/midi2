@@ -101,7 +101,7 @@ Validated on hardware against the official
 [MIDI 2.0 Workbench](https://github.com/midi2-dev/MIDI2.0Workbench): MIDI-CI
 Discovery (Message Version 0x02), Profile Configuration and Property Exchange
 complete, zero errors and zero warnings. On Windows the MIDI Services Console
-lists it with Native data format = UMP and both protocols declared; macOS
+lists it with Native data format = UMP and the MIDI 2.0 protocol declared; macOS
 Audio MIDI Setup shows it as a UMP endpoint.
 
 ![Windows MIDI Services endpoint properties for the Pico](board/properties_details.jpg)
