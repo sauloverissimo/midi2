@@ -40,6 +40,11 @@ static StackType_t  s_usb_stack[USB_TASK_STACK], s_midi_stack[MIDI_TASK_STACK];
 
 static volatile uint32_t s_rx_drops, s_tx_drops;
 
+/* usb_task retry state: the message taken from tx_queue but not yet accepted
+ * by the endpoint FIFO. Owned exclusively by usb_task. */
+static ump_msg_t s_tx_held;
+static bool      s_tx_held_valid;
+
 /* midi2_proc: inbound SysEx7 reassembly + plain-UMP dispatch. */
 static midi2_proc_state s_proc;
 static uint8_t s_sysex7_buf[256];
@@ -87,13 +92,22 @@ static void usb_task(void *arg) {
      * so an explicit yield is required: without it usb_task spins and starves
      * the lower-priority midi_task on the single-core scheduler. */
     tud_task_ext(0, false);
-    ump_msg_t m;
-    while (xQueueReceive(tx_queue, &m, 0) == pdTRUE) {
-      /* n_ump_write returns words actually written; a full TX endpoint FIFO
-       * makes it write fewer than requested. Count the shortfall so drops are
-       * never masked (matches the rx_queue accounting). */
-      uint32_t written = tud_midi2_n_ump_write(0, m.w, m.n);
-      if (written < m.n) s_tx_drops++;
+    /* Drain tx_queue into the endpoint FIFO, keeping every packet: a reply
+     * larger than the FIFO (a full PE GET DeviceInfo spans ~41 SysEx7
+     * packets against a 32 packet FIFO) must survive intact or the host
+     * receives a Start with no End and the message never assembles.
+     * tud_midi2_n_ump_write is atomic per packet (a packet that does not
+     * fit writes 0 words, never a fragment), so on a short write the
+     * message is held and retried next pass, after the host has drained
+     * the FIFO. tx_queue is the backlog; its xQueueSend(0) drop counter
+     * remains the overflow of last resort. */
+    for (;;) {
+      if (!s_tx_held_valid) {
+        if (xQueueReceive(tx_queue, &s_tx_held, 0) != pdTRUE) break;
+        s_tx_held_valid = true;
+      }
+      if (tud_midi2_n_ump_write(0, s_tx_held.w, s_tx_held.n) < s_tx_held.n) break;
+      s_tx_held_valid = false;
     }
     vTaskDelay(1);   /* yield ~1 ms: cap the poll rate and let midi_task run */
   }

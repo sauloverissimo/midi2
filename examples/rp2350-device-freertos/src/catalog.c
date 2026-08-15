@@ -10,6 +10,7 @@
  * Pure C99. No FreeRTOS, no TinyUSB: this file is host-unit-testable and is
  * the source of truth for the recipe's `## Spec coverage` table. */
 #include "catalog.h"
+#include "identity.h"
 #include "midi2_msg.h"
 
 /* Group 0 is the only advertised group (Function Block numGroups=1). */
@@ -24,10 +25,10 @@ static const uint8_t k_composer[] = { 'B', 'a', 'c', 'h' };
 static const uint8_t k_lyrics[]   = { 'l', 'a' };
 
 /* MIDI-CI / device identity constants, shared with the CI responder. */
-#define CAT_MFR_ID   0x007D0000u   /* {0x7D,0x00,0x00} educational prefix */
-#define CAT_FAMILY   0x0001u
-#define CAT_MODEL    0x0001u
-#define CAT_VERSION  0x00010000u
+#define CAT_MFR_ID   DEV_MFR_ID
+#define CAT_FAMILY   DEV_FAMILY
+#define CAT_MODEL    DEV_MODEL
+#define CAT_VERSION  DEV_VERSION
 
 uint32_t midi2_catalog_count(void) { return 58; }
 

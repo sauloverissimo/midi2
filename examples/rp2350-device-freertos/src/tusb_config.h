@@ -45,6 +45,14 @@ extern "C" {
 #define CFG_TUD_MIDI2                    1
 #define CFG_TUD_MIDI2_NUM_GROUPS         1
 #define CFG_TUD_MIDI2_EP_NAME            "RP2350 FreeRTOS Bench"
+#define CFG_TUD_MIDI2_PRODUCT_ID         "rp2350-freertos-bench-0001"
+
+/* Function Block capabilities this bench actually implements: MIDI-CI 1.2
+ * (Discovery, Profile Configuration, Property Exchange, Process Inquiry) and
+ * one SysEx8 stream, which the catalog emits. Left at the default of 0 the
+ * host reads "no MIDI-CI" and "SysEx8 unsupported". */
+#define CFG_TUD_MIDI2_FB_CI_VERSION      2
+#define CFG_TUD_MIDI2_FB_SYSEX8_STREAMS  1
 
 /* UMP endpoint FIFO sizes. Chosen jointly with the FreeRTOS queue depth
  * (pipeline.c PIPE_QUEUE_DEPTH) as the zero-loss burst budget. */

@@ -13,6 +13,7 @@
 #include <string.h>
 #include "bsp/board_api.h"
 #include "tusb.h"
+#include "identity.h"
 
 /*--------------------------------------------------------------------+
  * Device descriptor
@@ -71,10 +72,14 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
  * Block Info (direction + group span) from this GTB, and the FB name from
  * tud_midi2_fb_name_cb. Without them the host shows a generic unnamed block.
  *--------------------------------------------------------------------*/
+/* stridx points at STRID_BLOCK_MAIN below. A host that names the block from
+ * the descriptor (Windows MIDI Services) reads it there; a host that asks over
+ * UMP Stream (Linux, the MIDI 2.0 Workbench) gets it from
+ * tud_midi2_fb_name_cb. Both paths must carry the same name. */
 static uint8_t const desc_gtb[] = {
     TUD_MIDI2_GTB_HEADER(1),
     TUD_MIDI2_GTB_BLOCK(/*id*/ 1, MIDI2_GTB_BIDIRECTIONAL,
-                        /*first_group*/ 0, /*num_groups*/ 1, /*stridx*/ 0),
+                        /*first_group*/ 0, /*num_groups*/ 1, /*stridx*/ 4),
 };
 
 uint8_t const *tud_midi2_gtb_desc_cb(uint8_t itf, uint16_t *len) {
@@ -88,6 +93,18 @@ char const *tud_midi2_fb_name_cb(uint8_t itf, uint8_t fb_idx) {
     return (fb_idx == 0) ? "Main" : "";
 }
 
+/* Answers the Device Identity Notification when a host asks for it over UMP
+ * Stream. Same four values the MIDI-CI responder reports over SysEx7; without
+ * this the host reads an all-zero manufacturer on the Stream path. */
+bool tud_midi2_device_identity_cb(uint8_t itf, tud_midi2_device_identity_t *identity) {
+    (void)itf;
+    identity->manufacturer = DEV_MFR_ID;
+    identity->family       = DEV_FAMILY;
+    identity->model        = DEV_MODEL;
+    identity->sw_revision  = DEV_VERSION;
+    return true;
+}
+
 /*--------------------------------------------------------------------+
  * String descriptors
  *--------------------------------------------------------------------*/
@@ -96,6 +113,7 @@ enum {
     STRID_MANUFACTURER = 1,
     STRID_PRODUCT      = 2,
     STRID_SERIAL       = 3,
+    STRID_BLOCK_MAIN   = 4,
 };
 
 static char const *string_desc_arr[] = {
@@ -103,6 +121,7 @@ static char const *string_desc_arr[] = {
     "github.com/sauloverissimo",  /* 1: Manufacturer                   */
     "RP2350FreeRTOSBench",        /* 2: Product                        */
     NULL,                         /* 3: Serial, computed at runtime   */
+    "Main",                       /* 4: Function Block name (GTB stridx) */
 };
 
 static uint16_t _desc_str[32 + 1];

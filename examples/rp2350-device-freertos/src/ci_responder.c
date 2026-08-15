@@ -4,16 +4,17 @@
  * (a static DeviceInfo property). Mirrors the Zephyr sibling's CI bootstrap.
  * Replies are built by the core and emitted via pipeline_tx_words. */
 #include "ci_responder.h"
+#include "identity.h"
 #include "pipeline.h"
 #include "midi2_ci.h"
 
 #include "pico/rand.h"
 
 /* Educational identity (shared with the catalog's Device Identity entry). */
-#define CI_MFR      0x007D0000u   /* {0x7D, 0x00, 0x00} educational prefix */
-#define CI_FAMILY   0x0001u
-#define CI_MODEL    0x0001u
-#define CI_VERSION  0x00010000u
+#define CI_MFR      DEV_MFR_ID
+#define CI_FAMILY   DEV_FAMILY
+#define CI_MODEL    DEV_MODEL
+#define CI_VERSION  DEV_VERSION
 
 static const uint8_t k_profile_id[5] = { 0x7D, 0x00, 0x00, 0x01, 0x00 };
 
@@ -45,11 +46,17 @@ void ci_responder_init(void) {
   midi2_ci_set_nak_on_unknown(&g_ci, true);
 
   midi2_ci_add_profile(&g_ci, k_profile_id);
+  /* M2-105 DeviceInfo: the numeric ids are stringized from identity.h, so
+   * they cannot drift from what Discovery and Device Identity carry. */
   midi2_ci_add_property_static(&g_ci, "DeviceInfo",
-      "{\"manufacturer\":\"github.com/sauloverissimo\","
+      "{\"manufacturerId\":" DEV_JSON_MFR_ID
+      ",\"familyId\":" DEV_JSON_FAMILY_ID
+      ",\"modelId\":" DEV_JSON_MODEL_ID
+      ",\"versionId\":" DEV_JSON_VERSION_ID
+      ",\"manufacturer\":\"github.com/sauloverissimo\","
        "\"family\":\"rp2350-device-freertos\","
        "\"model\":\"RP2350FreeRTOSBench\","
-       "\"version\":\"0.6.0\"}");
+       "\"version\":\"1.0.0\"}");
 }
 
 void ci_responder_feed_sysex7(uint8_t group, const uint8_t *data, uint16_t len) {
