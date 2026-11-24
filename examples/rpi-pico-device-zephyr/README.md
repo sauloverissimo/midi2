@@ -37,7 +37,7 @@ Requires:
 # West manifest entry, see ../../README.md "Zephyr (west module)"
 #   - name: midi2
 #     url: https://github.com/sauloverissimo/midi2
-#     revision: v0.10.1
+#     revision: v0.10.2
 #     path: modules/lib/midi2
 
 cd examples/rpi-pico-device-zephyr

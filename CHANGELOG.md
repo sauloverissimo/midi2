@@ -4,6 +4,14 @@ Format based on Keep a Changelog. This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.10.2]
+
+### Fixed
+
+- The `atmega32u4-device-arduino` example includes `midi2.h` first, so the
+  Arduino builder takes the midi2 core headers from the midi2 library also
+  when midi2cpp, which bundles the same headers, is installed.
+
 ## [0.10.1]
 
 ### Changed
