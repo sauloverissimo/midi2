@@ -4,6 +4,28 @@ Format based on Keep a Changelog. This project follows Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.10.1]
+
+### Changed
+
+- The `atmega32u4-device-arduino` example builds against the midi2 library
+  itself (`arduino-cli lib install midi2 midi2duino`) and no longer keeps
+  symbolic links into `src/`, which the Arduino Library Manager does not
+  accept. The firmware it produces is the same size.
+- The `rp2350-device-freertos` example tracks TinyUSB master: it answers
+  Device Identity, declares MIDI-CI 1.2 and one SysEx8 stream in its
+  Function Block Info, and names the block in the GTB descriptor.
+- The `teensy-device-midi2` README lists the eight files the Teensy cores
+  fork changes.
+
+### Fixed
+
+- The `atmega32u4-device-baremetal` and `rp2350-device-freertos` examples
+  send each SysEx7 run in one pass, so no other message on the same Group
+  lands between its Start and End (M2-104-UM 7.7.1).
+- The `teensy-device-midi2` and `rpi-pico-device-zephyr` examples answer
+  UMP Stream Endpoint and Function Block Discovery.
+
 ## [0.10.0]
 
 ### Changed
