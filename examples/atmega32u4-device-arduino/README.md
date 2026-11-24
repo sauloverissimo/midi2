@@ -55,21 +55,24 @@ into real products must replace both `idVendor` and `idProduct`.
 |---|---|
 | Arduino AVR core (external, `arduino:avr`) | USB device core: enumeration, EP0, control transfers, bulk endpoint banks |
 | [midi2duino](https://github.com/sauloverissimo/midi2duino) library (external) | the PluggableUSB node: raw USB-MIDI descriptors (alt 0 MIDI 1.0, alt 1 MIDI 2.0, Group Terminal Block via class GET_DESCRIPTOR), the two bulk endpoints, the UMP word pump (RX backpressure is a plain NAK) |
-| midi2 C99 core ([`../../src`](../../src), vendored under `src/`) | typed dispatch, SysEx7 reassembly, MIDI-CI responder, UMP builders |
+| midi2 C99 core ([`../../src`](../../src), the midi2 library this example ships with) | typed dispatch, SysEx7 reassembly, MIDI-CI responder, UMP builders |
 | `src/stream_responder.c` / `src/ci_responder.c` | device identity over UMP Stream and MIDI-CI |
 | `src/midi2_usb.*` | the `Midi2Usb` veneer: wires the responders, pumps USB, exposes readable `send*` helpers. No `std::function`, no heap |
 | `atmega32u4-device-arduino.ino` | the application: identity setup and the showcase loop |
 
 ## Build
 
-Requires the **Arduino AVR Boards** core and the
-**[midi2duino](https://github.com/sauloverissimo/midi2duino)** library (the midi2
-core is vendored under `src/`):
+Requires the **Arduino AVR Boards** core, the **midi2** library (v0.10.0 or
+later) and the **[midi2duino](https://github.com/sauloverissimo/midi2duino)**
+library:
 
 ```bash
 arduino-cli core install arduino:avr
-arduino-cli lib install midi2duino
+arduino-cli lib install midi2 midi2duino
 ```
+
+Building from a clone of this repository, add `--library ../..` to the compile
+command below so the sketch picks up the midi2 core from the checkout.
 
 Compile for the Leonardo (primary target), overriding the USB identity inline:
 
@@ -191,12 +194,11 @@ atmega32u4-device-arduino/
     stream_responder.c / .h       UMP Stream identity responder
     ci_responder.c / .h           MIDI-CI Discovery responder
     board.h                       UMP Endpoint Name
-    midi2_*.c / .h                midi2 C99 core (symlinked from ../../src)
 ```
 
 The USB transport comes from the [midi2duino](https://github.com/sauloverissimo/midi2duino)
-library, installed separately; the midi2 C99 core is vendored under `src/` via
-symlink.
+library and the midi2 C99 core from the midi2 library, both installed as Arduino
+libraries.
 
 ## License
 
