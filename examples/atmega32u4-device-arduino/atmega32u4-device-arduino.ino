@@ -18,6 +18,9 @@
 // Always-UMP: the stock AVR core does not surface SET_INTERFACE, so this device
 // always speaks MIDI 2.0 (UMP) and targets MIDI 2.0 hosts. See the README.
 
+// Included first so the Arduino builder resolves the midi2 core headers to the
+// midi2 library, also when midi2cpp (which bundles the same headers) is installed.
+#include <midi2.h>
 #include "src/midi2_usb.h"
 
 Midi2Usb midi;
