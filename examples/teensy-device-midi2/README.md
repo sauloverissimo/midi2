@@ -10,7 +10,7 @@ RTOS, no C++ wrapper. It announces the UMP Stream identity, answers MIDI-CI
 Discovery, Profile Configuration, Property Exchange and Process Inquiry, and
 emits a one-note MIDI 2.0 demo so a host sees live traffic.
 
-> ![override](https://img.shields.io/badge/-cores%20fork-purple.svg) **Teensy cores fork required.** Built against [`sauloverissimo/cores`](https://github.com/sauloverissimo/cores/tree/feature/usb-midi2-descriptors) branch `feature/usb-midi2-descriptors` (USB MIDI 2.0 descriptor + raw UMP I/O primitives, not yet submitted upstream). Overlay `teensy4/usb.c`, `teensy4/usb_desc.{c,h}`, `teensy4/usb_midi2.{c,h}` onto your Teensyduino install at `~/.arduino15/packages/teensy/hardware/avr/<version>/cores/teensy4/`. The fork is transport only: all UMP parsing, MIDI-CI and Stream logic lives in this sketch through the midi2 library.
+> ![override](https://img.shields.io/badge/-cores%20fork-purple.svg) **Teensy cores fork required.** Built against [`sauloverissimo/cores`](https://github.com/sauloverissimo/cores/tree/feature/usb-midi2-descriptors) branch `feature/usb-midi2-descriptors` (USB MIDI 2.0 descriptor + raw UMP I/O primitives, submitted upstream as [PaulStoffregen/cores#803](https://github.com/PaulStoffregen/cores/pull/803)). Overlay the eight files the fork changes in `teensy4/` (`usb.c`, `usb_desc.c`, `usb_desc.h`, `usb_midi.c`, `usb_midi.h`, `usb_midi2.c`, `usb_midi2.h`, `usb_names.h`) onto your Teensyduino install at `~/.arduino15/packages/teensy/hardware/avr/<version>/cores/teensy4/`. The fork is transport only: all UMP parsing, MIDI-CI and Stream logic lives in this sketch through the midi2 library.
 
 ## USB identity
 
@@ -33,7 +33,7 @@ VID:PID per USB-IF rules.
 ## Build
 
 Requires Arduino IDE 2.x or arduino-cli with Teensyduino 1.60+, the cores fork
-overlaid (see note above), and the midi2 library on the sketchbook.
+overlaid (see note above), and the midi2 library v0.10.0 or later on the sketchbook.
 
 ```bash
 arduino-cli compile --fqbn teensy:avr:teensy41:usb=midi2 .
